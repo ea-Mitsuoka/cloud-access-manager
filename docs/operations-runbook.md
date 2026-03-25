@@ -102,7 +102,88 @@ else
 fi
 ```
 
-## 3. tfstate backend bootstrap手順
+## 3. CI/CD (GitHub Actions) の設定
+
+`.github/workflows/ci.yml` に定義されたCI/CDパイプラインを完全に機能させるには、以下の設定が必要です。
+
+### 3.1 GitHub Actions Variablesの設定
+
+リポジトリの `Settings` > `Secrets and variables` > `Actions` の `Variables` タブで、以下のリポジトリ変数を設定してください。
+
+- `TOOL_PROJECT_ID`: ツールをデプロイするGoogle CloudプロジェクトID。
+- `REGION`: `asia-northeast1` など、リソースをデプロイするリージョン。
+
+### 3.2 Workload Identity Federationの設定
+
+CIジョブがGoogle Cloudリソースを操作するために、パスワードレス認証であるWorkload Identity Federation（WIF）を設定します。
+
+1.  **CI用のサービスアカウント作成:**
+    ```bash
+    gcloud iam service-accounts create iam-access-ci-sa \
+      --project="${TOOL_PROJECT_ID}" \
+      --display-name="IAM Access CI/CD"
+    ```
+
+2.  **WIFプールとプロバイダの作成:**
+    ```bash
+    # プールの作成
+    gcloud iam workload-identity-pools create "github-pool" \
+      --project="${TOOL_PROJECT_ID}" \
+      --location="global" \
+      --display-name="GitHub Actions Pool"
+
+    # プールのIDを取得
+    WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" --project="${TOOL_PROJECT_ID}" --location="global" --format="value(name)")
+
+    # プロバイダの作成
+    gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+      --project="${TOOL_PROJECT_ID}" \
+      --location="global" \
+      --workload-identity-pool="github-pool" \
+      --display-name="GitHub Actions Provider" \
+      --issuer-uri="https://token.actions.githubusercontent.com" \
+      --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
+    ```
+
+3.  **CI用SAへの権限付与:**
+    CI用SAがリポジトリの `main` ブランチからの操作のみを受け付けるように設定します。
+    ```bash
+    REPO="your-github-organization/your-repository-name" # e.g. "google-cloud-japan/cloud-access-manager"
+    CI_SA_EMAIL="iam-access-ci-sa@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
+
+    gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}" \
+      --project="${TOOL_PROJECT_ID}" \
+      --role="roles/iam.workloadIdentityUser" \
+      --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
+    ```
+
+4.  **CI用SAに必要なロールを付与:**
+    CI用SAには、Terraformの実行、Dockerイメージのビルドとプッシュに必要な権限が必要です。これは、`2.2 Terraform実行主体` と同様の権限セットになります。
+    ```bash
+    # (例)
+    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/run.admin
+    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/storage.admin # for tfstate
+    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/artifactregistry.writer
+    # ... その他Terraformが必要とするロール
+    ```
+
+5.  **`.github/workflows/ci.yml` の更新:**
+    `build-and-deploy` ジョブ内の `Authenticate to Google Cloud` ステップにあるプレースホルダを、実際の設定値に置き換えます。
+    - `workload_identity_provider`: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` の形式。
+    - `service_account`: 上記で作成したCI用SAのメールアドレス (`iam-access-ci-sa@...`)。
+
+### 3.3 Artifact Registryリポジトリ
+
+CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は作成してください。
+```bash
+gcloud artifacts repositories create iam-access-repo \
+  --repository-format=docker \
+  --location=${REGION} \
+  --project=${TOOL_PROJECT_ID}
+```
+もし異なる名前のリポジトリを使用する場合は、`.github/workflows/ci.yml` 内のイメージ名を更新してください。
+
+## 4. tfstate backend bootstrap手順
 
 前提:
 - `saas.env` に `TFSTATE_BUCKET`, `TFSTATE_PREFIX`, `TFSTATE_LOCATION` を設定済み
@@ -130,7 +211,7 @@ printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBH
 gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d= -f2)
 ```
 
-## 4. サービスアカウント作成コマンド（手動bootstrapが必要な場合）
+## 5. サービスアカウント作成コマンド（手動bootstrapが必要な場合）
 
 通常は Terraform が作成:
 - `google_service_account.executor` in `terraform/main.tf`
@@ -144,14 +225,14 @@ gcloud iam service-accounts create iam-access-executor \
   --display-name "IAM Access Executor"
 ```
 
-## 5. コマンド付き運用Runbook
+## 6. コマンド付き運用Runbook
 
 最短導線（対話形式）:
 ```bash
 bash scripts/bootstrap-deploy.sh
 ```
 
-### 5.1 初回セットアップ
+### 6.1 初回セットアップ
 ```bash
 cp saas.env.example saas.env
 # 必要値を編集
@@ -163,20 +244,20 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 5.2 反映後の設定
+### 6.2 反映後の設定
 ```bash
 cd terraform
 terraform output cloud_run_url
 ```
 - 出力値を `apps-script/script-properties.json` の `CLOUD_RUN_EXECUTE_URL` に反映
 
-### 5.3 SQL適用（帳票準拠）
+### 6.3 SQL適用（帳票準拠）
 ```bash
 # BigQuery UI か bq query で build/sql/*.sql を順に実行
 # 実行順は sql/README.md を参照
 ```
 
-### 5.4 変更リリース（通常運用）
+### 6.4 変更リリース（通常運用）
 ```bash
 bash scripts/sync-config.sh
 cd terraform
@@ -184,7 +265,7 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 5.5 収集ジョブ手動実行（Folder/Project・Googleグループ）
+### 6.5 収集ジョブ手動実行（Folder/Project・Googleグループ）
 ```bash
 cd terraform
 CLOUD_RUN_URL="$(terraform output -raw cloud_run_url)"
@@ -193,7 +274,7 @@ bash ../scripts/collect-resource-inventory.sh --cloud-run-url "$CLOUD_RUN_URL"
 bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
 ```
 
-### 5.6 Cloud Scheduler（日次自動実行）確認
+### 6.6 Cloud Scheduler（日次自動実行）確認
 ```bash
 cd terraform
 terraform output resource_inventory_scheduler_job
@@ -202,7 +283,7 @@ gcloud scheduler jobs describe iam-resource-inventory-daily --location "$(grep '
 gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 ```
 
-### 5.7 障害時の一次切り分け
+### 6.7 障害時の一次切り分け
 ```bash
 # Cloud Run 実行結果
 bq query --use_legacy_sql=false \
@@ -219,7 +300,7 @@ bq query --use_legacy_sql=false \
  ORDER BY occurred_at DESC LIMIT 50"
 ```
 
-## 6. 未テスト項目の申し送り運用
+## 7. 未テスト項目の申し送り運用
 
 - 未テスト事項は `docs/untested-items-handover.md` に記録して管理する。
 - 新機能や権限変更を入れた場合は、同ファイルへ項目追加してからリリースする。
