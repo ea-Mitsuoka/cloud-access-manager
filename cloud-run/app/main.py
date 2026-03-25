@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import traceback
 import uuid
+from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request
@@ -248,6 +249,158 @@ def collect_groups():
     )
 
 
+@app.post("/reconcile")
+def reconcile_iam_issues():
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+    job_type = "IAM_RECONCILIATION"
+
+    try:
+        sql_content = _read_and_format_sql("../../sql/003_reconciliation.sql")
+        job = repo._client.query(sql_content)
+        job.result()  # Wait for the job to complete
+        
+        # BigQuery INSERT DML does not return rows inserted directly in job.result()
+        # We need to query the count of newly inserted rows into iam_reconciliation_issues
+        # for this specific execution_id if we want to report it.
+        # However, the current reconciliation SQL does not use execution_id in insert,
+        # so we will just report success for now.
+
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type=job_type,
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"inserted_issues": 0},  # Placeholder for now
+            details={"sql_file": "003_reconciliation.sql"},
+        )
+        return jsonify({"execution_id": execution_id, "result": "SUCCESS"})
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
+
+
+@app.post("/revoke_expired_permissions")
+def revoke_expired_permissions():
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+    job_type = "EXPIRED_PERMISSION_REVOCATION"
+
+    try:
+        expired_requests = repo.search_expired_approved_access_requests()
+        revoked_count = 0
+        skipped_count = 0
+        failed_count = 0
+
+        for req in expired_requests:
+            # Check if the permission still actually exists
+            iam_policy_permission = repo.get_iam_policy_permission(
+                principal_email=req.principal_email,
+                role=req.role,
+                resource_name=req.resource_name,
+            )
+
+            if not iam_policy_permission:
+                # Permission already gone, skip revocation
+                result = ExecutionResult(
+                    result="SKIPPED",
+                    action="REVOKE",
+                    target=req.resource_name,
+                    before_hash=None,
+                    after_hash=None,
+                    details={"reason": "Permission already removed or never existed"},
+                )
+                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                # Update status in iam_access_requests to prevent re-processing
+                repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
+                skipped_count += 1
+                continue
+
+            try:
+                # This request was originally a GRANT, but we need to revoke it.
+                req.request_type = "REVOKE"
+                result = iam_executor.execute(req) # Reuse existing iam_executor to revoke
+                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                if result.result == "SUCCESS":
+                    repo.update_request_status(req.request_id, "REVOKED")
+                    revoked_count += 1
+                else:
+                    repo.update_request_status(req.request_id, "REVOKE_FAILED")
+                    failed_count += 1
+            except Exception as inner_exc:
+                result = ExecutionResult(
+                    result="FAILED",
+                    action="REVOKE",
+                    target=req.resource_name,
+                    before_hash=None,
+                    after_hash=None,
+                    error_code=type(inner_exc).__name__,
+                    error_message=str(inner_exc),
+                    details={"trace": traceback.format_exc(limit=3)},
+                )
+                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                repo.update_request_status(req.request_id, "REVOKE_FAILED")
+                failed_count += 1
+
+        report_result = "SUCCESS" if failed_count == 0 else "FAILED"
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type=job_type,
+            result=report_result,
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"revoked": revoked_count, "skipped": skipped_count, "failed": failed_count},
+            details={},
+        )
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": report_result,
+                "revoked": revoked_count,
+                "skipped": skipped_count,
+                "failed": failed_count,
+            }
+        )
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
+
+
 def _authorize() -> bool:
     if _authorize_scheduler_oidc():
         return True
@@ -318,3 +471,12 @@ def _permission_hint(job_type: str) -> str:
             "verify cloudidentity.googleapis.com is enabled."
         )
     return "Verify IAM permissions for this collection job."
+
+
+def _read_and_format_sql(filename: str) -> str:
+    # Assuming SQL files are in the 'sql' directory relative to the project root.
+    # The cloud-run app is in cloud-run/app, so '../../sql' points to the 'sql' directory.
+    sql_path = Path(__file__).parent.joinpath(filename).resolve()
+    with open(sql_path, "r") as f:
+        sql_content = f.read()
+    return sql_content.replace("`your_project.your_dataset.", f"`{PROJECT_ID}.{DATASET_ID}.")

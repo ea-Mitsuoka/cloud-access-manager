@@ -157,6 +157,76 @@ class Repository:
             inserted += len(chunk)
         return inserted
 
+    @property
+    def iam_policy_permissions_table(self) -> str:
+        return f"{self._project_id}.{self._dataset_id}.iam_policy_permissions"
+
+    def get_iam_policy_permission(
+        self, principal_email: str, role: str, resource_name: str
+    ) -> dict[str, Any] | None:
+        sql = f"""
+        SELECT 1
+        FROM `{self.iam_policy_permissions_table}`
+        WHERE principal_email = @principal_email
+          AND role = @role
+          AND resource_name = @resource_name
+        LIMIT 1
+        """
+        params = [
+            bigquery.ScalarQueryParameter("principal_email", "STRING", principal_email),
+            bigquery.ScalarQueryParameter("role", "STRING", role),
+            bigquery.ScalarQueryParameter("resource_name", "STRING", resource_name),
+        ]
+        rows = list(self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
+        if not rows:
+            return None
+        return rows[0]
+
+    def update_request_status(self, request_id: str, status: str) -> None:
+        sql = f"""
+        UPDATE `{self.requests_table}`
+        SET status = @status
+        WHERE request_id = @request_id
+        """
+        params = [
+            bigquery.ScalarQueryParameter("status", "STRING", status),
+            bigquery.ScalarQueryParameter("request_id", "STRING", request_id),
+        ]
+        self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+
+    def search_expired_approved_access_requests(self) -> list[AccessRequest]:
+        sql = f"""
+        SELECT
+            request_id,
+            request_type,
+            principal_email,
+            resource_name,
+            role,
+            status,
+            approved_at,
+            expires_at
+        FROM `{self.requests_table}`
+        WHERE status = 'APPROVED'
+          AND expires_at IS NOT NULL
+          AND expires_at < CURRENT_TIMESTAMP()
+        """
+        rows = self._client.query(sql).result()
+        requests = []
+        for row in rows:
+            requests.append(
+                AccessRequest(
+                    request_id=row["request_id"],
+                    request_type=row["request_type"],
+                    principal_email=row["principal_email"],
+                    resource_name=row["resource_name"],
+                    role=row["role"],
+                    status=row["status"],
+                    approved_at=row["approved_at"],
+                    expires_at=row["expires_at"],
+                )
+            )
+        return requests
+
     def insert_pipeline_job_report(
         self,
         *,

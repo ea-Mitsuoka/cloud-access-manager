@@ -67,6 +67,18 @@ variable "group_collection_schedule" {
   default     = "30 3 * * *"
 }
 
+variable "reconciliation_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /reconcile"
+  default     = "0 4 * * *" # Daily at 04:00 AM
+}
+
+variable "revoke_expired_permissions_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /revoke_expired_permissions"
+  default     = "0 5 * * *" # Daily at 05:00 AM
+}
+
 variable "scheduler_time_zone" {
   type        = string
   description = "Time zone for Cloud Scheduler jobs"

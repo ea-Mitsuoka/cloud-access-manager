@@ -373,3 +373,57 @@ resource "google_cloud_scheduler_job" "group_collection_daily" {
     google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
   ]
 }
+
+resource "google_cloud_scheduler_job" "reconciliation_daily" {
+  name      = "iam-reconciliation-daily"
+  project   = var.tool_project_id
+  region    = var.region
+  schedule  = var.reconciliation_schedule
+  time_zone = var.scheduler_time_zone
+
+  http_target {
+    uri         = "${google_cloud_run_v2_service.executor.uri}/reconcile"
+    http_method = "POST"
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode("{}")
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler_invoker.email
+      audience              = google_cloud_run_v2_service.executor.uri
+    }
+  }
+
+  depends_on = [
+    google_project_service.services,
+    google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
+  ]
+}
+
+resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
+  name      = "iam-revoke-expired-permissions-daily"
+  project   = var.tool_project_id
+  region    = var.region
+  schedule  = var.revoke_expired_permissions_schedule
+  time_zone = var.scheduler_time_zone
+
+  http_target {
+    uri         = "${google_cloud_run_v2_service.executor.uri}/revoke_expired_permissions"
+    http_method = "POST"
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode("{}")
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler_invoker.email
+      audience              = google_cloud_run_v2_service.executor.uri
+    }
+  }
+
+  depends_on = [
+    google_project_service.services,
+    google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
+  ]
+}

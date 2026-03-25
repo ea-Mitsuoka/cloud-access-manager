@@ -64,23 +64,40 @@ FROM catalog_roles
 WHERE role_name IS NOT NULL;
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_iam_permission_history` AS
+WITH
+  LatestChangeLog AS (
+    SELECT
+      request_id,
+      ARRAY_AGG(STRUCT(action, result) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS latest_exec
+    FROM `your_project.your_dataset.iam_access_change_log`
+    GROUP BY request_id
+  )
 SELECT
-  resource_name AS `リソース名`,
-  resource_id AS `リソースID`,
-  resource_full_path AS `リソースのフルパス`,
-  principal_email AS `プリンシパル`,
-  principal_type AS `種別`,
-  iam_role AS `IAMロール`,
-  iam_condition AS `IAM Condition`,
-  ticket_ref AS `申請チケット番号`,
-  request_reason AS `申請理由・用途`,
-  status_ja AS `ステータス`,
-  approved_at AS `承認日`,
-  next_review_at AS `次回レビュー日`,
-  approver AS `承認者`,
-  request_id AS `request_id`,
-  recorded_at AS `recorded_at`
-FROM `your_project.your_dataset.iam_permission_bindings_history`;
+  p.resource_name AS `リソース名`,
+  p.resource_id AS `リソースID`,
+  p.resource_full_path AS `リソースのフルパス`,
+  p.principal_email AS `プリンシパル`,
+  p.principal_type AS `種別`,
+  p.iam_role AS `IAMロール`,
+  p.iam_condition AS `IAM Condition`,
+  p.ticket_ref AS `申請チケット番号`,
+  p.request_reason AS `申請理由・用途`,
+  COALESCE(r.status, p.status_ja) AS `ステータス`, -- Use request status if available, fallback to history status
+  p.approved_at AS `承認日`,
+  p.next_review_at AS `次回レビュー日`,
+  p.approver AS `承認者`,
+  p.request_id AS `request_id`,
+  p.recorded_at AS `recorded_at`,
+  r.expires_at AS `利用期限`,
+  r.status AS `リクエストステータス`,
+  lcl.latest_exec.action AS `最終実行アクション`,
+  lcl.latest_exec.result AS `最終実行結果`
+FROM `your_project.your_dataset.iam_permission_bindings_history` AS p
+LEFT JOIN `your_project.your_dataset.iam_access_requests` AS r
+  ON p.request_id = r.request_id
+LEFT JOIN LatestChangeLog AS lcl
+  ON p.request_id = lcl.request_id;
+
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_status` AS
 SELECT
