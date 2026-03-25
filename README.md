@@ -383,6 +383,35 @@ graph TD
     - リソース棚卸しは、そのプロジェクト内のリソースのみが対象です。
     - Googleグループ収集機能は、組織レベルの権限を必要とするため、正常に動作しない可能性が高いです。
 
+### 10.7 CI/CD
+
+このリポジトリでは、GitHub Actions を利用してCI/CDパイプラインが設定されています。
+
+- **Pull Request**: Pull Requestを作成すると、`terraform plan` が自動的に実行され、その結果がPull Requestのコメントとして投稿されます。これにより、変更内容をマージする前に確認できます。
+- **Merge to main**: Pull Requestが `main` ブランチにマージされると、`terraform apply` が自動的に実行され、インフラストラクチャが更新されます。
+
+#### 設定
+
+このCI/CDパイプラインを動作させるには、GitHubリポジトリの **Settings > Secrets and variables > Actions** で、以下のSecretとVariableを設定する必要があります。
+
+##### Secrets
+
+| 名前                  | 説明                                                                                                |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `WIF_PROVIDER`        | Google CloudのWorkload Identity連携で使用するWorkload Identity Poolのプロバイダ名。                   |
+| `WIF_SERVICE_ACCOUNT` | Google CloudのWorkload Identity連携で使用するサービスアカウントのメールアドレス。                     |
+
+##### Variables
+
+| 名前                        | 説明                               |
+| --------------------------- | ---------------------------------- |
+| `TOOL_PROJECT_ID`           | CI/CDツールが使用するGCPプロジェクトID |
+| `REGION`                    | GCPリソースのリージョン            |
+| `MANAGED_PROJECT_ID`        | Terraformが管理するGCPプロジェクトID |
+| `ORGANIZATION_ID`           | GCPの組織ID                        |
+| `BQ_DATASET_ID`             | BigQueryのデータセットID             |
+| `WORKSPACE_CUSTOMER_ID`     | Google Workspaceの顧客ID           |
+
 ## 12. SaaS向け設定一元化
 
 - ルート直下の `saas.env` を単一の設定ソースとして扱う。

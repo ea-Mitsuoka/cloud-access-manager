@@ -16,15 +16,16 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.x # Or the specific version used in the project
+          terraform_version: 1.x
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
+        working-directory: terraform
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # Or the specific version used in the project
+          python-version: '3.10'
 
       - name: Install Python dependencies
         run: |
@@ -53,23 +54,117 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
-          version: 1.8.2 # Use a specific version for consistency
+          version: 1.8.2
 
       - name: Install dependencies
         run: poetry install
 
       - name: Run tests
         run: poetry run pytest
-  build-and-deploy:
-    name: Build & Deploy
+
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download image name artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: image-name
+          path: .
+          if-no-files-found: error
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v1'
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Create tfvars file
+        run: |
+          CLOUD_RUN_IMAGE=$(cat image_name.txt)
+          echo "tool_project_id = "${{ vars.TOOL_PROJECT_ID }}"" > terraform/environment.auto.tfvars
+          echo "region = "${{ vars.REGION }}"" >> terraform/environment.auto.tfvars
+          echo "managed_project_id = "${{ vars.MANAGED_PROJECT_ID }}"" >> terraform/environment.auto.tfvars
+          echo "organization_id = "${{ vars.ORGANIZATION_ID }}"" >> terraform/environment.auto.tfvars
+          echo "cloud_run_image = "$CLOUD_RUN_IMAGE"" >> terraform/environment.auto.tfvars
+          echo "dataset_id = "${{ vars.BQ_DATASET_ID }}"" >> terraform/environment.auto.tfvars
+          echo "cloud_run_service_name = "iam-access-executor"" >> terraform/environment.auto.tfvars
+          echo "webhook_secret_name = "iam-access-webhook-token"" >> terraform/environment.auto.tfvars
+          echo "workspace_customer_id = "${{ vars.WORKSPACE_CUSTOMER_ID }}"" >> terraform/environment.auto.tfvars
+          echo "resource_collection_schedule = "0 3 * * *"" >> terraform/environment.auto.tfvars
+          echo "group_collection_schedule = "30 3 * * *"" >> terraform/environment.auto.tfvars
+          echo "reconciliation_schedule = "0 4 * * *"" >> terraform/environment.auto.tfvars
+          echo "revoke_expired_permissions_schedule = "0 5 * * *"" >> terraform/environment.auto.tfvars
+          echo "iam_bindings_history_update_schedule = "0 2 * * *"" >> terraform/environment.auto.tfvars
+          echo "scheduler_time_zone = "Asia/Tokyo"" >> terraform/environment.auto.tfvars
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.x
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config=../backend.hcl
+        working-directory: terraform
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -input=false -out=tfplan
+        working-directory: terraform
+        continue-on-error: true
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Plan 📖`${{ steps.plan.outcome }}`
+            <details><summary>Show Plan</summary>
+
+            ```
+
+            ${{ steps.plan.outputs.stdout }}
+            ```
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: `${{ github.event_name }}`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: terraform/tfplan
+          if-no-files-found: error
+
+  build:
+    name: Build Container Image
     runs-on: ubuntu-latest
     needs: test
-    if: github.ref == 'refs/heads/main'
-
-    # Add 'id-token' with 'write' permission.
     permissions:
       contents: 'read'
       id-token: 'write'
+    outputs:
+      image_name: ${{ steps.build-image.outputs.image_name }}
 
     steps:
       - name: Checkout code
@@ -78,8 +173,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v1'
         with:
-          workload_identity_provider: 'projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<POOL_ID>/providers/<PROVIDER_ID>'
-          service_account: 'iam-access-ci-sa@${{ vars.TOOL_PROJECT_ID }}.iam.gserviceaccount.com' # Placeholder SA
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
         uses: 'google-github-actions/setup-gcloud@v1'
@@ -88,9 +183,47 @@ jobs:
         run: gcloud auth configure-docker ${{ vars.REGION }}-docker.pkg.dev
 
       - name: Build and push container image
+        id: build-image
         run: |
-          docker build -t ${{ vars.REGION }}-docker.pkg.dev/${{ vars.TOOL_PROJECT_ID }}/iam-access-repo/iam-access-executor:${{ github.sha }} ./cloud-run
-          docker push ${{ vars.REGION }}-docker.pkg.dev/${{ vars.TOOL_PROJECT_ID }}/iam-access-repo/iam-access-executor:${{ github.sha }}
+          IMAGE_NAME="${{ vars.REGION }}-docker.pkg.dev/${{ vars.TOOL_PROJECT_ID }}/iam-access-repo/iam-access-executor:${{ github.sha }}"
+          docker build -t $IMAGE_NAME ./cloud-run
+          docker push $IMAGE_NAME
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo $IMAGE_NAME > image_name.txt
+
+      - name: Upload image name artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: image-name
+          path: image_name.txt
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+          path: terraform
+          if-no-files-found: error
+
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v1'
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # Set WIF_PROVIDER in repository secrets
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # Set WIF_SERVICE_ACCOUNT in repository secrets
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
@@ -98,9 +231,9 @@ jobs:
           terraform_version: 1.x
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend-config=../backend.hcl
         working-directory: terraform
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="cloud_run_image=${{ vars.REGION }}-docker.pkg.dev/${{ vars.TOOL_PROJECT_ID }}/iam-access-repo/iam-access-executor:${{ github.sha }}"
+        run: terraform apply -input=false tfplan
         working-directory: terraform
