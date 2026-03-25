@@ -95,6 +95,10 @@ required=(
   WEBHOOK_SECRET_NAME
   WORKSPACE_CUSTOMER_ID
   RESOURCE_COLLECTION_SCHEDULE
+  GROUP_COLLECTION_SCHEDULE
+  RECONCILIATION_SCHEDULE
+  REVOKE_EXPIRED_PERMISSIONS_SCHEDULE
+  IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE
   SCHEDULER_TIME_ZONE
   BQ_LOCATION
   TFSTATE_BUCKET
@@ -136,15 +140,15 @@ if ! ask_yes_no "Proceed with bootstrap + deploy workflow?" y; then
 fi
 
 echo
-echo "[1/6] Syncing generated config files..."
+echo "[1/8] Syncing generated config files..."
 bash "$ROOT_DIR/scripts/sync-config.sh" "$CONFIG_FILE"
 
 echo
-echo "[2/6] Bootstrapping tfstate bucket..."
+echo "[2/8] Bootstrapping tfstate bucket..."
 bash "$ROOT_DIR/scripts/bootstrap-tfstate.sh" "$CONFIG_FILE"
 
 echo
-echo "[3/6] Preparing webhook secret in Secret Manager..."
+echo "[3/8] Preparing webhook secret in Secret Manager..."
 if gcloud secrets describe "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" >/dev/null 2>&1; then
   echo "Secret exists: $WEBHOOK_SECRET_NAME"
 else
@@ -164,22 +168,22 @@ if ask_yes_no "Add a new secret version now?" n; then
 fi
 
 echo
-echo "[4/6] Terraform init..."
+echo "[4/8] Terraform init..."
 cd "$ROOT_DIR/terraform"
 terraform init -backend-config="$ROOT_DIR/backend.hcl"
 
 echo
-echo "[5/6] Terraform plan..."
+echo "[5/8] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
 
 if [[ "$SKIP_APPLY" == "true" ]]; then
   echo
-  echo "[6/6] Apply skipped by --skip-apply."
+  echo "[6/8] Apply skipped by --skip-apply."
   exit 0
 fi
 
 echo
-echo "[6/6] Terraform apply..."
+echo "[6/8] Terraform apply..."
 if [[ "$AUTO_APPROVE" == "true" ]]; then
   terraform apply -auto-approve -var-file="$ROOT_DIR/environment.auto.tfvars"
 else
@@ -187,9 +191,46 @@ else
 fi
 
 echo
-echo "Deployment complete."
+echo "[7/8] Applying BigQuery SQL definitions..."
+require_cmd bq
+
+sql_dir="$ROOT_DIR/build/sql"
+if [[ ! -d "$sql_dir" ]] || [[ -z "$(find "$sql_dir" -name '*.sql')" ]]; then
+  echo "Warning: No SQL files found in $sql_dir. Skipping BigQuery setup." >&2
+  echo "Ensure you have run 'bash scripts/sync-config.sh' first." >&2
+else
+  # Execute SQL files. The sync-config.sh script should have replaced placeholders.
+  for sql_file in $(find "$sql_dir" -name '*.sql' | sort); do
+    echo "Executing: $sql_file"
+    if ! bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$sql_file"; then
+      echo "Error executing $sql_file. Please check BigQuery permissions and SQL syntax." >&2
+      exit 1
+    fi
+  done
+  echo "All SQL files applied successfully."
+fi
+
+echo
+echo "[8/8] Initial Data Collection"
+if ask_yes_no "Run initial data collection jobs (resources and groups)? This may take a few minutes." y; then
+  if terraform output cloud_run_url >/dev/null 2>&1; then
+    cloud_run_url="$(terraform output -raw cloud_run_url)"
+    echo "Collecting resource inventory..."
+    bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" --cloud-run-url "$cloud_run_url"
+    echo "Collecting Google Groups..."
+    bash "$ROOT_DIR/scripts/collect-google-groups.sh" --cloud-run-url "$cloud_run_url"
+    echo "Initial data collection jobs triggered."
+  else
+    echo "Warning: Could not get Cloud Run URL from terraform output. Skipping data collection." >&2
+  fi
+else
+  echo "Skipping initial data collection. You can run collection scripts manually later."
+fi
+
+echo
+echo "=== Bootstrap & Deploy Complete ==="
 if terraform output cloud_run_url >/dev/null 2>&1; then
   cloud_run_url="$(terraform output -raw cloud_run_url)"
   echo "Cloud Run URL: $cloud_run_url"
-  echo "Set this into apps-script/script-properties.json: CLOUD_RUN_EXECUTE_URL"
+  echo "Please ensure this URL is set in your Google Apps Script properties (key: CLOUD_RUN_EXECUTE_URL)."
 fi
