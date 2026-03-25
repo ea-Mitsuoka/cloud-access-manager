@@ -11,25 +11,14 @@ from .models import AccessRequest, ExecutionResult
 
 class IamExecutor:
     def __init__(self) -> None:
-        self._crm = discovery.build("cloudresourcemanager", "v1", cache_discovery=False)
+        self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
 
     def execute(self, req: AccessRequest) -> ExecutionResult:
         action = self._normalize_action(req.request_type)
         member = self._to_member(req.principal_email)
-        target_type, target_id = self._parse_resource(req.resource_name)
+        target_type, _ = self._parse_resource(req.resource_name)
 
-        if target_type != "projects":
-            return ExecutionResult(
-                result="FAILED",
-                action=action,
-                target=req.resource_name,
-                before_hash=None,
-                after_hash=None,
-                error_code="UNSUPPORTED_TARGET",
-                error_message="MVP supports only projects/{project_id}",
-            )
-
-        policy = self._get_project_policy(target_id)
+        policy = self._get_policy(req.resource_name)
         before_hash = self._policy_hash(policy)
         changed = self._apply_diff(policy, req.role, member, action)
 
@@ -43,7 +32,7 @@ class IamExecutor:
                 details={"reason": "no diff"},
             )
 
-        updated = self._set_project_policy(target_id, policy)
+        updated = self._set_policy(req.resource_name, policy)
         after_hash = self._policy_hash(updated)
         return ExecutionResult(
             result="SUCCESS",
@@ -72,18 +61,32 @@ class IamExecutor:
     def _parse_resource(resource_name: str) -> tuple[str, str]:
         if resource_name.startswith("projects/"):
             return "projects", resource_name.split("/", 1)[1]
+        if resource_name.startswith("folders/"):
+            return "folders", resource_name.split("/", 1)[1]
+        if resource_name.startswith("organizations/"):
+            return "organizations", resource_name.split("/", 1)[1]
         raise ValueError(f"unsupported resource_name format: {resource_name}")
 
-    def _get_project_policy(self, project_id: str) -> dict[str, Any]:
-        req = self._crm.projects().getIamPolicy(resource=project_id, body={})
-        return req.execute()
+    def _get_policy(self, resource: str) -> dict[str, Any]:
+        if resource.startswith("projects/"):
+            return self._crm.projects().getIamPolicy(resource=resource).execute()
+        elif resource.startswith("folders/"):
+            return self._crm.folders().getIamPolicy(resource=resource).execute()
+        elif resource.startswith("organizations/"):
+            return self._crm.organizations().getIamPolicy(resource=resource).execute()
+        else:
+            raise ValueError(f"Unsupported resource type for getIamPolicy: {resource}")
 
-    def _set_project_policy(self, project_id: str, policy: dict[str, Any]) -> dict[str, Any]:
-        req = self._crm.projects().setIamPolicy(
-            resource=project_id,
-            body={"policy": policy},
-        )
-        return req.execute()
+    def _set_policy(self, resource: str, policy: dict[str, Any]) -> dict[str, Any]:
+        body = {"policy": policy}
+        if resource.startswith("projects/"):
+            return self._crm.projects().setIamPolicy(resource=resource, body=body).execute()
+        elif resource.startswith("folders/"):
+            return self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
+        elif resource.startswith("organizations/"):
+            return self._crm.organizations().setIamPolicy(resource=resource, body=body).execute()
+        else:
+            raise ValueError(f"Unsupported resource type for setIamPolicy: {resource}")
 
     @staticmethod
     def _policy_hash(policy: dict[str, Any]) -> str:

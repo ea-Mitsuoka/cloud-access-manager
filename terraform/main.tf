@@ -241,6 +241,21 @@ resource "google_organization_iam_member" "executor_org_cloudasset_viewer" {
   member = "serviceAccount:${google_service_account.executor.email}"
 }
 
+resource "google_organization_iam_member" "executor_org_folder_admin" {
+  count  = local.organization_scope_enabled ? 1 : 0
+  org_id = var.organization_id
+  role   = "roles/resourcemanager.folderAdmin"
+  member = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_organization_iam_member" "executor_org_organization_admin" {
+  count  = local.organization_scope_enabled ? 1 : 0
+  org_id = var.organization_id
+  role   = "roles/resourcemanager.organizationAdmin"
+  member = "serviceAccount:${google_service_account.executor.email}"
+}
+
+
 resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
   project   = var.tool_project_id
   secret_id = var.webhook_secret_name
@@ -308,6 +323,8 @@ resource "google_cloud_run_v2_service" "executor" {
     google_organization_iam_member.executor_org_project_iam_admin,
     google_organization_iam_member.executor_org_browser,
     google_organization_iam_member.executor_org_cloudasset_viewer,
+    google_organization_iam_member.executor_org_folder_admin,
+    google_organization_iam_member.executor_org_organization_admin,
     google_secret_manager_secret_iam_member.executor_secret_accessor,
   ]
 }
