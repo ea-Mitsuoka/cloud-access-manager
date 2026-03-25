@@ -58,5 +58,6 @@ curl -X POST \"https://<service-url>/collect/groups\" \\
 ```
 
 Note:
+
 - Group collection uses Cloud Identity API and requires Workspace-side read permissions in addition to GCP IAM.
 - Permission errors are returned as `FAILED_PERMISSION` with actionable `hint`, and also recorded in BigQuery `pipeline_job_reports`.

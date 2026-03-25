@@ -17,6 +17,55 @@
 
 ## 3. アーキテクチャ（最小構成）
 
+```mermaid
+graph TD
+    subgraph "User Interaction"
+        A[User] --> B("Google Form")
+        B --> C("Google Sheet: requests_raw")
+    end
+
+    subgraph "Data Processing & Automation"
+        C --> D["Google Apps Script"]
+        D --> E["BigQuery: iam_access_requests"]
+
+        subgraph "Cloud Run Service"
+            CR["Cloud Run (iam-access-executor)"]
+            E --> CR
+            F("Cloud Scheduler") --> CR
+        end
+
+        CR -- "IAM API" --> G["Google Cloud IAM"]
+        G --> CR
+        CR --> H["BigQuery: iam_access_change_log"]
+        CR --> I["BigQuery: gcp_resource_inventory_history"]
+        CR --> J["BigQuery: google_groups"]
+        CR --> K["BigQuery: google_group_membership_history"]
+        CR --> L["BigQuery: iam_reconciliation_issues"]
+        CR --> M["BigQuery: pipeline_job_reports"]
+        CR --> N["BigQuery: iam_policy_permissions_history"]
+        CR --> O["BigQuery: iam_permission_bindings_history"]
+    end
+
+    subgraph "Data Visualization"
+        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report")
+        E -- "used by views" --> P
+        H -- "used by views" --> P
+        I -- "used by views" --> P
+        J -- "used by views" --> P
+        K -- "used by views" --> P
+        L -- "used by views" --> P
+        N -- "used by views" --> P
+        O -- "used by views" --> P
+    end
+
+    style CR fill:#f9f,stroke:#333,stroke-width:2px
+    style F fill:#bbf,stroke:#333,stroke-width:2px
+    style G fill:#fcf,stroke:#333,stroke-width:2px
+    style B fill:#fcf,stroke:#333,stroke-width:2px
+    style C fill:#fcf,stroke:#333,stroke-width:2px
+    style Q fill:#fcf,stroke:#333,stroke-width:2px
+```
+
 ### 3.1 入力層（Googleフォーム）
 
 - 申請入力UIを提供する。
@@ -32,6 +81,64 @@
   - 承認者メール（または承認グループ）
 - 申請前支援として Gemini 提案アシスタント（Apps Script Web アプリ）を併用し、申請者は「やりたいこと」から候補ロールを確認できる。
 - Googleフォームには任意JavaScriptボタンを埋め込めないため、フォーム説明欄に Gemini 提案アシスタントURLを配置して導線化する。
+
+#### フォーム入力例
+
+以下は、ユーザーがGoogleフォームを利用して権限を申請する際の入力イメージです。
+
+```plaintext
+-----------------------------------------------------------------
+| IAM Access Request Form                                       |
+-----------------------------------------------------------------
+|                                                               |
+| Email Address: your-name@example.com                          |
+| * Required                                                    |
+|                                                               |
+| 申請種別 (Request Type) *                                      |
+|   ( ) 新規付与 (Grant)                                         |
+|   ( ) 変更 (Change)                                            |
+|   ( ) 削除 (Revoke)                                            |
+|                                                               |
+| 対象プリンシパル (Principal Email) *                             |
+|   [ user@example.com                               ]          |
+|                                                               |
+| 対象リソース (Resource Name) *                                  |
+|   [ projects/your-project-id                       ]          |
+|                                                               |
+| 付与・変更ロール (Role) *                                        |
+|   [ roles/storage.objectViewer                     ]          |
+|   (ヒント: どのロールを選べば良いか分からない場合は、説明欄の          |
+|    「Geminiロール提案アシスタント」をご利用ください)                 |
+|                                                               |
+| 申請理由・利用目的 (Reason) *                                    |
+|   [ (テキストボックス) 分析データ閲覧のため。        ]              |
+|                                                               |
+| 利用期限 (Expiration)                                          |
+|   ( ) 恒久 (Permanent)                                        |
+|   (o) 期限日を指定 (Specify Date) [ 2024-12-31 ]                |
+|                                                               |
+| 承認者メール (Approver Email) *                                 |
+|   [ approver@example.com                           ]          |
+|                                                               |
+| [ Submit ]                                                    |
+|                                                               |
+-----------------------------------------------------------------
+```
+
+#### 使い方
+
+1. **フォームを開く:** 提供されたURLからGoogleフォームにアクセスします。
+1. **申請種別:** 「新規付与」「変更」「削除」から目的の操作を選択します。
+1. **対象プリンシパル:** 権限を付与または剥奪したいユーザー、グループ、またはサービスアカウントの完全なメールアドレスを入力します。
+1. **対象リソース:** 権限を設定したいリソース名を正確に入力します。
+   - プロジェクト: `projects/your-project-id`
+   - フォルダ: `folders/123456789012`
+   - 組織: `organizations/123456789012`
+1. **付与・変更ロール:** 付与したいIAMロールを正確に入力します (例: `roles/storage.objectViewer`)。
+1. **申請理由・利用目的:** なぜこの権限が必要なのか、具体的な理由を記述します。
+1. **利用期限:** 権限が恒久的に必要か、あるいは特定の日付までの一時的なものかを選択します。
+1. **承認者メール:** この申請を承認する権限を持つ人のメールアドレスを入力します。
+1. **送信:** 全ての項目を入力したら、「Submit」ボタンを押して申請を完了します。申請内容は自動的に管理表に記録され、承認フローが開始されます。
 
 ### 3.2 審査層（Google Apps Script）
 
@@ -103,6 +210,7 @@
     - `executed_at`
 
 - `iam_access_request_history`
+
   - 用途: 申請・承認の監査履歴（利用目的スナップショット含む）
   - 主要列:
     - `history_id`
@@ -261,11 +369,13 @@
 本システムは、お客様の環境やセキュリティ要件に応じて、2つの運用モードをサポートします。
 
 - **Organizationモード (推奨):**
+
   - `saas.env` で `organization_id` を設定した場合に有効になります。
   - フォルダ階層を含むリソースの完全な棚卸しや、Googleグループの収集など、すべての機能が利用可能です。
   - 実行サービスアカウントには、組織レベルでのIAMロール (`roles/resourcemanager.projectIamAdmin`, `roles/resourcemanager.folderAdmin`, `roles/cloudasset.viewer` など) が必要です。
 
 - **Project-onlyモード:**
+
   - `saas.env` で `organization_id` を空にした場合に有効になります。
   - 機能が単一の指定プロジェクト (`managed_project_id`) に限定されます。SaaSとして提供するなど、お客様が組織全体の権限を付与できない場合に適しています。
   - **制限事項:**

@@ -20,19 +20,21 @@
   - リソース棚卸しも、プロジェクト内のリソースのみが対象です。
   - **Googleグループ収集機能は、組織/ワークスペースレベルの権限を必要とするため、このモードでは正常に動作しない可能性が高いです。**
 
----
+______________________________________________________________________
 
 ## 2. 必要IAMロール一覧
 
 ### 2.1 Cloud Run実行SA（`iam-access-executor@<tool_project>.iam.gserviceaccount.com`）
 
 必須（最小）:
+
 - `roles/bigquery.dataEditor` on `tool_project:dataset`（dataset単位）
 - `roles/bigquery.jobUser` on `tool_project`
 - `roles/artifactregistry.reader` on `tool_project`（Artifact Registryのプライベートイメージを使う場合）
 - `roles/secretmanager.secretAccessor` on webhook secret
 
 管理対象への付与（要件に応じて）:
+
 - `organization_id = ""` の場合:
   - `roles/resourcemanager.projectIamAdmin` on `managed_project_id`（単一プロジェクトのみ）
   - `roles/cloudasset.viewer` on `managed_project_id`（Folder/Project収集）
@@ -42,12 +44,14 @@
   - `roles/cloudasset.viewer` on managed organization（Folder/Project収集）
 
 Googleグループ収集の前提:
+
 - `cloudidentity.googleapis.com` を有効化
 - Workspace/Cloud Identity 側で実行SAにグループ参照権限を付与（組織運用ルールに従う）
 
 ### 2.2 Terraform実行主体（開発者 or CI用SA）
 
 必須（`tool_project`）:
+
 - `roles/serviceusage.serviceUsageAdmin`
 - `roles/bigquery.admin`
 - `roles/run.admin`
@@ -57,6 +61,7 @@ Googleグループ収集の前提:
 - `roles/iam.serviceAccountUser` on executor SA
 
 `tfstate` バケット作成・管理用（初回bootstrap）:
+
 - `roles/storage.admin` on `tool_project`
 
 ### 2.3 ロール付与コマンド例
@@ -117,79 +122,88 @@ fi
 
 CIジョブがGoogle Cloudリソースを操作するために、パスワードレス認証であるWorkload Identity Federation（WIF）を設定します。
 
-1.  **CI用のサービスアカウント作成:**
-    ```bash
-    gcloud iam service-accounts create iam-access-ci-sa \
-      --project="${TOOL_PROJECT_ID}" \
-      --display-name="IAM Access CI/CD"
-    ```
+1. **CI用のサービスアカウント作成:**
 
-2.  **WIFプールとプロバイダの作成:**
-    ```bash
-    # プールの作成
-    gcloud iam workload-identity-pools create "github-pool" \
-      --project="${TOOL_PROJECT_ID}" \
-      --location="global" \
-      --display-name="GitHub Actions Pool"
+   ```bash
+   gcloud iam service-accounts create iam-access-ci-sa \
+     --project="${TOOL_PROJECT_ID}" \
+     --display-name="IAM Access CI/CD"
+   ```
 
-    # プールのIDを取得
-    WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" --project="${TOOL_PROJECT_ID}" --location="global" --format="value(name)")
+1. **WIFプールとプロバイダの作成:**
 
-    # プロバイダの作成
-    gcloud iam workload-identity-pools providers create-oidc "github-provider" \
-      --project="${TOOL_PROJECT_ID}" \
-      --location="global" \
-      --workload-identity-pool="github-pool" \
-      --display-name="GitHub Actions Provider" \
-      --issuer-uri="https://token.actions.githubusercontent.com" \
-      --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
-    ```
+   ```bash
+   # プールの作成
+   gcloud iam workload-identity-pools create "github-pool" \
+     --project="${TOOL_PROJECT_ID}" \
+     --location="global" \
+     --display-name="GitHub Actions Pool"
 
-3.  **CI用SAへの権限付与:**
-    CI用SAがリポジトリの `main` ブランチからの操作のみを受け付けるように設定します。
-    ```bash
-    REPO="your-github-organization/your-repository-name" # e.g. "google-cloud-japan/cloud-access-manager"
-    CI_SA_EMAIL="iam-access-ci-sa@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
+   # プールのIDを取得
+   WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" --project="${TOOL_PROJECT_ID}" --location="global" --format="value(name)")
 
-    gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}" \
-      --project="${TOOL_PROJECT_ID}" \
-      --role="roles/iam.workloadIdentityUser" \
-      --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
-    ```
+   # プロバイダの作成
+   gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+     --project="${TOOL_PROJECT_ID}" \
+     --location="global" \
+     --workload-identity-pool="github-pool" \
+     --display-name="GitHub Actions Provider" \
+     --issuer-uri="https://token.actions.githubusercontent.com" \
+     --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
+   ```
 
-4.  **CI用SAに必要なロールを付与:**
-    CI用SAには、Terraformの実行、Dockerイメージのビルドとプッシュに必要な権限が必要です。これは、`2.2 Terraform実行主体` と同様の権限セットになります。
-    ```bash
-    # (例)
-    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/run.admin
-    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/storage.admin # for tfstate
-    gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/artifactregistry.writer
-    # ... その他Terraformが必要とするロール
-    ```
+1. **CI用SAへの権限付与:**
+   CI用SAがリポジトリの `main` ブランチからの操作のみを受け付けるように設定します。
 
-5.  **`.github/workflows/ci.yml` の更新:**
-    `build-and-deploy` ジョブ内の `Authenticate to Google Cloud` ステップにあるプレースホルダを、実際の設定値に置き換えます。
-    - `workload_identity_provider`: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` の形式。
-    - `service_account`: 上記で作成したCI用SAのメールアドレス (`iam-access-ci-sa@...`)。
+   ```bash
+   REPO="your-github-organization/your-repository-name" # e.g. "google-cloud-japan/cloud-access-manager"
+   CI_SA_EMAIL="iam-access-ci-sa@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
+
+   gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}" \
+     --project="${TOOL_PROJECT_ID}" \
+     --role="roles/iam.workloadIdentityUser" \
+     --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
+   ```
+
+1. **CI用SAに必要なロールを付与:**
+   CI用SAには、Terraformの実行、Dockerイメージのビルドとプッシュに必要な権限が必要です。これは、`2.2 Terraform実行主体` と同様の権限セットになります。
+
+   ```bash
+   # (例)
+   gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/run.admin
+   gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/storage.admin # for tfstate
+   gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$CI_SA_EMAIL" --role roles/artifactregistry.writer
+   # ... その他Terraformが必要とするロール
+   ```
+
+1. **`.github/workflows/ci.yml` の更新:**
+   `build-and-deploy` ジョブ内の `Authenticate to Google Cloud` ステップにあるプレースホルダを、実際の設定値に置き換えます。
+
+   - `workload_identity_provider`: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` の形式。
+   - `service_account`: 上記で作成したCI用SAのメールアドレス (`iam-access-ci-sa@...`)。
 
 ### 3.3 Artifact Registryリポジトリ
 
 CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は作成してください。
+
 ```bash
 gcloud artifacts repositories create iam-access-repo \
   --repository-format=docker \
   --location=${REGION} \
   --project=${TOOL_PROJECT_ID}
 ```
+
 もし異なる名前のリポジトリを使用する場合は、`.github/workflows/ci.yml` 内のイメージ名を更新してください。
 
 ## 4. tfstate backend bootstrap手順
 
 前提:
+
 - `saas.env` に `TFSTATE_BUCKET`, `TFSTATE_PREFIX`, `TFSTATE_LOCATION` を設定済み
 - `saas.env` に `WEBHOOK_SECRET_NAME` を設定済み
 
 実行:
+
 ```bash
 bash scripts/bootstrap-tfstate.sh
 bash scripts/sync-config.sh
@@ -198,6 +212,7 @@ terraform init -backend-config=../backend.hcl
 ```
 
 Webhook secret 作成（初回のみ）:
+
 ```bash
 TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
 WEBHOOK_SECRET_NAME="$(grep '^WEBHOOK_SECRET_NAME=' saas.env | cut -d= -f2)"
@@ -207,6 +222,7 @@ printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBH
 ```
 
 確認:
+
 ```bash
 gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d= -f2)
 ```
@@ -214,9 +230,11 @@ gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d
 ## 5. サービスアカウント作成コマンド（手動bootstrapが必要な場合）
 
 通常は Terraform が作成:
+
 - `google_service_account.executor` in `terraform/main.tf`
 
 手動で先に作る場合:
+
 ```bash
 TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
 
@@ -228,11 +246,13 @@ gcloud iam service-accounts create iam-access-executor \
 ## 6. コマンド付き運用Runbook
 
 最短導線（対話形式）:
+
 ```bash
 bash scripts/bootstrap-deploy.sh
 ```
 
 ### 6.1 初回セットアップ
+
 ```bash
 cp saas.env.example saas.env
 # 必要値を編集
@@ -245,19 +265,23 @@ terraform apply -var-file=../environment.auto.tfvars
 ```
 
 ### 6.2 反映後の設定
+
 ```bash
 cd terraform
 terraform output cloud_run_url
 ```
+
 - 出力値を `apps-script/script-properties.json` の `CLOUD_RUN_EXECUTE_URL` に反映
 
 ### 6.3 SQL適用（帳票準拠）
+
 ```bash
 # BigQuery UI か bq query で build/sql/*.sql を順に実行
 # 実行順は sql/README.md を参照
 ```
 
 ### 6.4 変更リリース（通常運用）
+
 ```bash
 bash scripts/sync-config.sh
 cd terraform
@@ -266,6 +290,7 @@ terraform apply -var-file=../environment.auto.tfvars
 ```
 
 ### 6.5 収集ジョブ手動実行（Folder/Project・Googleグループ）
+
 ```bash
 cd terraform
 CLOUD_RUN_URL="$(terraform output -raw cloud_run_url)"
@@ -275,6 +300,7 @@ bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
 ```
 
 ### 6.6 Cloud Scheduler（日次自動実行）確認
+
 ```bash
 cd terraform
 terraform output resource_inventory_scheduler_job
@@ -284,6 +310,7 @@ gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^R
 ```
 
 ### 6.7 障害時の一次切り分け
+
 ```bash
 # Cloud Run 実行結果
 bq query --use_legacy_sql=false \
