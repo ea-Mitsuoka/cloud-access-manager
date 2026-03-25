@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request
+from google.cloud import bigquery
 from google.api_core.exceptions import PermissionDenied as GcpPermissionDenied
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
@@ -383,6 +384,55 @@ def revoke_expired_permissions():
                 "failed": failed_count,
             }
         )
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
+
+
+@app.post("/jobs/update-iam-bindings-history")
+def update_iam_bindings_history():
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+    job_type = "IAM_BINDINGS_HISTORY_UPDATE"
+
+    try:
+        sql_content = _read_and_format_sql("../../sql/008_update_bindings_history.sql")
+        
+        query_params = [
+            bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
+        ]
+        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
+        
+        job = repo._client.query(sql_content, job_config=job_config)
+        job.result()  # Wait for the job to complete
+
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type=job_type,
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"inserted_rows": job.num_dml_affected_rows},
+            details={"sql_file": "008_update_bindings_history.sql"},
+        )
+        return jsonify({"execution_id": execution_id, "result": "SUCCESS", "inserted_rows": job.num_dml_affected_rows})
     except Exception as exc:  # pragma: no cover
         report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
