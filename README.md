@@ -30,6 +30,8 @@
   - 利用期限（恒久 or 期限日）
   - 申請者メール
   - 承認者メール（または承認グループ）
+- 申請前支援として Gemini 提案アシスタント（Apps Script Web アプリ）を併用し、申請者は「やりたいこと」から候補ロールを確認できる。
+- Googleフォームには任意JavaScriptボタンを埋め込めないため、フォーム説明欄に Gemini 提案アシスタントURLを配置して導線化する。
 
 ### 3.2 審査層（Google Apps Script）
 
@@ -100,6 +102,18 @@
     - `executed_by`
     - `executed_at`
 
+- `iam_access_request_history`
+  - 用途: 申請・承認の監査履歴（利用目的スナップショット含む）
+  - 主要列:
+    - `history_id`
+    - `request_id`
+    - `event_type`（`REQUESTED/STATUS_CHANGED`）
+    - `old_status`
+    - `new_status`
+    - `reason_snapshot`
+    - `acted_by`
+    - `event_at`
+
 - `iam_reconciliation_issues`
 
   - 用途: 意図（申請）と実態（現状IAM）の不一致管理
@@ -169,8 +183,12 @@
 
 - `sql/001_tables.sql`
   - 必須テーブル（履歴・申請・実行ログ・不整合）DDL
+- `sql/004_workbook_tables.sql`
+  - 帳票フォーマット準拠のマスタ/履歴テーブル（プリンシパル、グループ、グループメンバー、リソース、ステータス、IAM権限設定履歴）
 - `sql/002_views.sql`
   - 管理表向けの結合ビュー
+- `sql/005_workbook_views.sql`
+  - 帳票の各シートと1対1対応するビュー
 - `sql/003_reconciliation.sql`
   - 意図（申請）と実態（現状IAM）の不一致検知バッチ
 - `cloud-run/`
@@ -181,16 +199,20 @@
 ### 10.2 3時間実装の進め方（目安）
 
 1. 0:00-0:40
-   - ルート直下の `environment.auto.tfvars` を更新
-   - `cd terraform && terraform init && terraform apply -var-file=../environment.auto.tfvars`
+   - ルート直下の `saas.env` を更新（単一設定ファイル）
+   - 対話型で実行する場合は `bash scripts/bootstrap-deploy.sh` を実行
+   - 手動実行する場合は `bash scripts/sync-config.sh` で各プログラム用設定へ反映し、`cd terraform && terraform init && terraform apply -var-file=../environment.auto.tfvars`
 1. 0:40-1:20
    - Cloud Runデプロイ状態を確認（Terraformで作成済み）
    - `POST /healthz` 確認
+   - Folder/Project収集は Cloud Scheduler（日次）で自動実行されることを確認
+   - Folder/Project収集を実行: `bash scripts/collect-resource-inventory.sh --cloud-run-url <terraform output cloud_run_url>`
+   - Googleグループ収集を実行: `bash scripts/collect-google-groups.sh --cloud-run-url <terraform output cloud_run_url>`
 1. 1:20-2:10
    - スプレッドシートにフォーム連携
    - `apps-script/Code.gs` 配置、トリガー設定
 1. 2:10-2:40
-   - `sql/002_views.sql` 実行
+   - `sql/002_views.sql` / `sql/004_workbook_tables.sql` / `sql/005_workbook_views.sql` 実行
    - 管理表タブでビュー参照設定
 1. 2:40-3:00
    - `sql/003_reconciliation.sql` を手動実行
@@ -199,9 +221,11 @@
 ### 10.3 実行時の前提
 
 - Cloud Run 実行SAには以下を付与する。
-  - `roles/bigquery.dataEditor`（対象dataset）
-  - IAM更新対象に応じた最小権限ロール（例: プロジェクトIAM管理権限）
-  - `organization_id` を指定する場合は、組織配下判定のために対象組織を参照できる権限（例: `roles/browser`）を付与する。
+  - `roles/bigquery.dataEditor`（対象dataset単位）
+  - `roles/bigquery.jobUser`（tool project）
+  - IAM更新対象に応じた最小権限ロール
+    - 単一プロジェクト管理: `managed_project_id` に `roles/resourcemanager.projectIamAdmin`
+    - 組織管理: `organization_id` に `roles/resourcemanager.projectIamAdmin` + `roles/browser`
 - `iam_policy_permissions` は既存の洗い替えジョブを継続利用する。
 - `iam_policy_permissions_history` は棚卸しジョブ側で `WRITE_APPEND` する。
 
@@ -215,14 +239,51 @@
 
 ### 10.5 Terraform適用手順
 
-1. `environment.auto.tfvars` の値を環境に合わせる。
+1. `saas.env` の値を環境に合わせる。
    - `tool_project_id`: ツールをデプロイするプロジェクト
    - `managed_project_id`: 管理対象プロジェクト（空なら `tool_project_id` を利用）
    - `organization_id = ""` の場合は「プロジェクト単体管理」として扱う。
+1. `bash scripts/sync-config.sh` を実行して、`environment.auto.tfvars` / `cloud-run/.env` / `apps-script/script-properties.json` / `build/sql/*.sql` を生成する。
+1. `bash scripts/bootstrap-tfstate.sh` を実行して tfstate 用 GCS バケットを作成/更新する。
 1. `terraform/` ディレクトリで以下を実行する。
-   - `terraform init`
+   - `terraform init -backend-config=../backend.hcl`
    - `terraform plan -var-file=../environment.auto.tfvars`
    - `terraform apply -var-file=../environment.auto.tfvars`
 1. `terraform output cloud_run_url` の値を Apps Script の `CLOUD_RUN_EXECUTE_URL` に設定する。
 1. `terraform output management_scope` で管理対象スコープを確認する。
 1. `terraform output effective_managed_project_id` で実際の管理対象プロジェクトを確認する。
+1. `terraform output resource_inventory_scheduler_job` で日次収集ジョブ名を確認する。
+1. `terraform output group_collection_scheduler_job` で Googleグループ日次収集ジョブ名を確認する。
+
+## 12. SaaS向け設定一元化
+
+- ルート直下の `saas.env` を単一の設定ソースとして扱う。
+- `scripts/sync-config.sh` で設定を各実行ファイル向けに反映する。
+  - `environment.auto.tfvars`
+  - `cloud-run/.env`
+  - `apps-script/script-properties.json`
+  - `build/sql/*.sql`（`your_project.your_dataset` を置換済み）
+- テンプレートは `saas.env.example` を利用する。
+- 対話型のデプロイ支援は `scripts/bootstrap-deploy.sh` を利用する。
+- 詳細なロール一覧・bootstrap・運用手順は `docs/operations-runbook.md` を参照する。
+- 未テスト項目の申し送り・検証状況は `docs/untested-items-handover.md` を参照する。
+
+## 11. 帳票フォーマット準拠
+
+添付フォーマットに合わせて、以下のシートを BigQuery ビューとして出力できる構成にした。
+
+- `プリンシパル` -> `v_sheet_principal`
+- `グループメンバー` -> `v_sheet_group_members`
+- `グループ` -> `v_sheet_group`
+- `リソース` -> `v_sheet_resource`
+- `IAMロール` -> `v_sheet_iam_role`
+- `IAM権限設定履歴` -> `v_sheet_iam_permission_history`
+- `IAM権限設定マトリクス` -> `IAM権限設定履歴` シートを元に Spreadsheet のピボット機能で生成
+- `ステータス` -> `v_sheet_status`
+- `カスタムロール` -> `v_sheet_custom_role`
+
+補足:
+
+- ステータスは帳票側（`requests_review` シート）で更新し、Apps Script で BigQuery に同期する。
+- `承認済`/`APPROVED` へ更新された場合のみ Cloud Run 実行をトリガーする。
+- マトリクスは `refreshIamMatrixPivotFromHistory()` を実行して更新する（データ整形SQLは不要）。

@@ -17,10 +17,14 @@ locals {
 resource "google_project_service" "services" {
   for_each = toset([
     "bigquery.googleapis.com",
+    "cloudasset.googleapis.com",
+    "cloudidentity.googleapis.com",
+    "cloudscheduler.googleapis.com",
     "run.googleapis.com",
     "cloudbuild.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "secretmanager.googleapis.com",
     "iam.googleapis.com",
   ])
 
@@ -154,15 +158,94 @@ resource "google_bigquery_table" "iam_reconciliation_issues" {
   ])
 }
 
+resource "google_bigquery_table" "pipeline_job_reports" {
+  project    = var.tool_project_id
+  dataset_id = google_bigquery_dataset.iam.dataset_id
+  table_id   = "pipeline_job_reports"
+
+  time_partitioning {
+    type  = "DAY"
+    field = "occurred_at"
+  }
+
+  clustering = ["job_type", "result"]
+
+  schema = jsonencode([
+    { name = "execution_id", type = "STRING", mode = "REQUIRED" },
+    { name = "job_type", type = "STRING", mode = "REQUIRED" },
+    { name = "result", type = "STRING", mode = "REQUIRED" },
+    { name = "error_code", type = "STRING", mode = "NULLABLE" },
+    { name = "error_message", type = "STRING", mode = "NULLABLE" },
+    { name = "hint", type = "STRING", mode = "NULLABLE" },
+    { name = "counts", type = "JSON", mode = "NULLABLE" },
+    { name = "details", type = "JSON", mode = "NULLABLE" },
+    { name = "occurred_at", type = "TIMESTAMP", mode = "REQUIRED" },
+  ])
+}
+
 resource "google_service_account" "executor" {
   account_id   = "iam-access-executor"
   display_name = "IAM Access Executor"
 }
 
-resource "google_project_iam_member" "executor_bigquery_editor" {
+resource "google_service_account" "scheduler_invoker" {
+  account_id   = "iam-scheduler-invoker"
+  display_name = "IAM Scheduler Invoker"
+}
+
+resource "google_bigquery_dataset_iam_member" "executor_bigquery_data_editor" {
+  project    = var.tool_project_id
+  dataset_id = google_bigquery_dataset.iam.dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_project_iam_member" "executor_bigquery_job_user" {
   project = var.tool_project_id
-  role    = "roles/bigquery.dataEditor"
+  role    = "roles/bigquery.jobUser"
   member  = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_project_iam_member" "executor_managed_project_iam_admin" {
+  count   = local.organization_scope_enabled ? 0 : 1
+  project = local.effective_managed_project_id
+  role    = "roles/resourcemanager.projectIamAdmin"
+  member  = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_project_iam_member" "executor_managed_project_cloudasset_viewer" {
+  count   = local.organization_scope_enabled ? 0 : 1
+  project = local.effective_managed_project_id
+  role    = "roles/cloudasset.viewer"
+  member  = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_organization_iam_member" "executor_org_project_iam_admin" {
+  count  = local.organization_scope_enabled ? 1 : 0
+  org_id = var.organization_id
+  role   = "roles/resourcemanager.projectIamAdmin"
+  member = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_organization_iam_member" "executor_org_browser" {
+  count  = local.organization_scope_enabled ? 1 : 0
+  org_id = var.organization_id
+  role   = "roles/browser"
+  member = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_organization_iam_member" "executor_org_cloudasset_viewer" {
+  count  = local.organization_scope_enabled ? 1 : 0
+  org_id = var.organization_id
+  role   = "roles/cloudasset.viewer"
+  member = "serviceAccount:${google_service_account.executor.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
+  project   = var.tool_project_id
+  secret_id = var.webhook_secret_name
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.executor.email}"
 }
 
 resource "google_cloud_run_v2_service" "executor" {
@@ -193,18 +276,100 @@ resource "google_cloud_run_v2_service" "executor" {
         value = var.organization_id
       }
       env {
+        name  = "WORKSPACE_CUSTOMER_ID"
+        value = var.workspace_customer_id
+      }
+      env {
         name  = "EXECUTOR_IDENTITY"
         value = google_service_account.executor.email
       }
       env {
-        name  = "WEBHOOK_SHARED_SECRET"
-        value = var.webhook_shared_secret
+        name  = "SCHEDULER_INVOKER_EMAIL"
+        value = google_service_account.scheduler_invoker.email
+      }
+      env {
+        name = "WEBHOOK_SHARED_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = var.webhook_secret_name
+            version = "latest"
+          }
+        }
       }
     }
   }
 
   depends_on = [
     google_project_service.services,
-    google_project_iam_member.executor_bigquery_editor,
+    google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
+    google_project_iam_member.executor_bigquery_job_user,
+    google_project_iam_member.executor_managed_project_iam_admin,
+    google_project_iam_member.executor_managed_project_cloudasset_viewer,
+    google_organization_iam_member.executor_org_project_iam_admin,
+    google_organization_iam_member.executor_org_browser,
+    google_organization_iam_member.executor_org_cloudasset_viewer,
+    google_secret_manager_secret_iam_member.executor_secret_accessor,
+  ]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "scheduler_run_invoker" {
+  project  = var.tool_project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.executor.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler_invoker.email}"
+}
+
+resource "google_cloud_scheduler_job" "resource_inventory_daily" {
+  name      = "iam-resource-inventory-daily"
+  project   = var.tool_project_id
+  region    = var.region
+  schedule  = var.resource_collection_schedule
+  time_zone = var.scheduler_time_zone
+
+  http_target {
+    uri         = "${google_cloud_run_v2_service.executor.uri}/collect/resources"
+    http_method = "POST"
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode("{}")
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler_invoker.email
+      audience              = google_cloud_run_v2_service.executor.uri
+    }
+  }
+
+  depends_on = [
+    google_project_service.services,
+    google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
+  ]
+}
+
+resource "google_cloud_scheduler_job" "group_collection_daily" {
+  name      = "iam-group-collection-daily"
+  project   = var.tool_project_id
+  region    = var.region
+  schedule  = var.group_collection_schedule
+  time_zone = var.scheduler_time_zone
+
+  http_target {
+    uri         = "${google_cloud_run_v2_service.executor.uri}/collect/groups"
+    http_method = "POST"
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode("{}")
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler_invoker.email
+      audience              = google_cloud_run_v2_service.executor.uri
+    }
+  }
+
+  depends_on = [
+    google_project_service.services,
+    google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
   ]
 }

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IAMロール提案アシスタント</title>
+  <style>
+    body { font-family: sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; }
+    h1 { margin-bottom: 8px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin: 16px 0; }
+    textarea, input { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 6px; }
+    button { padding: 10px 14px; border: 0; border-radius: 8px; cursor: pointer; }
+    .primary { background: #1a73e8; color: #fff; }
+    .muted { color: #666; font-size: 13px; }
+    pre { white-space: pre-wrap; background: #f7f7f7; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>IAMロール提案アシスタント</h1>
+  <p class="muted">Googleフォーム送信前に、やりたいことから推奨ロール候補を確認できます。</p>
+
+  <div class="card">
+    <label>やりたいこと（必須）
+      <textarea id="goal" rows="5" placeholder="例: BigQueryで特定データセットの参照クエリを実行したい"></textarea>
+    </label>
+    <label>対象リソース（任意）
+      <input id="resource" placeholder="例: projects/xxx/datasets/yyy" />
+    </label>
+    <label>対象プリンシパル（任意）
+      <input id="principal" placeholder="例: dev-team@example.com" />
+    </label>
+    <div style="margin-top: 12px;">
+      <button class="primary" onclick="runSuggest()">Geminiで提案を取得</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>提案結果</h3>
+    <pre id="result">ここに結果が表示されます。</pre>
+    <p class="muted">フォームには「付与・変更ロール」へ role 候補、「申請理由・利用目的」へ summary / reviewer_note を転記してください。</p>
+  </div>
+
+  <script>
+    function runSuggest() {
+      const goal = document.getElementById('goal').value.trim();
+      const resource = document.getElementById('resource').value.trim();
+      const principal = document.getElementById('principal').value.trim();
+      const resultEl = document.getElementById('result');
+      if (!goal) {
+        resultEl.textContent = 'やりたいこと（必須）を入力してください。';
+        return;
+      }
+      resultEl.textContent = '提案を取得中...';
+      google.script.run
+        .withSuccessHandler((res) => {
+          resultEl.textContent = JSON.stringify(res, null, 2);
+        })
+        .withFailureHandler((err) => {
+          resultEl.textContent = 'エラー: ' + (err && err.message ? err.message : err);
+        })
+        .suggestIamRoles({ goal, resource, principal });
+    }
+  </script>
+</body>
+</html>

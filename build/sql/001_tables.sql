@@ -1,6 +1,6 @@
--- Replace `your_project.your_dataset` before execution.
+-- Replace `ea-yukihidemitsuoka2.iam_access_mgmt` before execution.
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_policy_permissions_history` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions_history` (
   execution_id STRING NOT NULL,
   assessment_timestamp TIMESTAMP NOT NULL,
   scope STRING,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_policy_permissions_his
 PARTITION BY DATE(assessment_timestamp)
 CLUSTER BY resource_type, principal_email, role;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_requests` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_requests` (
   request_id STRING NOT NULL,
   request_type STRING NOT NULL, -- GRANT / REVOKE / CHANGE
   principal_email STRING NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_requests` (
 PARTITION BY DATE(requested_at)
 CLUSTER BY status, principal_email, role;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_change_log` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_change_log` (
   execution_id STRING NOT NULL,
   request_id STRING NOT NULL,
   action STRING NOT NULL, -- GRANT / REVOKE
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_change_log` (
 PARTITION BY DATE(executed_at)
 CLUSTER BY request_id, result;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_request_history` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_request_history` (
   history_id STRING NOT NULL,
   request_id STRING NOT NULL,
   event_type STRING NOT NULL, -- REQUESTED / STATUS_CHANGED
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_access_request_history
 PARTITION BY DATE(event_at)
 CLUSTER BY request_id, new_status, event_type;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_reconciliation_issues` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_reconciliation_issues` (
   issue_id STRING NOT NULL,
   issue_type STRING NOT NULL,
   request_id STRING,
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_reconciliation_issues`
 PARTITION BY DATE(detected_at)
 CLUSTER BY issue_type, status, severity;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.pipeline_job_reports` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.pipeline_job_reports` (
   execution_id STRING NOT NULL,
   job_type STRING NOT NULL, -- RESOURCE_COLLECTION / GROUP_COLLECTION / ...
   result STRING NOT NULL, -- SUCCESS / FAILED_PERMISSION / FAILED

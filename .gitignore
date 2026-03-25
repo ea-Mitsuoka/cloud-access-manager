@@ -1,0 +1,37 @@
+# Terraform files to ignore
+.terraform/
+.terraform.lock.hcl
+.terraform-version
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfbackend
+
+# Environment files
+domain.env
+env
+
+# Automatically created terraform files
+/terraform/1_core/services/logsink/sinks/gcp_log_sink_config.csv
+
+# Sphinx documentation build
+build/
+
+# Python cache files
+__pycache__/
+
+# IDE files
+.netrc
+
+# Other files
+memo*
+TODO.md
+.DS_Store
+.catignore
+list-files-for-ai.sh
+cat-for-ai.sh
+file_list.txt
+all_contents.txt
+change.patch
+cloud-run/.env
+saas.env

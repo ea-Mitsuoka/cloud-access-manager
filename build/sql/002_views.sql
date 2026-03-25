@@ -1,6 +1,6 @@
--- Replace `your_project.your_dataset` before execution.
+-- Replace `ea-yukihidemitsuoka2.iam_access_mgmt` before execution.
 
-CREATE OR REPLACE VIEW `your_project.your_dataset.v_iam_request_execution_latest` AS
+CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_request_execution_latest` AS
 WITH latest_execution AS (
   SELECT
     request_id,
@@ -21,7 +21,7 @@ WITH latest_execution AS (
       ORDER BY executed_at DESC
       LIMIT 1
     )[OFFSET(0)] AS exec
-  FROM `your_project.your_dataset.iam_access_change_log`
+  FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_change_log`
   GROUP BY request_id
 )
 SELECT
@@ -43,10 +43,10 @@ SELECT
   e.exec.executed_at AS latest_executed_at,
   e.exec.error_code AS latest_error_code,
   e.exec.error_message AS latest_error_message
-FROM `your_project.your_dataset.iam_access_requests` r
+FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_requests` r
 LEFT JOIN latest_execution e USING (request_id);
 
-CREATE OR REPLACE VIEW `your_project.your_dataset.v_iam_request_approval_history` AS
+CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_request_approval_history` AS
 SELECT
   history_id,
   request_id,
@@ -64,9 +64,9 @@ SELECT
   actor_source,
   event_at,
   details
-FROM `your_project.your_dataset.iam_access_request_history`;
+FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_request_history`;
 
-CREATE OR REPLACE VIEW `your_project.your_dataset.v_iam_inventory_with_requests` AS
+CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_inventory_with_requests` AS
 SELECT
   p.resource_type,
   p.resource_name,
@@ -80,10 +80,10 @@ SELECT
   r.ticket_ref,
   l.latest_execution_result,
   l.latest_executed_at
-FROM `your_project.your_dataset.iam_policy_permissions` p
-LEFT JOIN `your_project.your_dataset.v_iam_request_execution_latest` l
+FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions` p
+LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_request_execution_latest` l
   ON p.resource_name = l.resource_name
   AND p.principal_email = l.principal_email
   AND p.role = l.role
-LEFT JOIN `your_project.your_dataset.iam_access_requests` r
+LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_requests` r
   ON l.request_id = r.request_id;

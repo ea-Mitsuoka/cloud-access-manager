@@ -43,8 +43,32 @@ variable "cloud_run_image" {
   description = "Container image URL for Cloud Run service"
 }
 
-variable "webhook_shared_secret" {
+variable "webhook_secret_name" {
   type        = string
-  description = "Shared secret for X-Webhook-Token"
-  sensitive   = true
+  description = "Secret Manager secret name for webhook token (latest version is used)"
+  default     = "iam-access-webhook-token"
+}
+
+variable "workspace_customer_id" {
+  type        = string
+  description = "Workspace customer ID for Cloud Identity groups search (e.g. my_customer or C0123abc)"
+  default     = "my_customer"
+}
+
+variable "resource_collection_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /collect/resources"
+  default     = "0 3 * * *"
+}
+
+variable "group_collection_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /collect/groups"
+  default     = "30 3 * * *"
+}
+
+variable "scheduler_time_zone" {
+  type        = string
+  description = "Time zone for Cloud Scheduler jobs"
+  default     = "Asia/Tokyo"
 }

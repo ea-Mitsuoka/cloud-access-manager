@@ -1,0 +1,8 @@
+{
+  "BQ_PROJECT_ID": "ea-yukihidemitsuoka2",
+  "BQ_DATASET_ID": "iam_access_mgmt",
+  "BQ_LOCATION": "asia-northeast1",
+  "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
+  "WEBHOOK_SHARED_SECRET": "<set-from-secret-manager>",
+  "GEMINI_API_KEY": ""
+}

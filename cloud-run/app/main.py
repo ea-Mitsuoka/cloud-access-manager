@@ -3,11 +3,18 @@ from __future__ import annotations
 import os
 import traceback
 import uuid
+from typing import Any
 
 from flask import Flask, jsonify, request
+from google.api_core.exceptions import PermissionDenied as GcpPermissionDenied
+from google.auth.transport import requests as google_auth_requests
+from google.oauth2 import id_token as google_id_token
+from googleapiclient.errors import HttpError
 
 from .iam_executor import IamExecutor
 from .models import ExecutionResult
+from .google_group_collector import GoogleGroupCollector
+from .resource_inventory_collector import ResourceInventoryCollector
 from .repository import Repository
 from .scope_validator import ScopeConfig, ScopeValidator
 
@@ -20,6 +27,8 @@ EXECUTOR_IDENTITY = os.environ.get("EXECUTOR_IDENTITY", "cloud-run")
 SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "")
 TARGET_PROJECT_ID = os.environ.get("MGMT_TARGET_PROJECT_ID", "").strip()
 TARGET_ORG_ID = os.environ.get("MGMT_TARGET_ORGANIZATION_ID", "").strip()
+WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").strip()
+SCHEDULER_INVOKER_EMAIL = os.environ.get("SCHEDULER_INVOKER_EMAIL", "").strip()
 
 repo = Repository(project_id=PROJECT_ID, dataset_id=DATASET_ID)
 iam_executor = IamExecutor()
@@ -28,6 +37,14 @@ scope_validator = ScopeValidator(
         target_project_id=TARGET_PROJECT_ID,
         target_org_id=TARGET_ORG_ID,
     )
+)
+resource_collector = ResourceInventoryCollector(
+    target_project_id=TARGET_PROJECT_ID,
+    target_org_id=TARGET_ORG_ID,
+)
+group_collector = GoogleGroupCollector(
+    workspace_customer_id=WORKSPACE_CUSTOMER_ID,
+    source="cloudidentity",
 )
 
 
@@ -40,10 +57,8 @@ def healthz():
 def execute_request():
     execution_id = str(uuid.uuid4())
 
-    if SHARED_SECRET:
-        token = request.headers.get("X-Webhook-Token", "")
-        if token != SHARED_SECRET:
-            return jsonify({"error": "unauthorized"}), 401
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
     request_id = str(payload.get("request_id", "")).strip()
@@ -132,3 +147,174 @@ def execute_request():
         ),
         http_status,
     )
+
+
+@app.post("/collect/resources")
+def collect_resources():
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+
+    try:
+        rows, counts, scope = resource_collector.collect_rows(execution_id=execution_id)
+        inserted = repo.insert_resource_inventory_rows(rows)
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type="RESOURCE_COLLECTION",
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"inserted_rows": inserted, **counts},
+            details={"scope": scope},
+        )
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(job_type="RESOURCE_COLLECTION", execution_id=execution_id, exc=exc)
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
+
+    return jsonify(
+        {
+            "execution_id": execution_id,
+            "result": "SUCCESS",
+            "scope": scope,
+            "inserted_rows": inserted,
+            "counts": counts,
+        }
+    )
+
+
+@app.post("/collect/groups")
+def collect_groups():
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+
+    try:
+        group_rows, membership_rows, counts = group_collector.collect(execution_id=execution_id)
+        replaced_groups = repo.replace_groups(group_rows, source=group_collector.source)
+        inserted_memberships = repo.insert_group_membership_rows(membership_rows)
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type="GROUP_COLLECTION",
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"groups_replaced": replaced_groups, "memberships_inserted": inserted_memberships, **counts},
+            details={"source": group_collector.source},
+        )
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(job_type="GROUP_COLLECTION", execution_id=execution_id, exc=exc)
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
+
+    return jsonify(
+        {
+            "execution_id": execution_id,
+            "result": "SUCCESS",
+            "groups_replaced": replaced_groups,
+            "memberships_inserted": inserted_memberships,
+            "counts": counts,
+        }
+    )
+
+
+def _authorize() -> bool:
+    if _authorize_scheduler_oidc():
+        return True
+    if not SHARED_SECRET:
+        return True
+    token = request.headers.get("X-Webhook-Token", "")
+    return token == SHARED_SECRET
+
+
+def _authorize_scheduler_oidc() -> bool:
+    if not SCHEDULER_INVOKER_EMAIL:
+        return False
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return False
+
+    token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return False
+
+    # Cloud Scheduler OIDC token audience should match this service base URI.
+    expected_audience = request.url_root.rstrip("/")
+    try:
+        claims = google_id_token.verify_oauth2_token(token, google_auth_requests.Request(), expected_audience)
+    except Exception:
+        return False
+
+    email = str(claims.get("email", "")).strip().lower()
+    return email == SCHEDULER_INVOKER_EMAIL.lower()
+
+
+def _build_collection_error_report(*, job_type: str, execution_id: str, exc: Exception) -> dict[str, Any]:
+    error_code = type(exc).__name__
+    error_message = str(exc)
+    hint = "Check Cloud Run logs for details."
+    result = "FAILED"
+    http_status = 500
+
+    if isinstance(exc, GcpPermissionDenied):
+        result = "FAILED_PERMISSION"
+        http_status = 200
+        hint = _permission_hint(job_type)
+    elif isinstance(exc, HttpError) and exc.resp is not None and int(exc.resp.status) in (401, 403):
+        result = "FAILED_PERMISSION"
+        http_status = 200
+        hint = _permission_hint(job_type)
+
+    return {
+        "execution_id": execution_id,
+        "job_type": job_type,
+        "result": result,
+        "error_code": error_code,
+        "error_message": error_message,
+        "hint": hint,
+        "counts": {},
+        "details": {"exception_type": error_code},
+        "http_status": http_status,
+    }
+
+
+def _permission_hint(job_type: str) -> str:
+    if job_type == "RESOURCE_COLLECTION":
+        return "Grant roles/cloudasset.viewer to executor SA on managed scope and verify Cloud Asset API is enabled."
+    if job_type == "GROUP_COLLECTION":
+        return (
+            "Grant Cloud Identity/Workspace group read permissions to executor SA and "
+            "verify cloudidentity.googleapis.com is enabled."
+        )
+    return "Verify IAM permissions for this collection job."
