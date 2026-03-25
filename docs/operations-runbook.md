@@ -1,8 +1,30 @@
 # IAM Access Manager Runbook
 
-## 1. 必要IAMロール一覧
+## 1. 運用モードについて (About Operating Modes)
 
-### 1.1 Cloud Run実行SA（`iam-access-executor@<tool_project>.iam.gserviceaccount.com`）
+本システムは、`saas.env`の`organization_id`の設定に応じて、2つの主要な運用モードで動作します。
+
+### 1.1 Organizationモード
+
+- **設定:** `organization_id`にGCP組織のID（例: `123456789012`）を設定します。
+- **動作:** システムは組織全体を管理対象とします。フォルダ階層を含むリソースの棚卸しや、組織全体のIAMポリシーの変更、Googleグループの収集が可能です。
+- **権限:** 実行サービスアカウントには、組織レベルでの複数のIAMロール（`roles/resourcemanager.projectIamAdmin`, `roles/resourcemanager.folderAdmin`, `roles/cloudasset.viewer`など）の付与が必要です。
+
+### 1.2 Project-onlyモード
+
+- **設定:** `organization_id`を空 (`""`) にします。
+- **動作:** システムの機能は、`managed_project_id`で指定された単一のGoogle Cloudプロジェクトに限定されます。お客様が組織全体の権限を許可しないSaaS提供形態などに適しています。
+- **権限と制限:**
+  - 必要な権限は、対象プロジェクトに対する`roles/resourcemanager.projectIamAdmin`と`roles/cloudasset.viewer`などに限定されます。
+  - IAMの変更は、そのプロジェクト内でのみ可能です。
+  - リソース棚卸しも、プロジェクト内のリソースのみが対象です。
+  - **Googleグループ収集機能は、組織/ワークスペースレベルの権限を必要とするため、このモードでは正常に動作しない可能性が高いです。**
+
+---
+
+## 2. 必要IAMロール一覧
+
+### 2.1 Cloud Run実行SA（`iam-access-executor@<tool_project>.iam.gserviceaccount.com`）
 
 必須（最小）:
 - `roles/bigquery.dataEditor` on `tool_project:dataset`（dataset単位）
@@ -23,7 +45,7 @@ Googleグループ収集の前提:
 - `cloudidentity.googleapis.com` を有効化
 - Workspace/Cloud Identity 側で実行SAにグループ参照権限を付与（組織運用ルールに従う）
 
-### 1.2 Terraform実行主体（開発者 or CI用SA）
+### 2.2 Terraform実行主体（開発者 or CI用SA）
 
 必須（`tool_project`）:
 - `roles/serviceusage.serviceUsageAdmin`
@@ -37,7 +59,7 @@ Googleグループ収集の前提:
 `tfstate` バケット作成・管理用（初回bootstrap）:
 - `roles/storage.admin` on `tool_project`
 
-### 1.3 ロール付与コマンド例
+### 2.3 ロール付与コマンド例
 
 ```bash
 TOOL_PROJECT_ID="<tool-project-id>"
@@ -80,7 +102,7 @@ else
 fi
 ```
 
-## 2. tfstate backend bootstrap手順
+## 3. tfstate backend bootstrap手順
 
 前提:
 - `saas.env` に `TFSTATE_BUCKET`, `TFSTATE_PREFIX`, `TFSTATE_LOCATION` を設定済み
@@ -108,7 +130,7 @@ printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBH
 gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d= -f2)
 ```
 
-## 3. サービスアカウント作成コマンド（手動bootstrapが必要な場合）
+## 4. サービスアカウント作成コマンド（手動bootstrapが必要な場合）
 
 通常は Terraform が作成:
 - `google_service_account.executor` in `terraform/main.tf`
@@ -122,14 +144,14 @@ gcloud iam service-accounts create iam-access-executor \
   --display-name "IAM Access Executor"
 ```
 
-## 4. コマンド付き運用Runbook
+## 5. コマンド付き運用Runbook
 
 最短導線（対話形式）:
 ```bash
 bash scripts/bootstrap-deploy.sh
 ```
 
-### 4.1 初回セットアップ
+### 5.1 初回セットアップ
 ```bash
 cp saas.env.example saas.env
 # 必要値を編集
@@ -141,20 +163,20 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 4.2 反映後の設定
+### 5.2 反映後の設定
 ```bash
 cd terraform
 terraform output cloud_run_url
 ```
 - 出力値を `apps-script/script-properties.json` の `CLOUD_RUN_EXECUTE_URL` に反映
 
-### 4.3 SQL適用（帳票準拠）
+### 5.3 SQL適用（帳票準拠）
 ```bash
 # BigQuery UI か bq query で build/sql/*.sql を順に実行
 # 実行順は sql/README.md を参照
 ```
 
-### 4.4 変更リリース（通常運用）
+### 5.4 変更リリース（通常運用）
 ```bash
 bash scripts/sync-config.sh
 cd terraform
@@ -162,7 +184,7 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 4.5 収集ジョブ手動実行（Folder/Project・Googleグループ）
+### 5.5 収集ジョブ手動実行（Folder/Project・Googleグループ）
 ```bash
 cd terraform
 CLOUD_RUN_URL="$(terraform output -raw cloud_run_url)"
@@ -171,7 +193,7 @@ bash ../scripts/collect-resource-inventory.sh --cloud-run-url "$CLOUD_RUN_URL"
 bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
 ```
 
-### 4.6 Cloud Scheduler（日次自動実行）確認
+### 5.6 Cloud Scheduler（日次自動実行）確認
 ```bash
 cd terraform
 terraform output resource_inventory_scheduler_job
@@ -180,7 +202,7 @@ gcloud scheduler jobs describe iam-resource-inventory-daily --location "$(grep '
 gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 ```
 
-### 4.7 障害時の一次切り分け
+### 5.7 障害時の一次切り分け
 ```bash
 # Cloud Run 実行結果
 bq query --use_legacy_sql=false \
@@ -197,7 +219,7 @@ bq query --use_legacy_sql=false \
  ORDER BY occurred_at DESC LIMIT 50"
 ```
 
-## 5. 未テスト項目の申し送り運用
+## 6. 未テスト項目の申し送り運用
 
 - 未テスト事項は `docs/untested-items-handover.md` に記録して管理する。
 - 新機能や権限変更を入れた場合は、同ファイルへ項目追加してからリリースする。

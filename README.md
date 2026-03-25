@@ -256,6 +256,23 @@
 1. `terraform output resource_inventory_scheduler_job` で日次収集ジョブ名を確認する。
 1. `terraform output group_collection_scheduler_job` で Googleグループ日次収集ジョブ名を確認する。
 
+### 10.6 運用モード (Organization vs. Project-only)
+
+本システムは、お客様の環境やセキュリティ要件に応じて、2つの運用モードをサポートします。
+
+- **Organizationモード (推奨):**
+  - `saas.env` で `organization_id` を設定した場合に有効になります。
+  - フォルダ階層を含むリソースの完全な棚卸しや、Googleグループの収集など、すべての機能が利用可能です。
+  - 実行サービスアカウントには、組織レベルでのIAMロール (`roles/resourcemanager.projectIamAdmin`, `roles/resourcemanager.folderAdmin`, `roles/cloudasset.viewer` など) が必要です。
+
+- **Project-onlyモード:**
+  - `saas.env` で `organization_id` を空にした場合に有効になります。
+  - 機能が単一の指定プロジェクト (`managed_project_id`) に限定されます。SaaSとして提供するなど、お客様が組織全体の権限を付与できない場合に適しています。
+  - **制限事項:**
+    - IAMの付与・剥奪は指定されたプロジェクト内でのみ可能です。
+    - リソース棚卸しは、そのプロジェクト内のリソースのみが対象です。
+    - Googleグループ収集機能は、組織レベルの権限を必要とするため、正常に動作しない可能性が高いです。
+
 ## 12. SaaS向け設定一元化
 
 - ルート直下の `saas.env` を単一の設定ソースとして扱う。
