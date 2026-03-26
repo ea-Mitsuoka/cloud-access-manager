@@ -43,8 +43,7 @@ def org_validator(monkeypatch):
     # Mock discovery.build to prevent actual API calls during ScopeValidator init
     mock_crm_service = MagicMock()
     monkeypatch.setattr(
-        "app.scope_validator.discovery",
-        "build",
+        "app.scope_validator.discovery.build",
         lambda *args, **kwargs: mock_crm_service,
     )
 
