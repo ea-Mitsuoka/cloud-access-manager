@@ -33,7 +33,7 @@ jobs:
           pip install flake8
 
       - name: Lint Python code
-        run: flake8 cloud-run/app
+        run: flake8 --config=cloud-run/.flake8 cloud-run/app
 
   test:
     name: Test
