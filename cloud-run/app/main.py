@@ -210,7 +210,9 @@ def collect_resources():
             "execution_id": execution_id,
             "result": report["result"],
             "error_code": report["error_code"],
-            "error_message": report["error_message"],
+            "error_message": (
+                report["error_message"]
+            ),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -275,7 +277,9 @@ def collect_groups():
             "execution_id": execution_id,
             "result": report["result"],
             "error_code": report["error_code"],
-            "error_message": report["error_message"],
+            "error_message": (
+                report["error_message"]
+            ),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -322,7 +326,7 @@ def reconcile_iam_issues():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"inserted_issues": 0},  # Placeholder for now
+            counts={"inserted_issues": 0},
             details={"sql_file": "003_reconciliation.sql"},
         )
         return jsonify({"execution_id": execution_id, "result": "SUCCESS"})
@@ -339,7 +343,9 @@ def reconcile_iam_issues():
             "execution_id": execution_id,
             "result": report["result"],
             "error_code": report["error_code"],
-            "error_message": report["error_message"],
+            "error_message": (
+                report["error_message"]
+            ),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -461,7 +467,9 @@ def revoke_expired_permissions():
             "execution_id": execution_id,
             "result": report["result"],
             "error_code": report["error_code"],
-            "error_message": report["error_message"],
+            "error_message": (
+                report["error_message"]
+            ),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -523,7 +531,9 @@ def update_iam_bindings_history():
             "execution_id": execution_id,
             "result": report["result"],
             "error_code": report["error_code"],
-            "error_message": report["error_message"],
+            "error_message": (
+                report["error_message"]
+            ),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
