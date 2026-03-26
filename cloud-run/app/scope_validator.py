@@ -15,7 +15,9 @@ class ScopeConfig:
 class ScopeValidator:
     def __init__(self, config: ScopeConfig) -> None:
         self._config = config
-        self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
+        self._crm = discovery.build(
+            "cloudresourcemanager", "v3", cache_discovery=False
+        )
         self._org_cache: dict[str, str | None] = {}
 
     def validate_resource_name(self, resource_name: str) -> str | None:
@@ -24,7 +26,8 @@ class ScopeValidator:
             if resource_name != f"projects/{self._config.target_project_id}":
                 return (
                     "resource is out of managed scope: expected "
-                    f"projects/{self._config.target_project_id}, got {resource_name}"
+                    f"projects/{self._config.target_project_id}, got "
+                    f"{resource_name}"
                 )
             return None
 
@@ -40,11 +43,16 @@ class ScopeValidator:
             org_id = resource_name.split("/", 1)[1].strip()
         else:
             return (
-                "resource_name must start with projects/, folders/, or organizations/"
+                "resource_name must start with projects/, folders/, or "
+                "organizations/"
             )
 
         if org_id is None:
-            return f"failed to resolve organization for resource: {resource_name}"
+            return (
+                "failed to resolve organization for resource: {}".format(
+                    resource_name
+                )
+            )
         if org_id != self._config.target_org_id:
             return (
                 "resource is out of managed organization scope: expected "

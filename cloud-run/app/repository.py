@@ -24,7 +24,10 @@ class Repository:
 
     @property
     def resource_inventory_history_table(self) -> str:
-        return f"{self._project_id}.{self._dataset_id}.gcp_resource_inventory_history"
+        return (
+            f"{self._project_id}.{self._dataset_id}"
+            ".gcp_resource_inventory_history"
+        )
 
     @property
     def groups_table(self) -> str:
@@ -32,7 +35,10 @@ class Repository:
 
     @property
     def group_membership_history_table(self) -> str:
-        return f"{self._project_id}.{self._dataset_id}.google_group_membership_history"
+        return (
+            f"{self._project_id}.{self._dataset_id}"
+            ".google_group_membership_history"
+        )
 
     @property
     def pipeline_job_reports_table(self) -> str:
@@ -52,10 +58,13 @@ class Repository:
         WHERE request_id = @request_id
         LIMIT 1
         """
-        params = [bigquery.ScalarQueryParameter("request_id", "STRING", request_id)]
+        params = [
+            bigquery.ScalarQueryParameter("request_id", "STRING", request_id)
+        ]
         rows = list(
             self._client.query(
-                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+                sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=params),
             ).result()
         )
         if not rows:
@@ -79,10 +88,13 @@ class Repository:
         WHERE request_id = @request_id
           AND result = 'SUCCESS'
         """
-        params = [bigquery.ScalarQueryParameter("request_id", "STRING", request_id)]
+        params = [
+            bigquery.ScalarQueryParameter("request_id", "STRING", request_id)
+        ]
         row = next(
             self._client.query(
-                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+                sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=params),
             ).result()
         )
         return int(row["cnt"]) > 0
@@ -122,22 +134,29 @@ class Repository:
 
         inserted = 0
         for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
+            chunk = rows[i:i + chunk_size]
             errors = self._client.insert_rows_json(
                 self.resource_inventory_history_table, chunk
             )
             if errors:
                 raise RuntimeError(
-                    f"failed to insert resource inventory rows: {errors}"
+                    "failed to insert resource inventory rows: {}".format(
+                        errors
+                    )
                 )
             inserted += len(chunk)
         return inserted
 
-    def replace_groups(self, rows: list[dict[str, Any]], source: str) -> int:
-        delete_sql = f"DELETE FROM `{self.groups_table}` WHERE source = @source"
+    def replace_groups(
+        self, rows: list[dict[str, Any]], source: str
+    ) -> int:
+        delete_sql = (
+            f"DELETE FROM `{self.groups_table}` WHERE source = @source"
+        )
         params = [bigquery.ScalarQueryParameter("source", "STRING", source)]
         self._client.query(
-            delete_sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+            delete_sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=params),
         ).result()
 
         if not rows:
@@ -168,18 +187,22 @@ class Repository:
             return 0
         inserted = 0
         for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
+            chunk = rows[i:i + chunk_size]
             errors = self._client.insert_rows_json(
                 self.group_membership_history_table, chunk
             )
             if errors:
-                raise RuntimeError(f"failed to insert group membership rows: {errors}")
+                raise RuntimeError(
+                    f"failed to insert group membership rows: {errors}"
+                )
             inserted += len(chunk)
         return inserted
 
     @property
     def iam_policy_permissions_table(self) -> str:
-        return f"{self._project_id}.{self._dataset_id}.iam_policy_permissions"
+        return (
+            f"{self._project_id}.{self._dataset_id}.iam_policy_permissions"
+        )
 
     def get_iam_policy_permission(
         self, principal_email: str, role: str, resource_name: str
@@ -193,13 +216,18 @@ class Repository:
         LIMIT 1
         """
         params = [
-            bigquery.ScalarQueryParameter("principal_email", "STRING", principal_email),
+            bigquery.ScalarQueryParameter(
+                "principal_email", "STRING", principal_email
+            ),
             bigquery.ScalarQueryParameter("role", "STRING", role),
-            bigquery.ScalarQueryParameter("resource_name", "STRING", resource_name),
+            bigquery.ScalarQueryParameter(
+                "resource_name", "STRING", resource_name
+            ),
         ]
         rows = list(
             self._client.query(
-                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+                sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=params),
             ).result()
         )
         if not rows:
@@ -214,13 +242,17 @@ class Repository:
         """
         params = [
             bigquery.ScalarQueryParameter("status", "STRING", status),
-            bigquery.ScalarQueryParameter("request_id", "STRING", request_id),
+            bigquery.ScalarQueryParameter(
+                "request_id", "STRING", request_id
+            ),
         ]
         self._client.query(
             sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
         ).result()
 
-    def search_expired_approved_access_requests(self) -> list[AccessRequest]:
+    def search_expired_approved_access_requests(
+        self,
+    ) -> list[AccessRequest]:
         sql = f"""
         SELECT
             request_id,
@@ -278,6 +310,10 @@ class Repository:
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
-        errors = self._client.insert_rows_json(self.pipeline_job_reports_table, rows)
+        errors = self._client.insert_rows_json(
+            self.pipeline_job_reports_table, rows
+        )
         if errors:
-            raise RuntimeError(f"failed to insert pipeline job report: {errors}")
+            raise RuntimeError(
+                f"failed to insert pipeline job report: {errors}"
+            )

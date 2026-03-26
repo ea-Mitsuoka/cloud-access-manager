@@ -12,7 +12,11 @@ class GoogleGroupCollector:
     ) -> None:
         self._customer_id = workspace_customer_id or "my_customer"
         self._source = source
-        self._api = discovery.build("cloudidentity", "v1", cache_discovery=False)
+        self._api = discovery.build(
+            "cloudidentity",
+            "v1",
+            cache_discovery=False,
+        )
 
     @property
     def source(self) -> str:
@@ -75,7 +79,8 @@ class GoogleGroupCollector:
         # Cloud Identity query for Google Groups in the customer.
         query = (
             f"parent=='customers/{self._customer_id}'"
-            " && 'cloudidentity.googleapis.com/groups.discussion_forum' in labels"
+            " && 'cloudidentity.googleapis.com/groups.discussion_forum' in"
+            " labels"
         )
 
         groups: list[dict[str, Any]] = []

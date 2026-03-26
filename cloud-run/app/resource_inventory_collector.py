@@ -36,11 +36,15 @@ class ResourceInventoryCollector:
 
         for resource in self._client.search_all_resources(request=request):
             resource_type = self._to_resource_type(resource.asset_type)
-            normalized_name = self._normalize_full_resource_name(resource.name)
+            normalized_name = self._normalize_full_resource_name(
+                resource.name
+            )
             parent = self._normalize_full_resource_name(
                 resource.parent_full_resource_name
             )
-            resource_id = self._to_resource_id(resource_type, resource, normalized_name)
+            resource_id = self._to_resource_id(
+                resource_type, resource, normalized_name
+            )
 
             rows.append(
                 {
@@ -63,7 +67,9 @@ class ResourceInventoryCollector:
             return f"organizations/{self._target_org_id}"
         if self._target_project_id:
             return f"projects/{self._target_project_id}"
-        raise ValueError("either target_org_id or target_project_id is required")
+        raise ValueError(
+            "either target_org_id or target_project_id is required"
+        )
 
     @staticmethod
     def _to_resource_type(asset_type: str) -> str:
@@ -79,14 +85,15 @@ class ResourceInventoryCollector:
             return ""
         value = raw.strip()
         value = value.removeprefix("//")
-        value = value.removeprefix("cloudresourcemanager.googleapis.com/")
-        value = (
-            value.removeprefix("projects/")
-            if value.startswith("projects/") and value.count("/") > 1
-            else value
+        value = value.removeprefix(
+            "cloudresourcemanager.googleapis.com/"
         )
+        if value.startswith("projects/") and value.count("/") > 1:
+            value = value.removeprefix("projects/")
 
-        m = re.search(r"(organizations/\d+|folders/\d+|projects/[^/]+)$", value)
+        m = re.search(
+            r"(organizations/\d+|folders/\d+|projects/[^/]+)$", value
+        )
         if m:
             return m.group(1)
         return value

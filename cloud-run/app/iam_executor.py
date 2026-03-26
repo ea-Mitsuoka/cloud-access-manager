@@ -11,7 +11,11 @@ from .models import AccessRequest, ExecutionResult
 
 class IamExecutor:
     def __init__(self) -> None:
-        self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
+        self._crm = discovery.build(
+            "cloudresourcemanager",
+            "v3",
+            cache_discovery=False,
+        )
 
     def execute(self, req: AccessRequest) -> ExecutionResult:
         action = self._normalize_action(req.request_type)
@@ -69,15 +73,27 @@ class IamExecutor:
 
     def _get_policy(self, resource: str) -> dict[str, Any]:
         if resource.startswith("projects/"):
-            return self._crm.projects().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.projects().getIamPolicy(resource=resource).execute()
+            )
         elif resource.startswith("folders/"):
             return self._crm.folders().getIamPolicy(resource=resource).execute()
         elif resource.startswith("organizations/"):
-            return self._crm.organizations().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.organizations()
+                .getIamPolicy(resource=resource)
+                .execute()
+            )
         else:
-            raise ValueError(f"Unsupported resource type for getIamPolicy: {resource}")
+            raise ValueError(
+                "Unsupported resource type for getIamPolicy: {}".format(
+                    resource
+                )
+            )
 
-    def _set_policy(self, resource: str, policy: dict[str, Any]) -> dict[str, Any]:
+    def _set_policy(
+        self, resource: str, policy: dict[str, Any]
+    ) -> dict[str, Any]:
         body = {"policy": policy}
         if resource.startswith("projects/"):
             return (
@@ -87,7 +103,9 @@ class IamExecutor:
             )
         elif resource.startswith("folders/"):
             return (
-                self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
+                self._crm.folders()
+                .setIamPolicy(resource=resource, body=body)
+                .execute()
             )
         elif resource.startswith("organizations/"):
             return (
@@ -96,11 +114,17 @@ class IamExecutor:
                 .execute()
             )
         else:
-            raise ValueError(f"Unsupported resource type for setIamPolicy: {resource}")
+            raise ValueError(
+                "Unsupported resource type for setIamPolicy: {}".format(
+                    resource
+                )
+            )
 
     @staticmethod
     def _policy_hash(policy: dict[str, Any]) -> str:
-        payload = json.dumps(policy, sort_keys=True, separators=(",", ":"))
+        payload = json.dumps(
+            policy, sort_keys=True, separators=(",", ":")
+        )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @staticmethod
