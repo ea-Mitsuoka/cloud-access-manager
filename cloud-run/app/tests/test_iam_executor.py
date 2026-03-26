@@ -16,7 +16,10 @@ def test_to_member():
         IamExecutor._to_member(
             "sa@project.iam.gserviceaccount.com"
         )
-        == "serviceAccount:sa@project.iam.gserviceaccount.com"
+        == (
+            "serviceAccount:sa@project.iam"
+            ".gserviceaccount.com"
+        )
     )
     assert (
         IamExecutor._to_member("group:group@example.com")

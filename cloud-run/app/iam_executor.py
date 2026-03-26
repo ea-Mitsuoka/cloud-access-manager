@@ -79,7 +79,11 @@ class IamExecutor:
                 self._crm.projects().getIamPolicy(resource=resource).execute()
             )
         elif resource.startswith("folders/"):
-            return self._crm.folders().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.folders()
+                .getIamPolicy(resource=resource)
+                .execute()
+            )
         elif resource.startswith("organizations/"):
             return (
                 self._crm.organizations()

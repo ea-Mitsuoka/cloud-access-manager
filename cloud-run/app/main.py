@@ -206,18 +206,14 @@ def collect_resources():
             if k != "http_status":
                 report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
-        return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "result": report["result"],
-                    "error_code": report["error_code"],
-                    "error_message": report["error_message"],
-                    "hint": report["hint"],
-                }
-            ),
-            report["http_status"],
-        )
+        json_response = {
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }
+        return jsonify(json_response), report["http_status"]
 
     return jsonify(
         {
@@ -275,18 +271,14 @@ def collect_groups():
             if k != "http_status":
                 report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
-        return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "result": report["result"],
-                    "error_code": report["error_code"],
-                    "error_message": report["error_message"],
-                    "hint": report["hint"],
-                }
-            ),
-            report["http_status"],
-        )
+        json_response = {
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }
+        return jsonify(json_response), report["http_status"]
 
     return jsonify(
         {
@@ -343,18 +335,14 @@ def reconcile_iam_issues():
             if k != "http_status":
                 report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
-        return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "result": report["result"],
-                    "error_code": report["error_code"],
-                    "error_message": report["error_message"],
-                    "hint": report["hint"],
-                }
-            ),
-            report["http_status"],
-        )
+        json_response = {
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }
+        return jsonify(json_response), report["http_status"]
 
 
 @app.post("/revoke_expired_permissions")
@@ -469,18 +457,14 @@ def revoke_expired_permissions():
             if k != "http_status":
                 report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
-        return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "result": report["result"],
-                    "error_code": report["error_code"],
-                    "error_message": report["error_message"],
-                    "hint": report["hint"],
-                }
-            ),
-            report["http_status"],
-        )
+        json_response = {
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }
+        return jsonify(json_response), report["http_status"]
 
 
 @app.post("/jobs/update-iam-bindings-history")
@@ -535,18 +519,14 @@ def update_iam_bindings_history():
             if k != "http_status":
                 report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
-        return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "result": report["result"],
-                    "error_code": report["error_code"],
-                    "error_message": report["error_message"],
-                    "hint": report["hint"],
-                }
-            ),
-            report["http_status"],
-        )
+        json_response = {
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }
+        return jsonify(json_response), report["http_status"]
 
 
 def _authorize() -> bool:
@@ -633,8 +613,10 @@ def _permission_hint(job_type: str) -> str:
 
 
 def _read_and_format_sql(filename: str) -> str:
-    # Assuming SQL files are in the 'sql' directory relative to the project root.
-    # The cloud-run app is in cloud-run/app, so '../../sql' points to the 'sql' directory.
+    # Assuming SQL files are in the 'sql' directory
+    # relative to the project root.
+    # The cloud-run app is in cloud-run/app,
+    # so '../../sql' points to the 'sql' directory.
     sql_path = Path(__file__).parent.joinpath(filename).resolve()
     with open(sql_path, "r") as f:
         sql_content = f.read()
