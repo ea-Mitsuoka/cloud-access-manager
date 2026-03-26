@@ -321,9 +321,8 @@ def reconcile_iam_issues():
         job.result()  # Wait for the job to complete
 
         # BigQuery INSERT DML does not return rows inserted directly in job.result()
-        # We need to query the count of newly inserted rows into
-        # iam_reconciliation_issues for this specific execution_id if we want to
-        # report it.
+        # We need to query the count of newly inserted rows into iam_reconciliation_issues
+        # for this specific execution_id if we want treport it.
         # However, the current reconciliation SQL does not use execution_id in insert,
         # so we will just report success for now.
 
