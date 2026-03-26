@@ -248,6 +248,11 @@ def collect_groups():
         inserted_memberships = repo.insert_group_membership_rows(
             membership_rows
         )
+        counts_for_report = {
+            "groups_replaced": replaced_groups,
+            "memberships_inserted": inserted_memberships,
+            **counts,
+        }
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
             job_type="GROUP_COLLECTION",
@@ -255,11 +260,7 @@ def collect_groups():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={
-                "groups_replaced": replaced_groups,
-                "memberships_inserted": inserted_memberships,
-                **counts,
-            },
+            counts=counts_for_report,
             details={"source": group_collector.source},
         )
     except Exception as exc:  # pragma: no cover
