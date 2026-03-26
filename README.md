@@ -59,12 +59,12 @@ graph TD
         O -- "used by" --> P;
     end
 
-    style CR fill:#f9f,stroke:#333,stroke-width:2px
-    style F fill:#bbf,stroke:#333,stroke-width:2px
-    style G fill:#fcf,stroke:#333,stroke-width:2px
-    style B fill:#fcf,stroke:#333,stroke-width:2px
-    style C fill:#fcf,stroke:#333,stroke-width:2px
-    style Q fill:#fcf,stroke:#333,stroke-width:2px
+    style CR fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#FFFFFF
+    style F fill:#FBBC04,stroke:#e0b200,stroke-width:2px
+    style G fill:#34A853,stroke:#267d3f,stroke-width:2px
+    style B fill:#ECEFF1,stroke:#616161,stroke-width:2px
+    style C fill:#ECEFF1,stroke:#616161,stroke-width:2px
+    style Q fill:#ECEFF1,stroke:#616161,stroke-width:2px
 ```
 
 ### 3.1 入力層（Googleフォーム）
