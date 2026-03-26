@@ -1,82 +1,82 @@
-# Local Development Guide (Poetry)
+# ローカル開発ガイド (Poetry)
 
-This guide provides step-by-step instructions for setting up a local development environment using Poetry. Following these steps will allow you to run unit tests and validate your changes before committing them.
+このガイドでは、Poetry を使用してローカル開発環境をセットアップするための手順を説明します。これらの手順に従うことで、単体テストを実行し、変更をコミットする前に検証することができます。
 
-## 1. Prerequisites
+## 1. 前提条件
 
-Before you begin, ensure you have the following tools installed and configured on your local machine:
+始める前に、ローカルマシンに以下のツールがインストールされ、設定されていることを確認してください。
 
-- **Poetry**: The dependency management and packaging tool for Python.
-- **gcloud CLI**: The Google Cloud command-line tool.
-- **Terraform**: The infrastructure as code tool.
-- **Python**: Version 3.10 or later.
-- **Docker**: For building container images (optional for local testing).
+- **Poetry**: Python の依存関係管理およびパッケージングツール。
+- **gcloud CLI**: Google Cloud のコマンドラインツール。
+- **Terraform**: Infrastructure as Code ツール。
+- **Python**: バージョン 3.10 以降。
+- **Docker**: コンテナイメージをビルドするため（ローカルテストではオプション）。
 
-You should also have access to a Google Cloud project for development and testing, and your `gcloud` CLI should be authenticated (`gcloud auth login`).
+また、開発およびテスト用の Google Cloud プロジェクトへのアクセス権があり、`gcloud` CLI が認証済みである必要があります (`gcloud auth login`)。
 
-## 2. Configuration
+## 2. 設定
 
-1.  **Create `saas.env` file**:
-    If you don't have a `saas.env` file in the root of the repository, create one by copying the example file:
+1.  **`saas.env` ファイルの作成**:
+    リポジトリのルートに `saas.env` ファイルがない場合は、サンプルファイルをコピーして作成します。
     ```bash
     cp saas.env.example saas.env
     ```
 
-2.  **Edit `saas.env`**:
-    Open `saas.env` and fill in the values required for your local setup, primarily:
-    - `TOOL_PROJECT_ID`: Your Google Cloud project ID for development.
-    - `REGION`: The GCP region for your resources.
-    - `BQ_DATASET_ID`: A BigQuery dataset ID for testing (e.g., `iam_access_mgmt_dev`).
+2.  **`saas.env` の編集**:
+    `saas.env` を開き、ローカルセットアップに必要な値を入力します。主に以下の項目です。
+    - `TOOL_PROJECT_ID`: 開発用の Google Cloud プロジェクトID。
+    - `REGION`: リソースの GCP リージョン。
+    - `BQ_DATASET_ID`: テスト用の BigQuery データセットID (例: `iam_access_mgmt_dev`)。
 
-## 3. Environment Setup & Testing
+## 3. 環境のセットアップとテスト
 
-Poetry simplifies environment setup and command execution.
+Poetry は環境のセットアップとコマンドの実行を簡素化します。
 
-1.  **Navigate to the `cloud-run` directory**:
-    The Python project is defined in this directory.
+1.  **`cloud-run` ディレクトリへの移動**:
+    Python プロジェクトはこのディレクトリで定義されています。
     ```bash
     cd cloud-run
     ```
 
-2.  **Install dependencies**:
-    This command will create a new virtual environment in the directory and install all application and development dependencies specified in `pyproject.toml`.
+2.  **依存関係のインストール**:
+    このコマンドは、ディレクトリ内に新しい仮想環境を作成し、`pyproject.toml` で指定されたすべてのアプリケーションおよび開発依存関係をインストールします。
     ```bash
     poetry install
     ```
 
-3.  **Run Unit Tests**:
-    To run the test suite, use `poetry run`, which executes commands within the project's virtual environment.
+3.  **単体テストの実行**:
+    テストスイートを実行するには、プロジェクトの仮想環境内でコマンドを実行する `poetry run` を使用します。
     ```bash
     poetry run pytest
     ```
-    This command will discover and run all tests in the `app/tests/` directory.
+    このコマンドは `app/tests/` ディレクトリ内のすべてのテストを検出し、実行します。
 
-## 4. Running the Application Locally (for basic checks)
+## 4. アプリケーションのローカル実行 (基本的なチェック)
 
-You can run the Flask application locally for very basic checks.
+基本的なチェックのために、Flask アプリケーションをローカルで実行できます。
 
-**Important Note**: Most endpoints require real Google Cloud authentication and permissions. Running locally is **not a substitute for deploying to a dev environment** for end-to-end testing.
+**重要な注意**: ほとんどのエンドポイントは、実際の Google Cloud 認証と権限を必要とします。ローカルでの実行は、エンドツーエンドのテストのために開発環境にデプロイする代わりには**なりません**。
 
-1.  **Navigate to the `cloud-run` directory** (if you aren't already there).
+1.  **`cloud-run` ディレクトリへの移動** (まだ移動していない場合)。
 
-2.  **Set Environment Variables**:
-    The application relies on environment variables from `saas.env`. First, ensure the `.env` file is up-to-date by running the sync script from the **repository root**.
+2.  **環境変数の設定**:
+    アプリケーションは `saas.env` の環境変数に依存しています。まず、**リポジトリのルート**から同期スクリプトを実行して、`.env` ファイルが最新であることを確認します。
     ```bash
     # From the repository root
     bash scripts/sync-config.sh
     ```
-    Poetry can automatically load variables from a `.env` file if it exists in the same directory as `pyproject.toml`. The `sync-config.sh` script already creates `cloud-run/.env`, so no manual `export` is needed.
+    Poetry は `pyproject.toml` と同じディレクトリに `.env` ファイルが存在する場合、自動的に変数を読み込むことができます。`sync-config.sh` スクリプトはすでに `cloud-run/.env` を作成しているため、手動での `export` は不要です。
 
-3.  **Run the Flask App**:
-    Use `poetry run` to execute Flask within the managed environment.
+3.  **Flask アプリの実行**:
+    `poetry run` を使用して、管理された環境内で Flask を実行します。
     ```bash
     # From the ./cloud-run directory
     poetry run flask --app app/main run
     ```
 
-4.  **Test the health check**:
-    In a new terminal, you can now access the health check endpoint:
+4.  **ヘルスチェックのテスト**:
+    新しいターミナルで、ヘルスチェックエンドポイントにアクセスできます。
     ```bash
     curl http://127.0.0.1:5000/healthz
     ```
-    You should see a `{"ok":true}` response.
+    `{"ok":true}` というレスポンスが表示されるはずです。

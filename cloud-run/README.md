@@ -1,63 +1,63 @@
 # Cloud Run Executor
 
-This service executes approved IAM requests and logs every execution into BigQuery.
+このサービスは、承認されたIAMリクエストを実行し、すべての実行をBigQueryに記録します。
 
-## Endpoints
+## エンドポイント
 
 - `GET /healthz`
-- `POST /execute` with payload: `{ "request_id": "..." }`
-- `POST /collect/resources` (collect Folder/Project inventory to BigQuery history)
-- `POST /collect/groups` (collect Google Groups and memberships to BigQuery)
+- `POST /execute` ペイロード: `{ "request_id": "..." }`
+- `POST /collect/resources` (フォルダ/プロジェクトのインベントリをBigQueryの履歴に収集)
+- `POST /collect/groups` (GoogleグループとメンバーシップをBigQueryに収集)
 
-## Environment variables
+## 環境変数
 
-- `BQ_PROJECT_ID` (required)
-- `BQ_DATASET_ID` (required)
-- `MGMT_TARGET_PROJECT_ID` (required in project-only mode)
-- `MGMT_TARGET_ORGANIZATION_ID` (optional; if set, project ancestry is validated against this org)
-- `WORKSPACE_CUSTOMER_ID` (optional, default: `my_customer`)
-- `EXECUTOR_IDENTITY` (optional)
-- `WEBHOOK_SHARED_SECRET` (loaded from Secret Manager in Terraform deployment)
+- `BQ_PROJECT_ID` (必須)
+- `BQ_DATASET_ID` (必須)
+- `MGMT_TARGET_PROJECT_ID` (プロジェクト単体モードで必須)
+- `MGMT_TARGET_ORGANIZATION_ID` (オプション; 設定されている場合、プロジェクトの祖先がこの組織に対して検証されます)
+- `WORKSPACE_CUSTOMER_ID` (オプション, デフォルト: `my_customer`)
+- `EXECUTOR_IDENTITY` (オプション)
+- `WEBHOOK_SHARED_SECRET` (Terraformのデプロイ時にSecret Managerから読み込まれます)
 
-## Deploy example
+## デプロイ例
 
 ```bash
-gcloud run deploy iam-access-executor \
-  --source cloud-run \
-  --region asia-northeast1 \
-  --service-account iam-executor@YOUR_PROJECT.iam.gserviceaccount.com \
-  --set-env-vars BQ_PROJECT_ID=YOUR_PROJECT,BQ_DATASET_ID=YOUR_DATASET \
+gcloud run deploy iam-access-executor 
+  --source cloud-run 
+  --region asia-northeast1 
+  --service-account iam-executor@YOUR_PROJECT.iam.gserviceaccount.com 
+  --set-env-vars BQ_PROJECT_ID=YOUR_PROJECT,BQ_DATASET_ID=YOUR_DATASET 
   --allow-unauthenticated
 ```
 
-Use network-level controls (IAP/VPC-SC or ingress restrictions) and Secret Manager-backed `WEBHOOK_SHARED_SECRET`.
+ネットワークレベルの制御（IAP/VPC-SCまたはイングレス制限）と、Secret Managerをバックエンドとする`WEBHOOK_SHARED_SECRET`を使用してください。
 
-## Resource inventory collection
+## リソースインベントリ収集
 
-Call `/collect/resources` with the webhook token header.
+webhookトークンヘッダーを付けて `/collect/resources` を呼び出します。
 
 ```bash
-curl -X POST \"https://<service-url>/collect/resources\" \\
-  -H \"Content-Type: application/json\" \\
-  -H \"X-Webhook-Token: <token>\" \\
+curl -X POST "https://<service-url>/collect/resources" 
+  -H "Content-Type: application/json" 
+  -H "X-Webhook-Token: <token>" 
   -d '{}'
 ```
 
-For scheduled runs, Terraform provisions Cloud Scheduler with OIDC to call this endpoint daily.
-Permission errors are returned as `FAILED_PERMISSION` with actionable `hint`, and also recorded in BigQuery `pipeline_job_reports`.
+定期的な実行のために、TerraformはOIDCを使用してこのエンドポイントを毎日呼び出すCloud Schedulerをプロビジョニングします。
+権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`pipeline_job_reports`にも記録されます。
 
-## Google group collection
+## Googleグループ収集
 
-Call `/collect/groups` with the webhook token header.
+webhookトークンヘッダーを付けて `/collect/groups` を呼び出します。
 
 ```bash
-curl -X POST \"https://<service-url>/collect/groups\" \\
-  -H \"Content-Type: application/json\" \\
-  -H \"X-Webhook-Token: <token>\" \\
+curl -X POST "https://<service-url>/collect/groups" 
+  -H "Content-Type: application/json" 
+  -H "X-Webhook-Token: <token>" 
   -d '{}'
 ```
 
-Note:
+注意：
 
-- Group collection uses Cloud Identity API and requires Workspace-side read permissions in addition to GCP IAM.
-- Permission errors are returned as `FAILED_PERMISSION` with actionable `hint`, and also recorded in BigQuery `pipeline_job_reports`.
+- グループ収集はCloud Identity APIを使用し、GCP IAMに加えてWorkspace側の読み取り権限が必要です。
+- 権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`pipeline_job_reports`にも記録されます。

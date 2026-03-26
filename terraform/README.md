@@ -1,11 +1,11 @@
 # Terraform
 
-## Prerequisites
+## 前提条件
 
 - Terraform 1.6+
-- gcloud auth configured for target project
+- ターゲットプロジェクトに対して`gcloud auth`が設定済みであること
 
-## Usage
+## 使い方
 
 ```bash
 bash ../scripts/sync-config.sh
@@ -16,21 +16,21 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-## Notes
+## 注意事項
 
-- `tool_project_id` is the deployment project for this tool stack.
-- `managed_project_id` is the managed target project. If empty (`""`), `tool_project_id` is used.
-- `organization_id` is optional. If empty (`""`), this stack is treated as project-only management scope.
-- `workspace_customer_id` controls Cloud Identity group search target (default: `my_customer`).
-- `resource_collection_schedule` controls the daily Cloud Scheduler run for `/collect/resources`.
-- `group_collection_schedule` controls the daily Cloud Scheduler run for `/collect/groups`.
-- `scheduler_time_zone` controls Cloud Scheduler time zone for both jobs.
-- You can confirm selected scope with `terraform output management_scope`.
-- You can confirm current target with `terraform output effective_managed_project_id`.
-- You can confirm scheduler job with `terraform output resource_inventory_scheduler_job`.
-- You can confirm groups scheduler job with `terraform output group_collection_scheduler_job`.
-- Enabled APIs are protected with `lifecycle.prevent_destroy = true` and `disable_on_destroy = false`, so `destroy` will not disable them.
-- This MVP creates dataset, required BQ tables, executor service account, and Cloud Run service.
-- Executor SA IAM is scoped for least privilege: dataset-level BigQuery editor plus managed target scope (`managed_project_id` or `organization_id`).
-- Container image must be built/pushed separately and passed via `cloud_run_image`.
-- Detailed role matrix and operational commands: `docs/operations-runbook.md`.
+- `tool_project_id` は、このツールスタックをデプロイするプロジェクトです。
+- `managed_project_id` は、管理対象のプロジェクトです。空 (`""`) の場合は、`tool_project_id` が使用されます。
+- `organization_id` はオプションです。空 (`""`) の場合は、このスタックはプロジェクト単体の管理スコープとして扱われます。
+- `workspace_customer_id` は、Cloud Identity のグループ検索対象を制御します (デフォルト: `my_customer`)。
+- `resource_collection_schedule` は、`/collect/resources` を実行する日次のCloud Schedulerの実行スケジュールを制御します。
+- `group_collection_schedule` は、`/collect/groups` を実行する日次のCloud Schedulerの実行スケジュールを制御します。
+- `scheduler_time_zone` は、両方のCloud Schedulerジョブのタイムゾーンを制御します。
+- `terraform output management_scope` で選択されている管理スコープを確認できます。
+- `terraform output effective_managed_project_id` で現在の管理対象プロジェクトを確認できます。
+- `terraform output resource_inventory_scheduler_job` でリソース収集のスケジューラジョブ名を確認できます。
+- `terraform output group_collection_scheduler_job` でグループ収集のスケジューラジョब名を確認できます。
+- 有効化されたAPIは `lifecycle.prevent_destroy = true` と `disable_on_destroy = false` で保護されているため、`destroy` を実行しても無効化されません。
+- このMVP（Minimum Viable Product）では、データセット、必要なBigQueryテーブル、実行用サービスアカウント、Cloud Runサービスが作成されます。
+- 実行用サービスアカウントのIAM権限は、最小権限の原則に基づき、データセットレベルのBigQuery編集者権限と、管理対象スコープ（`managed_project_id` または `organization_id`）に限定されています。
+- コンテナイメージは別途ビルド/プッシュし、`cloud_run_image` 変数で渡す必要があります。
+- 詳細なロール一覧や運用コマンドについては、`docs/operations-runbook.md` を参照してください。

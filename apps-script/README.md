@@ -1,56 +1,56 @@
-# Apps Script Setup
+# Apps Script セットアップ
 
-## 1. Script properties
+## 1. スクリプトプロパティ
 
-Set these values in `Project Settings > Script properties`.
+`プロジェクト設定 > スクリプトプロパティ` で以下の値を設定してください。
 
 - `BQ_PROJECT_ID`
 - `BQ_DATASET_ID`
 - `BQ_LOCATION`
-- `CLOUD_RUN_EXECUTE_URL` (e.g. `https://<service-url>/execute`)
-- `WEBHOOK_SHARED_SECRET` (optional but recommended)
+- `CLOUD_RUN_EXECUTE_URL` (例: `https://<service-url>/execute`)
+- `WEBHOOK_SHARED_SECRET` (任意ですが推奨)
 - `GEMINI_API_KEY` (Gemini提案アシスタントを使う場合に必須)
 
-You can generate this as JSON from root config via:
+ルートの設定ファイルから以下のコマンドでJSONとして生成できます:
 
 ```bash
 bash scripts/sync-config.sh
 cat apps-script/script-properties.json
 ```
 
-## 2. Enable services
+## 2. サービスの有効化
 
-- `Services` -> add `BigQuery API` (Advanced Google Services)
-- In linked Google Cloud project, also enable BigQuery API
+- `サービス` -> `BigQuery API` を追加 (Googleの拡張サービス)
+- リンクされたGoogle Cloudプロジェクトでも、BigQuery APIを有効化してください。
 
-## 3. Triggers
+## 3. トリガー
 
-Create installable triggers:
+インストール可能なトリガーを作成します:
 
-- `onFormSubmit`: From spreadsheet, Event source `From spreadsheet`, Event type `On form submit`
-- `onEdit`: From spreadsheet, Event source `From spreadsheet`, Event type `On edit`
+- `onFormSubmit`: スプレッドシートから、イベントのソース `スプレッドシートから`、イベントの種類 `フォーム送信時`
+- `onEdit`: スプレッドシートから、イベントのソース `スプレッドシートから`、イベントの種類 `編集時`
 
-`onEdit` behavior:
+`onEdit` の動作:
 
-- When `requests_review.status` is updated, status is synchronized to BigQuery.
-- If edited status is `承認済` or `APPROVED`, Cloud Run `/execute` is called automatically.
-- After status update, `実行結果 / 最終反映確認 / 最終確認時刻` are refreshed in `requests_review`.
-- `利用目的` は申請・承認履歴テーブル `iam_access_request_history` にスナップショット保存されます（監査向け）。
+- `requests_review.status` が更新されると、ステータスがBigQueryに同期されます。
+- 編集されたステータスが `承認済` または `APPROVED` の場合、Cloud Runの `/execute` が自動的に呼び出されます。
+- ステータス更新後、`実行結果 / 最終反映確認 / 最終確認時刻` が `requests_review` シートで更新されます。
+- `利用目的` は申請・承認履歴テーブル `iam_access_request_history` にスナップショットとして保存されます（監査向け）。
 
-Pivot operation (no data shaping):
+ピボット操作（データ整形なし）:
 
-- Run `refreshIamMatrixPivotFromHistory()` to generate `IAM権限設定マトリクス` directly from `IAM権限設定履歴` using native spreadsheet pivot tables.
-- A custom menu is also available: `棚卸し > マトリクス更新`.
+- `refreshIamMatrixPivotFromHistory()` を実行すると、`IAM権限設定履歴` シートから直接、スプレッドシートネイティブのピボットテーブル機能を使って `IAM権限設定マトリクス` が生成されます。
+- カスタムメニュー `棚卸し > マトリクス更新` も利用できます。
 
-Review status sync:
+レビュー状況の同期:
 
-- Run `refreshRequestReviewStatus_()` to refresh `requests_review` from BigQuery execution/actual IAM state.
-- A custom menu is also available: `棚卸し > 申請反映ステータス更新`.
-- Recommended trigger: time-driven (e.g. every 15 minutes) for continuous visibility.
+- `refreshRequestReviewStatus_()` を実行すると、BigQueryの実行結果や実際のIAM状態から `requests_review` シートが更新されます。
+- カスタムメニュー `棚卸し > 申請反映ステータス更新` も利用できます。
+- 継続的な可視性のために、時間駆動トリガー（例: 15分ごと）を推奨します。
 
-## 4. Required form item labels
+## 4. 必須のフォーム項目ラベル
 
-This script reads the following Japanese labels from form answers:
+このスクリプトは、フォームの回答から以下の日本語ラベルを読み取ります:
 
 - `申請種別`
 - `対象プリンシパル`
@@ -60,37 +60,37 @@ This script reads the following Japanese labels from form answers:
 - `申請者メール`
 - `承認者メール（または承認グループ）`
 
-If your labels differ, update keys inside `pick_()` calls in `Code.gs`.
+ラベルが異なる場合は、`Code.gs` 内の `pick_()` 呼び出しのキーを更新してください。
 
-`申請理由・利用目的` は承認判断の必須情報として扱われ、未入力は受け付けません。
+`申請理由・利用目的` は承認判断の必須情報として扱われ、未入力の場合は受け付けられません。
 
 ## 5. Gemini提案アシスタント（申請前支援）
 
 申請者がIAMロール名を知らなくても、「Google Cloudでやりたいこと」から候補ロールを事前に確認できます。
 
-1. Apps Script に `GeminiRoleAdvisor.gs` と `RoleAdvisor.html` を配置する
-1. `Project Settings > Script properties` に `GEMINI_API_KEY` を設定する
-1. Apps Script を Web アプリとしてデプロイする（実行ユーザー: 自分、アクセス: 組織内ユーザー）
-1. 発行された Web アプリURLを Googleフォームの説明文に貼る
-1. 申請者は URL 先で提案を取得し、`付与・変更ロール` と `申請理由・利用目的` に転記して送信する
+1. Apps Script に `GeminiRoleAdvisor.gs` と `RoleAdvisor.html` を配置します。
+2. `プロジェクト設定 > スクリプトプロパティ` に `GEMINI_API_KEY` を設定します。
+3. Apps Script を Web アプリとしてデプロイします（実行ユーザー: 自分、アクセス: 組織内ユーザー）。
+4. 発行された Web アプリのURLを Googleフォームの説明文に貼り付けます。
+5. 申請者は URL 先で提案を取得し、`付与・変更ロール` と `申請理由・利用目的` に転記してフォームを送信します。
 
 注記:
 
-- Googleフォーム本体に任意JavaScriptの「ボタン」を直接埋め込むことはできません。運用上はフォーム説明欄のリンク導線で代替します。
-- Geminiの提案は参考情報です。最終承認は管理者が行ってください。
+- Googleフォーム本体に任意のJavaScriptの「ボタン」を直接埋め込むことはできません。運用上はフォーム説明欄のリンク導線で代替します。
+- Geminiの提案は参考情報です。最終的な承認は管理者が行ってください。
 
-## 6. Troubleshooting (Apps Script)
+## 6. トラブルシューティング
 
 - `棚卸し` メニューが表示されない:
 
   - スプレッドシートを再読み込みしてください（`onOpen` は再読込時に実行されます）。
   - Apps Script の保存漏れがないか確認してください。
-  - 初回はスクリプトの権限承認ダイアログ完了後に再読み込みが必要です。
+  - 初回はスクリプトの権限承認ダイアログが完了した後に再読み込みが必要です。
 
 - Gemini提案アシスタントでエラーになる:
 
-  - `GEMINI_API_KEY` が Script Properties に設定されているか確認してください。
-  - Webアプリのデプロイ版が最新コードになっているか確認してください（再デプロイ）。
+  - `GEMINI_API_KEY` がスクリプトプロパティに設定されているか確認してください。
+  - Webアプリのデプロイ版が最新のコードになっているか確認してください（再デプロイ）。
 
 - `マトリクス更新` 実行でエラーになる:
 
@@ -99,12 +99,12 @@ If your labels differ, update keys inside `pick_()` calls in `Code.gs`.
 
 - トリガーが動かない:
 
-  - Installable trigger（`onFormSubmit`, `onEdit`, 必要に応じて `refreshRequestReviewStatus_` の時間トリガー）を作成済みか確認してください。
-  - `Project Settings > Script properties` の必須値（`BQ_PROJECT_ID`, `BQ_DATASET_ID`, `BQ_LOCATION`, `CLOUD_RUN_EXECUTE_URL`）を確認してください。
+  - インストール可能なトリガー（`onFormSubmit`, `onEdit`, 必要に応じて `refreshRequestReviewStatus_` の時間トリガー）が作成済みか確認してください。
+  - `プロジェクト設定 > スクリプトプロパティ` の必須値（`BQ_PROJECT_ID`, `BQ_DATASET_ID`, `BQ_LOCATION`, `CLOUD_RUN_EXECUTE_URL`）を確認してください。
 
 - BigQuery 関連の権限エラー:
 
-  - Apps Script 側で `BigQuery API`（Advanced Service）を有効化しているか確認してください。
+  - Apps Script 側で `BigQuery API`（拡張サービス）が有効になっているか確認してください。
   - 紐づく GCP プロジェクトでも BigQuery API が有効か確認してください。
 
 申し送り:
