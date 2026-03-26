@@ -1,4 +1,4 @@
-print("GEMINI_CLI_VERSION_CHECK_1" + " This is a very long string added to intentionally exceed the 88 character limit for testing purposes.")
+print("GEMINI_CLI_VERSION_CHECK_1" + " This is a very long string added to   intentionally exceed the 88 character limit for testing purposes.")
 from __future__ import annotations
 
 import os
