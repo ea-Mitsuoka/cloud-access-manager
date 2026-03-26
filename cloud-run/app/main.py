@@ -252,7 +252,9 @@ def collect_groups():
         )
         counts_for_report = {
             "groups_replaced": replaced_groups,
-            "memberships_inserted": inserted_memberships,
+            "memberships_inserted": (
+                inserted_memberships
+            ),
             **counts,
         }
         repo.insert_pipeline_job_report(
