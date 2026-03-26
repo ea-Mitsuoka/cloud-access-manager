@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 from app.scope_validator import ScopeConfig, ScopeValidator
 
 # --- Project-only Mode Tests ---
@@ -39,6 +40,14 @@ def test_project_mode_rejects_organization():
 @pytest.fixture
 def org_validator(monkeypatch):
     """Provides a ScopeValidator in org mode with mocked helpers."""
+    # Mock discovery.build to prevent actual API calls during ScopeValidator init
+    mock_crm_service = MagicMock()
+    monkeypatch.setattr(
+        "app.scope_validator.discovery",
+        "build",
+        lambda *args, **kwargs: mock_crm_service,
+    )
+
     config = ScopeConfig(
         target_project_id="any-project", target_org_id="11111"
     )
