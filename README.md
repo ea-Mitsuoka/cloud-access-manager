@@ -20,42 +20,43 @@
 ```mermaid
 graph TD
     subgraph "User Interaction"
-        A[User] --> B("Google Form")
-        B --> C("Google Sheet: requests_raw")
+        A[User] --> B("Google Form");
+        B --> C("Google Sheet: requests_raw");
     end
 
     subgraph "Data Processing & Automation"
-        C --> D["Google Apps Script"]
-        D --> E["BigQuery: iam_access_requests"]
+        C --> D["Google Apps Script"];
+        D --> E["BigQuery: iam_access_requests"];
 
         subgraph "Cloud Run Service"
-            CR["Cloud Run (iam-access-executor)"]
-            E --> CR
-            F("Cloud Scheduler") --> CR
+            CR["Cloud Run (iam-access-executor)"];
+            E --> CR;
+            F("Cloud Scheduler") --> CR;
         end
 
-        CR -- "IAM API" --> G["Google Cloud IAM"]
-        G --> CR
-        CR --> H["BigQuery: iam_access_change_log"]
-        CR --> I["BigQuery: gcp_resource_inventory_history"]
-        CR --> J["BigQuery: google_groups"]
-        CR --> K["BigQuery: google_group_membership_history"]
-        CR --> L["BigQuery: iam_reconciliation_issues"]
-        CR --> M["BigQuery: pipeline_job_reports"]
-        CR --> N["BigQuery: iam_policy_permissions_history"]
-        CR --> O["BigQuery: iam_permission_bindings_history"]
+        CR -- "IAM API" --> G["Google Cloud IAM"];
+        G --> CR;
+        
+        CR --> H["BigQuery: iam_access_change_log"];
+        CR --> I["BigQuery: gcp_resource_inventory_history"];
+        CR --> J["BigQuery: google_groups"];
+        CR --> K["BigQuery: google_group_membership_history"];
+        CR --> L["BigQuery: iam_reconciliation_issues"];
+        CR --> M["BigQuery: pipeline_job_reports"];
+        CR --> N["BigQuery: iam_policy_permissions_history"];
+        CR --> O["BigQuery: iam_permission_bindings_history"];
     end
 
     subgraph "Data Visualization"
-        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report")
-        E -- "used by views" --> P
-        H -- "used by views" --> P
-        I -- "used by views" --> P
-        J -- "used by views" --> P
-        K -- "used by views" --> P
-        L -- "used by views" --> P
-        N -- "used by views" --> P
-        O -- "used by views" --> P
+        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report");
+        E -- "used by" --> P;
+        H -- "used by" --> P;
+        I -- "used by" --> P;
+        J -- "used by" --> P;
+        K -- "used by" --> P;
+        L -- "used by" --> P;
+        N -- "used by" --> P;
+        O -- "used by" --> P;
     end
 
     style CR fill:#f9f,stroke:#333,stroke-width:2px
