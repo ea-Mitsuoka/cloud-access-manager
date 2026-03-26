@@ -209,7 +209,9 @@ def collect_resources():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": report["error_code"],
+            "error_code": (
+                report["error_code"]
+            ),
             "error_message": (
                 report["error_message"]
             ),
@@ -277,7 +279,9 @@ def collect_groups():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": report["error_code"],
+            "error_code": (
+                report["error_code"]
+            ),
             "error_message": (
                 report["error_message"]
             ),
@@ -343,7 +347,9 @@ def reconcile_iam_issues():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": report["error_code"],
+            "error_code": (
+                report["error_code"]
+            ),
             "error_message": (
                 report["error_message"]
             ),
@@ -467,7 +473,9 @@ def revoke_expired_permissions():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": report["error_code"],
+            "error_code": (
+                report["error_code"]
+            ),
             "error_message": (
                 report["error_message"]
             ),
@@ -531,7 +539,9 @@ def update_iam_bindings_history():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": report["error_code"],
+            "error_code": (
+                report["error_code"]
+            ),
             "error_message": (
                 report["error_message"]
             ),
