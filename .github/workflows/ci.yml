@@ -150,7 +150,7 @@ jobs:
             })
 
       - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: terraform/tfplan
@@ -192,7 +192,7 @@ jobs:
           echo $IMAGE_NAME > image_name.txt
 
       - name: Upload image name artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: image-name
           path: image_name.txt
