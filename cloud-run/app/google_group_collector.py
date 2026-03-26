@@ -7,7 +7,9 @@ from googleapiclient import discovery
 
 
 class GoogleGroupCollector:
-    def __init__(self, workspace_customer_id: str, source: str = "cloudidentity") -> None:
+    def __init__(
+        self, workspace_customer_id: str, source: str = "cloudidentity"
+    ) -> None:
         self._customer_id = workspace_customer_id or "my_customer"
         self._source = source
         self._api = discovery.build("cloudidentity", "v1", cache_discovery=False)
@@ -16,7 +18,9 @@ class GoogleGroupCollector:
     def source(self) -> str:
         return self._source
 
-    def collect(self, execution_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+    def collect(
+        self, execution_id: str
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
         assessed_at = datetime.now(timezone.utc).isoformat()
 
         groups = self._fetch_groups()
@@ -38,7 +42,9 @@ class GoogleGroupCollector:
             )
 
             for m in self._fetch_memberships(group_name):
-                member_email = str(m.get("preferredMemberKey", {}).get("id", "")).strip()
+                member_email = str(
+                    m.get("preferredMemberKey", {}).get("id", "")
+                ).strip()
                 if not member_email:
                     continue
 

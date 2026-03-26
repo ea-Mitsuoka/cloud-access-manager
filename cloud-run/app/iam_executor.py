@@ -80,11 +80,21 @@ class IamExecutor:
     def _set_policy(self, resource: str, policy: dict[str, Any]) -> dict[str, Any]:
         body = {"policy": policy}
         if resource.startswith("projects/"):
-            return self._crm.projects().setIamPolicy(resource=resource, body=body).execute()
+            return (
+                self._crm.projects()
+                .setIamPolicy(resource=resource, body=body)
+                .execute()
+            )
         elif resource.startswith("folders/"):
-            return self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
+            return (
+                self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
+            )
         elif resource.startswith("organizations/"):
-            return self._crm.organizations().setIamPolicy(resource=resource, body=body).execute()
+            return (
+                self._crm.organizations()
+                .setIamPolicy(resource=resource, body=body)
+                .execute()
+            )
         else:
             raise ValueError(f"Unsupported resource type for setIamPolicy: {resource}")
 
@@ -94,7 +104,9 @@ class IamExecutor:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @staticmethod
-    def _apply_diff(policy: dict[str, Any], role: str, member: str, action: str) -> bool:
+    def _apply_diff(
+        policy: dict[str, Any], role: str, member: str, action: str
+    ) -> bool:
         bindings = policy.setdefault("bindings", [])
         role_binding = None
         for binding in bindings:

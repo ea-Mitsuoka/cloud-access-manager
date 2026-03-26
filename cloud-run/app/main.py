@@ -20,7 +20,6 @@ from .resource_inventory_collector import ResourceInventoryCollector
 from .repository import Repository
 from .scope_validator import ScopeConfig, ScopeValidator
 
-
 app = Flask(__name__)
 
 PROJECT_ID = os.environ["BQ_PROJECT_ID"]
@@ -81,7 +80,13 @@ def execute_request():
             details={"reason": f"status is {req.status}"},
         )
         repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
-        return jsonify({"execution_id": execution_id, "result": result.result, "reason": "status_not_approved"})
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": result.result,
+                "reason": "status_not_approved",
+            }
+        )
 
     scope_error = scope_validator.validate_resource_name(req.resource_name)
     if scope_error:
@@ -118,7 +123,13 @@ def execute_request():
             details={"reason": "already executed"},
         )
         repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
-        return jsonify({"execution_id": execution_id, "result": result.result, "reason": "idempotent_skip"})
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": result.result,
+                "reason": "idempotent_skip",
+            }
+        )
 
     try:
         result = iam_executor.execute(req)
@@ -173,7 +184,9 @@ def collect_resources():
             details={"scope": scope},
         )
     except Exception as exc:  # pragma: no cover
-        report = _build_collection_error_report(job_type="RESOURCE_COLLECTION", execution_id=execution_id, exc=exc)
+        report = _build_collection_error_report(
+            job_type="RESOURCE_COLLECTION", execution_id=execution_id, exc=exc
+        )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
         return (
@@ -209,7 +222,9 @@ def collect_groups():
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
-        group_rows, membership_rows, counts = group_collector.collect(execution_id=execution_id)
+        group_rows, membership_rows, counts = group_collector.collect(
+            execution_id=execution_id
+        )
         replaced_groups = repo.replace_groups(group_rows, source=group_collector.source)
         inserted_memberships = repo.insert_group_membership_rows(membership_rows)
         repo.insert_pipeline_job_report(
@@ -219,11 +234,17 @@ def collect_groups():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"groups_replaced": replaced_groups, "memberships_inserted": inserted_memberships, **counts},
+            counts={
+                "groups_replaced": replaced_groups,
+                "memberships_inserted": inserted_memberships,
+                **counts,
+            },
             details={"source": group_collector.source},
         )
     except Exception as exc:  # pragma: no cover
-        report = _build_collection_error_report(job_type="GROUP_COLLECTION", execution_id=execution_id, exc=exc)
+        report = _build_collection_error_report(
+            job_type="GROUP_COLLECTION", execution_id=execution_id, exc=exc
+        )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
         return (
@@ -263,7 +284,7 @@ def reconcile_iam_issues():
         sql_content = _read_and_format_sql("../../sql/003_reconciliation.sql")
         job = repo._client.query(sql_content)
         job.result()  # Wait for the job to complete
-        
+
         # BigQuery INSERT DML does not return rows inserted directly in job.result()
         # We need to query the count of newly inserted rows into iam_reconciliation_issues
         # for this specific execution_id if we want to report it.
@@ -282,7 +303,9 @@ def reconcile_iam_issues():
         )
         return jsonify({"execution_id": execution_id, "result": "SUCCESS"})
     except Exception as exc:  # pragma: no cover
-        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report = _build_collection_error_report(
+            job_type=job_type, execution_id=execution_id, exc=exc
+        )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
         return (
@@ -332,17 +355,25 @@ def revoke_expired_permissions():
                     after_hash=None,
                     details={"reason": "Permission already removed or never existed"},
                 )
-                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                repo.insert_change_log(
+                    execution_id, req.request_id, EXECUTOR_IDENTITY, result
+                )
                 # Update status in iam_access_requests to prevent re-processing
-                repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
+                repo.update_request_status(
+                    req.request_id, "REVOKED_ALREADY_GONE"
+                )  # noqa: E501
                 skipped_count += 1
                 continue
 
             try:
                 # This request was originally a GRANT, but we need to revoke it.
                 req.request_type = "REVOKE"
-                result = iam_executor.execute(req) # Reuse existing iam_executor to revoke
-                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                result = iam_executor.execute(
+                    req
+                )  # Reuse existing iam_executor to revoke
+                repo.insert_change_log(
+                    execution_id, req.request_id, EXECUTOR_IDENTITY, result
+                )
                 if result.result == "SUCCESS":
                     repo.update_request_status(req.request_id, "REVOKED")
                     revoked_count += 1
@@ -360,7 +391,9 @@ def revoke_expired_permissions():
                     error_message=str(inner_exc),
                     details={"trace": traceback.format_exc(limit=3)},
                 )
-                repo.insert_change_log(execution_id, req.request_id, EXECUTOR_IDENTITY, result)
+                repo.insert_change_log(
+                    execution_id, req.request_id, EXECUTOR_IDENTITY, result
+                )
                 repo.update_request_status(req.request_id, "REVOKE_FAILED")
                 failed_count += 1
 
@@ -372,7 +405,11 @@ def revoke_expired_permissions():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"revoked": revoked_count, "skipped": skipped_count, "failed": failed_count},
+            counts={
+                "revoked": revoked_count,
+                "skipped": skipped_count,
+                "failed": failed_count,
+            },
             details={},
         )
         return jsonify(
@@ -385,7 +422,9 @@ def revoke_expired_permissions():
             }
         )
     except Exception as exc:  # pragma: no cover
-        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report = _build_collection_error_report(
+            job_type=job_type, execution_id=execution_id, exc=exc
+        )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
         return (
@@ -413,12 +452,12 @@ def update_iam_bindings_history():
 
     try:
         sql_content = _read_and_format_sql("../../sql/008_update_bindings_history.sql")
-        
+
         query_params = [
             bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
         ]
         job_config = bigquery.QueryJobConfig(query_parameters=query_params)
-        
+
         job = repo._client.query(sql_content, job_config=job_config)
         job.result()  # Wait for the job to complete
 
@@ -432,9 +471,17 @@ def update_iam_bindings_history():
             counts={"inserted_rows": job.num_dml_affected_rows},
             details={"sql_file": "008_update_bindings_history.sql"},
         )
-        return jsonify({"execution_id": execution_id, "result": "SUCCESS", "inserted_rows": job.num_dml_affected_rows})
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": "SUCCESS",
+                "inserted_rows": job.num_dml_affected_rows,
+            }
+        )
     except Exception as exc:  # pragma: no cover
-        report = _build_collection_error_report(job_type=job_type, execution_id=execution_id, exc=exc)
+        report = _build_collection_error_report(
+            job_type=job_type, execution_id=execution_id, exc=exc
+        )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
         return (
@@ -475,7 +522,9 @@ def _authorize_scheduler_oidc() -> bool:
     # Cloud Scheduler OIDC token audience should match this service base URI.
     expected_audience = request.url_root.rstrip("/")
     try:
-        claims = google_id_token.verify_oauth2_token(token, google_auth_requests.Request(), expected_audience)
+        claims = google_id_token.verify_oauth2_token(
+            token, google_auth_requests.Request(), expected_audience
+        )
     except Exception:
         return False
 
@@ -483,7 +532,9 @@ def _authorize_scheduler_oidc() -> bool:
     return email == SCHEDULER_INVOKER_EMAIL.lower()
 
 
-def _build_collection_error_report(*, job_type: str, execution_id: str, exc: Exception) -> dict[str, Any]:
+def _build_collection_error_report(
+    *, job_type: str, execution_id: str, exc: Exception
+) -> dict[str, Any]:
     error_code = type(exc).__name__
     error_message = str(exc)
     hint = "Check Cloud Run logs for details."
@@ -494,7 +545,11 @@ def _build_collection_error_report(*, job_type: str, execution_id: str, exc: Exc
         result = "FAILED_PERMISSION"
         http_status = 200
         hint = _permission_hint(job_type)
-    elif isinstance(exc, HttpError) and exc.resp is not None and int(exc.resp.status) in (401, 403):
+    elif (
+        isinstance(exc, HttpError)
+        and exc.resp is not None
+        and int(exc.resp.status) in (401, 403)
+    ):
         result = "FAILED_PERMISSION"
         http_status = 200
         hint = _permission_hint(job_type)
@@ -514,7 +569,10 @@ def _build_collection_error_report(*, job_type: str, execution_id: str, exc: Exc
 
 def _permission_hint(job_type: str) -> str:
     if job_type == "RESOURCE_COLLECTION":
-        return "Grant roles/cloudasset.viewer to executor SA on managed scope and verify Cloud Asset API is enabled."
+        return (
+            "Grant roles/cloudasset.viewer to executor SA on managed scope and verify "
+            "Cloud Asset API is enabled."
+        )
     if job_type == "GROUP_COLLECTION":
         return (
             "Grant Cloud Identity/Workspace group read permissions to executor SA and "
@@ -529,4 +587,7 @@ def _read_and_format_sql(filename: str) -> str:
     sql_path = Path(__file__).parent.joinpath(filename).resolve()
     with open(sql_path, "r") as f:
         sql_content = f.read()
-    return sql_content.replace("`your_project.your_dataset.", f"`{PROJECT_ID}.{DATASET_ID}.")
+    return sql_content.replace(
+        "`your_project.your_dataset.",
+        f"`{PROJECT_ID}.{DATASET_ID}.",
+    )  # noqa: E501

@@ -15,7 +15,9 @@ class ResourceInventoryCollector:
         self._target_org_id = target_org_id
         self._client = asset_v1.AssetServiceClient()
 
-    def collect_rows(self, execution_id: str) -> tuple[list[dict[str, Any]], dict[str, int], str]:
+    def collect_rows(
+        self, execution_id: str
+    ) -> tuple[list[dict[str, Any]], dict[str, int], str]:
         scope = self._resolve_scope()
         assessed_at = datetime.now(timezone.utc).isoformat()
         note = f"source=cloudasset scope={scope}"
@@ -35,7 +37,9 @@ class ResourceInventoryCollector:
         for resource in self._client.search_all_resources(request=request):
             resource_type = self._to_resource_type(resource.asset_type)
             normalized_name = self._normalize_full_resource_name(resource.name)
-            parent = self._normalize_full_resource_name(resource.parent_full_resource_name)
+            parent = self._normalize_full_resource_name(
+                resource.parent_full_resource_name
+            )
             resource_id = self._to_resource_id(resource_type, resource, normalized_name)
 
             rows.append(
@@ -76,19 +80,32 @@ class ResourceInventoryCollector:
         value = raw.strip()
         value = value.removeprefix("//")
         value = value.removeprefix("cloudresourcemanager.googleapis.com/")
-        value = value.removeprefix("projects/") if value.startswith("projects/") and value.count("/") > 1 else value
+        value = (
+            value.removeprefix("projects/")
+            if value.startswith("projects/") and value.count("/") > 1
+            else value
+        )
 
         m = re.search(r"(organizations/\d+|folders/\d+|projects/[^/]+)$", value)
         if m:
             return m.group(1)
         return value
 
-    def _to_resource_id(self, resource_type: str, resource: asset_v1.ResourceSearchResult, normalized_name: str) -> str:
+    def _to_resource_id(
+        self,
+        resource_type: str,
+        resource: asset_v1.ResourceSearchResult,
+        normalized_name: str,
+    ) -> str:
         if resource_type == "Folder":
             return normalized_name or "unknown-folder"
 
         if resource_type == "Project":
-            attrs = MessageToDict(resource.additional_attributes) if resource.additional_attributes else {}
+            attrs = (
+                MessageToDict(resource.additional_attributes)
+                if resource.additional_attributes
+                else {}
+            )
             project_id = str(attrs.get("projectId", "")).strip()
             if project_id:
                 return project_id

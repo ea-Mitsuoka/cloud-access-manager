@@ -53,7 +53,11 @@ class Repository:
         LIMIT 1
         """
         params = [bigquery.ScalarQueryParameter("request_id", "STRING", request_id)]
-        rows = list(self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
+        rows = list(
+            self._client.query(
+                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+            ).result()
+        )
         if not rows:
             return None
 
@@ -76,7 +80,11 @@ class Repository:
           AND result = 'SUCCESS'
         """
         params = [bigquery.ScalarQueryParameter("request_id", "STRING", request_id)]
-        row = next(self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
+        row = next(
+            self._client.query(
+                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+            ).result()
+        )
         return int(row["cnt"]) > 0
 
     def insert_change_log(
@@ -106,23 +114,31 @@ class Repository:
         if errors:
             raise RuntimeError(f"failed to insert change log: {errors}")
 
-    def insert_resource_inventory_rows(self, rows: list[dict[str, Any]], chunk_size: int = 500) -> int:
+    def insert_resource_inventory_rows(
+        self, rows: list[dict[str, Any]], chunk_size: int = 500
+    ) -> int:
         if not rows:
             return 0
 
         inserted = 0
         for i in range(0, len(rows), chunk_size):
             chunk = rows[i : i + chunk_size]
-            errors = self._client.insert_rows_json(self.resource_inventory_history_table, chunk)
+            errors = self._client.insert_rows_json(
+                self.resource_inventory_history_table, chunk
+            )
             if errors:
-                raise RuntimeError(f"failed to insert resource inventory rows: {errors}")
+                raise RuntimeError(
+                    f"failed to insert resource inventory rows: {errors}"
+                )
             inserted += len(chunk)
         return inserted
 
     def replace_groups(self, rows: list[dict[str, Any]], source: str) -> int:
         delete_sql = f"DELETE FROM `{self.groups_table}` WHERE source = @source"
         params = [bigquery.ScalarQueryParameter("source", "STRING", source)]
-        self._client.query(delete_sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+        self._client.query(
+            delete_sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
 
         if not rows:
             return 0
@@ -145,13 +161,17 @@ class Repository:
             raise RuntimeError(f"failed to replace groups: {errors}")
         return len(payload)
 
-    def insert_group_membership_rows(self, rows: list[dict[str, Any]], chunk_size: int = 500) -> int:
+    def insert_group_membership_rows(
+        self, rows: list[dict[str, Any]], chunk_size: int = 500
+    ) -> int:
         if not rows:
             return 0
         inserted = 0
         for i in range(0, len(rows), chunk_size):
             chunk = rows[i : i + chunk_size]
-            errors = self._client.insert_rows_json(self.group_membership_history_table, chunk)
+            errors = self._client.insert_rows_json(
+                self.group_membership_history_table, chunk
+            )
             if errors:
                 raise RuntimeError(f"failed to insert group membership rows: {errors}")
             inserted += len(chunk)
@@ -177,7 +197,11 @@ class Repository:
             bigquery.ScalarQueryParameter("role", "STRING", role),
             bigquery.ScalarQueryParameter("resource_name", "STRING", resource_name),
         ]
-        rows = list(self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result())
+        rows = list(
+            self._client.query(
+                sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+            ).result()
+        )
         if not rows:
             return None
         return rows[0]
@@ -192,7 +216,9 @@ class Repository:
             bigquery.ScalarQueryParameter("status", "STRING", status),
             bigquery.ScalarQueryParameter("request_id", "STRING", request_id),
         ]
-        self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+        self._client.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
 
     def search_expired_approved_access_requests(self) -> list[AccessRequest]:
         sql = f"""

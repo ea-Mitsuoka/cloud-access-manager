@@ -22,7 +22,10 @@ class ScopeValidator:
         if self._config.target_org_id == "":
             # Project-only mode: only allow the target project
             if resource_name != f"projects/{self._config.target_project_id}":
-                return f"resource is out of managed scope: expected projects/{self._config.target_project_id}, got {resource_name}"
+                return (
+                    "resource is out of managed scope: expected "
+                    f"projects/{self._config.target_project_id}, got {resource_name}"
+                )
             return None
 
         # Organization mode
@@ -36,14 +39,17 @@ class ScopeValidator:
         elif resource_name.startswith("organizations/"):
             org_id = resource_name.split("/", 1)[1].strip()
         else:
-            return "resource_name must start with projects/, folders/, or organizations/"
+            return (
+                "resource_name must start with projects/, folders/, or organizations/"
+            )
 
         if org_id is None:
             return f"failed to resolve organization for resource: {resource_name}"
         if org_id != self._config.target_org_id:
             return (
-                "resource is out of managed organization scope: "
-                f"expected organizations/{self._config.target_org_id}, got organizations/{org_id}"
+                "resource is out of managed organization scope: expected "
+                f"organizations/{self._config.target_org_id}, got "
+                f"organizations/{org_id}"
             )
         return None
 
@@ -62,7 +68,7 @@ class ScopeValidator:
                 org_id = parent.split("/", 1)[1]
                 self._org_cache[folder_name] = org_id
                 return org_id
-            
+
             if parent.startswith("folders/"):
                 return self._get_folder_org_id(parent)
 
@@ -90,7 +96,7 @@ class ScopeValidator:
                 org_id = parent.split("/", 1)[1]
                 self._org_cache[project_id] = org_id
                 return org_id
-            
+
             if parent.startswith("folders/"):
                 return self._get_folder_org_id(parent)
 
