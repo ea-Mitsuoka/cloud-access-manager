@@ -69,7 +69,9 @@ class IamExecutor:
             return "folders", resource_name.split("/", 1)[1]
         if resource_name.startswith("organizations/"):
             return "organizations", resource_name.split("/", 1)[1]
-        raise ValueError(f"unsupported resource_name format: {resource_name}")
+        raise ValueError(
+            f"unsupported resource_name format: {resource_name}"
+        )
 
     def _get_policy(self, resource: str) -> dict[str, Any]:
         if resource.startswith("projects/"):

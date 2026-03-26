@@ -201,9 +201,10 @@ def collect_resources():
             execution_id=execution_id,
             exc=exc,
         )
-        report_for_db = {
-            k: v for k, v in report.items() if k != "http_status"
-        }
+        report_for_db = {}
+        for k, v in report.items():
+            if k != "http_status":
+                report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
         return (
             jsonify(
@@ -265,11 +266,14 @@ def collect_groups():
         )
     except Exception as exc:  # pragma: no cover
         report = _build_collection_error_report(
-            job_type="GROUP_COLLECTION", execution_id=execution_id, exc=exc
+            job_type="GROUP_COLLECTION",
+            execution_id=execution_id,
+            exc=exc,
         )
-        report_for_db = {
-            k: v for k, v in report.items() if k != "http_status"
-        }
+        report_for_db = {}
+        for k, v in report.items():
+            if k != "http_status":
+                report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
         return (
             jsonify(
@@ -334,9 +338,10 @@ def reconcile_iam_issues():
         report = _build_collection_error_report(
             job_type=job_type, execution_id=execution_id, exc=exc
         )
-        report_for_db = {
-            k: v for k, v in report.items() if k != "http_status"
-        }
+        report_for_db = {}
+        for k, v in report.items():
+            if k != "http_status":
+                report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
         return (
             jsonify(
@@ -459,9 +464,10 @@ def revoke_expired_permissions():
         report = _build_collection_error_report(
             job_type=job_type, execution_id=execution_id, exc=exc
         )
-        report_for_db = {
-            k: v for k, v in report.items() if k != "http_status"
-        }
+        report_for_db = {}
+        for k, v in report.items():
+            if k != "http_status":
+                report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
         return (
             jsonify(
@@ -524,9 +530,10 @@ def update_iam_bindings_history():
         report = _build_collection_error_report(
             job_type=job_type, execution_id=execution_id, exc=exc
         )
-        report_for_db = {
-            k: v for k, v in report.items() if k != "http_status"
-        }
+        report_for_db = {}
+        for k, v in report.items():
+            if k != "http_status":
+                report_for_db[k] = v
         repo.insert_pipeline_job_report(**report_for_db)
         return (
             jsonify(
@@ -614,13 +621,13 @@ def _build_collection_error_report(
 def _permission_hint(job_type: str) -> str:
     if job_type == "RESOURCE_COLLECTION":
         return (
-            "Grant roles/cloudasset.viewer to executor SA on managed scope and "
-            "verify Cloud Asset API is enabled."
+            "Grant roles/cloudasset.viewer to executor SA on managed scope "
+            "and verify Cloud Asset API is enabled."
         )
     if job_type == "GROUP_COLLECTION":
         return (
-            "Grant Cloud Identity/Workspace group read permissions to executor "
-            "SA and verify cloudidentity.googleapis.com is enabled."
+            "Grant Cloud Identity/Workspace group read permissions to "
+            "executor SA and verify cloudidentity.googleapis.com is enabled."
         )
     return "Verify IAM permissions for this collection job."
 
