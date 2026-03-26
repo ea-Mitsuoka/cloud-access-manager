@@ -5,32 +5,37 @@ from app.scope_validator import ScopeConfig, ScopeValidator
 # --- Project-only Mode Tests ---
 
 
-def test_project_mode_valid_project():
+@pytest.fixture
+def project_validator(monkeypatch):
+    """Provides a ScopeValidator in project mode with mocked discovery.build."""
+    mock_crm_service = MagicMock()
+    monkeypatch.setattr(
+        "app.scope_validator.discovery.build",
+        lambda *args, **kwargs: mock_crm_service,
+    )
     config = ScopeConfig(target_project_id="my-project", target_org_id="")
     validator = ScopeValidator(config)
-    assert validator.validate_resource_name("projects/my-project") is None
+    return validator
 
 
-def test_project_mode_invalid_project():
-    config = ScopeConfig(target_project_id="my-project", target_org_id="")
-    validator = ScopeValidator(config)
+def test_project_mode_valid_project(project_validator):
+    assert project_validator.validate_resource_name("projects/my-project") is None
+
+
+def test_project_mode_invalid_project(project_validator):
     assert (
-        validator.validate_resource_name("projects/another-project")
+        project_validator.validate_resource_name("projects/another-project")
         is not None
     )
 
 
-def test_project_mode_rejects_folder():
-    config = ScopeConfig(target_project_id="my-project", target_org_id="")
-    validator = ScopeValidator(config)
-    assert validator.validate_resource_name("folders/12345") is not None
+def test_project_mode_rejects_folder(project_validator):
+    assert project_validator.validate_resource_name("folders/12345") is not None
 
 
-def test_project_mode_rejects_organization():
-    config = ScopeConfig(target_project_id="my-project", target_org_id="")
-    validator = ScopeValidator(config)
+def test_project_mode_rejects_organization(project_validator):
     assert (
-        validator.validate_resource_name("organizations/67890") is not None
+        project_validator.validate_resource_name("organizations/67890") is not None
     )
 
 
