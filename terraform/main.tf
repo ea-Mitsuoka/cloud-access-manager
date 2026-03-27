@@ -352,6 +352,11 @@ resource "google_cloud_scheduler_job" "resource_inventory_daily" {
   schedule  = var.resource_collection_schedule
   time_zone = var.scheduler_time_zone
 
+  # 一過性のエラーに備えて最大3回まで自動リトライ
+  retry_config {
+    retry_count = 3
+  }
+
   http_target {
     uri         = "${google_cloud_run_v2_service.executor.uri}/collect/resources"
     http_method = "POST"
@@ -378,6 +383,10 @@ resource "google_cloud_scheduler_job" "group_collection_daily" {
   region    = var.region
   schedule  = var.group_collection_schedule
   time_zone = var.scheduler_time_zone
+
+  retry_config {
+    retry_count = 3
+  }
 
   http_target {
     uri         = "${google_cloud_run_v2_service.executor.uri}/collect/groups"
@@ -406,6 +415,10 @@ resource "google_cloud_scheduler_job" "reconciliation_daily" {
   schedule  = var.reconciliation_schedule
   time_zone = var.scheduler_time_zone
 
+  retry_config {
+    retry_count = 3
+  }
+
   http_target {
     uri         = "${google_cloud_run_v2_service.executor.uri}/reconcile"
     http_method = "POST"
@@ -433,6 +446,10 @@ resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
   schedule  = var.revoke_expired_permissions_schedule
   time_zone = var.scheduler_time_zone
 
+  retry_config {
+    retry_count = 3
+  }
+
   http_target {
     uri         = "${google_cloud_run_v2_service.executor.uri}/revoke_expired_permissions"
     http_method = "POST"
@@ -459,6 +476,10 @@ resource "google_cloud_scheduler_job" "iam_bindings_history_update_daily" {
   region    = var.region
   schedule  = var.iam_bindings_history_update_schedule
   time_zone = var.scheduler_time_zone
+
+  retry_config {
+    retry_count = 3
+  }
 
   http_target {
     uri         = "${google_cloud_run_v2_service.executor.uri}/jobs/update-iam-bindings-history"
