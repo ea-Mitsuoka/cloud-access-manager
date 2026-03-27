@@ -1,63 +1,39 @@
-# Cloud Run Executor
+# Cloud Run: IAM Access Executor
 
-このサービスは、承認されたIAMリクエストを実行し、すべての実行をBigQueryに記録します。
+このディレクトリには、Python/Flaskアプリケーションが含まれており、IAMアクセス管理システムの実行エンジンとして機能します。
 
-## エンドポイント
+このアプリケーションは、コンテナイメージにビルドされ、リポジトリのルートにあるTerraform設定を介してCloud Runサービスとしてデプロイされるように設計されています。
 
-- `GET /healthz`
-- `POST /execute` ペイロード: `{ "request_id": "..." }`
-- `POST /collect/resources` (フォルダ/プロジェクトのインベントリをBigQueryの履歴に収集)
-- `POST /collect/groups` (GoogleグループとメンバーシップをBigQueryに収集)
+## 主要な機能 (Core Functions)
 
-## 環境変数
+- **IAMリクエストの実行**: 承認済みの権限付与・剥奪リクエストをIAM API経由で実行します。
+- **データ収集ジョブ**: Cloud Schedulerからトリガーされ、GCPリソースやGoogleグループの情報を収集します。
+- **不整合検知と履歴作成**: 定期的に権限の不整合を検知し、棚卸し用の履歴データを作成します。
 
-- `BQ_PROJECT_ID` (必須)
-- `BQ_DATASET_ID` (必須)
-- `MGMT_TARGET_PROJECT_ID` (プロジェクト単体モードで必須)
-- `MGMT_TARGET_ORGANIZATION_ID` (オプション; 設定されている場合、プロジェクトの祖先がこの組織に対して検証されます)
-- `WORKSPACE_CUSTOMER_ID` (オプション, デフォルト: `my_customer`)
-- `EXECUTOR_IDENTITY` (オプション)
-- `WEBHOOK_SHARED_SECRET` (Terraformのデプロイ時にSecret Managerから読み込まれます)
+## エンドポイント (Endpoints)
 
-## デプロイ例
+- `GET /healthz`: ヘルスチェック用エンドポイント。
+- `POST /execute`: 指定された `request_id` に基づき、権限の付与・剥奪を実行します。
+- `POST /collect/resources`: GCPリソース（プロジェクト、フォルダ）のインベントリを収集します。
+- `POST /collect/groups`: Google Workspace/Cloud Identityのグループとメンバーシップ情報を収集します。
+- `POST /reconcile`: 申請内容と実際の権限の不整合を検知します。
+- `POST /revoke_expired_permissions`: 期限切れの権限を自動的に剥奪します。
+- `POST /jobs/update-iam-bindings-history`: 帳票用の整形済み権限履歴テーブルを更新します。
 
-```bash
-gcloud run deploy iam-access-executor 
-  --source cloud-run 
-  --region asia-northeast1 
-  --service-account iam-executor@YOUR_PROJECT.iam.gserviceaccount.com 
-  --set-env-vars BQ_PROJECT_ID=YOUR_PROJECT,BQ_DATASET_ID=YOUR_DATASET 
-  --allow-unauthenticated
-```
+## 環境変数 (Environment Variables)
 
-ネットワークレベルの制御（IAP/VPC-SCまたはイングレス制限）と、Secret Managerをバックエンドとする`WEBHOOK_SHARED_SECRET`を使用してください。
+このCloud Runサービスに必要なすべての環境変数は、Terraformによってインフラ定義 (`terraform/main.tf`) の中で設定されます。
 
-## リソースインベントリ収集
+設定値のマスターソースは、リポジトリのルートにある `saas.env` ファイルです。このファイルの値が `scripts/sync-config.sh` を通じてTerraformに渡されます。詳細については、ルートの `README.md` および `DEVELOPING.md` を参照してください。
 
-webhookトークンヘッダーを付けて `/collect/resources` を呼び出します。
+## デプロイ (Deployment)
 
-```bash
-curl -X POST "https://<service-url>/collect/resources" 
-  -H "Content-Type: application/json" 
-  -H "X-Webhook-Token: <token>" 
-  -d '{}'
-```
+**このサービスを `gcloud run deploy` コマンドで手動デプロイすることは推奨されません。**
 
-定期的な実行のために、TerraformはOIDCを使用してこのエンドポイントを毎日呼び出すCloud Schedulerをプロビジョニングします。
-権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`iam_pipeline_job_reports`にも記録されます。
+デプロイは、リポジトリルートのTerraform定義とCI/CDパイプライン（GitHub Actions）によって一元管理されます。
 
-## Googleグループ収集
+1. **コンテナイメージのビルド**: `Dockerfile` はPoetryを使用したマルチステージビルドになっており、CI/CDパイプラインで自動的にビルドされ、Artifact Registryにプッシュされます。
+1. **Cloud Runサービスの定義**: `terraform/main.tf` 内の `google_cloud_run_v2_service` リソースが、使用するコンテナイメージ、サービスアカウント、環境変数、Ingress設定などをすべて定義します。
+1. **適用**: `terraform apply` を実行すると、定義に基づいたCloud Runサービスが作成・更新されます。
 
-webhookトークンヘッダーを付けて `/collect/groups` を呼び出します。
-
-```bash
-curl -X POST "https://<service-url>/collect/groups" 
-  -H "Content-Type: application/json" 
-  -H "X-Webhook-Token: <token>" 
-  -d '{}'
-```
-
-注意：
-
-- グループ収集はCloud Identity APIを使用し、GCP IAMに加えてWorkspace側の読み取り権限が必要です。
-- 権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`pipeline_job_reports`にも記録されます。
+詳細なデプロイ手順については、リポジトリルートの `README.md` および `docs/operations-runbook.md` を確認してください。
