@@ -127,4 +127,3 @@ def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: Mag
     assert call_args["result"] == "FAILED"
     assert call_args["error_code"] == "Exception"
     assert call_args["error_message"] == "Something broke"
-

@@ -233,20 +233,20 @@ class Repository:
     ) -> list[ExpiredAccessRequest]:
         sql = f"""
         SELECT
-            req.request_id,
-            req.request_type,
-            req.principal_email,
-            req.resource_name,
-            req.role,
-            req.status,
-            req.approved_at,
-            req.expires_at,
-            (perm.principal_email IS NOT NULL) AS is_permission_active
+          req.request_id,
+          req.request_type,
+          req.principal_email,
+          req.resource_name,
+          req.role,
+          req.status,
+          req.approved_at,
+          req.expires_at,
+          (perm.principal_email IS NOT NULL) AS is_permission_active
         FROM `{self.requests_table}` AS req
         LEFT JOIN `{self.iam_policy_permissions_table}` AS perm
-            ON req.principal_email = perm.principal_email
-            AND req.role = perm.role
-            AND req.resource_name = perm.resource_name
+          ON req.principal_email = perm.principal_email
+          AND req.role = perm.role
+          AND req.resource_name = perm.resource_name
         WHERE req.status = 'APPROVED'
           AND req.expires_at IS NOT NULL
           AND req.expires_at < CURRENT_TIMESTAMP()
@@ -301,42 +301,93 @@ class Repository:
     def run_reconciliation_job(self) -> int:
         sql = f"""
         INSERT INTO `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` (
-          issue_id, issue_type, request_id, principal_email, resource_name,
-          role, detected_at, severity, status, details
+          issue_id,
+          issue_type,
+          request_id,
+          principal_email,
+          resource_name,
+          role,
+          detected_at,
+          severity,
+          status,
+          details
         )
         WITH requests AS (
-          SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at
+          SELECT
+            request_id,
+            request_type,
+            principal_email,
+            resource_name,
+            role,
+            status,
+            expires_at
           FROM `{self.requests_table}`
         ),
         actual AS (
-          SELECT principal_email, resource_name, role, TRUE AS exists_now
+          SELECT
+            principal_email,
+            resource_name,
+            role,
+            TRUE AS exists_now
           FROM `{self.iam_policy_permissions_table}`
         ),
         joined AS (
-          SELECT r.*, IFNULL(a.exists_now, FALSE) AS exists_now
+          SELECT
+            r.*,
+            IFNULL(a.exists_now, FALSE) AS exists_now
           FROM requests r
           LEFT JOIN actual a USING (principal_email, resource_name, role)
         )
         SELECT
-          FORMAT('%s-%s-%s', request_id, issue_type, FORMAT_TIMESTAMP('%Y%m%d%H%M%S', CURRENT_TIMESTAMP())) AS issue_id,
-          issue_type, request_id, principal_email, resource_name, role,
-          CURRENT_TIMESTAMP() AS detected_at, severity, 'OPEN' AS status,
+          FORMAT(
+            '%s-%s-%s', request_id, issue_type, FORMAT_TIMESTAMP(
+                '%Y%m%d%H%M%S', CURRENT_TIMESTAMP())
+                ) AS issue_id,
+          issue_type,
+          request_id,
+          principal_email,
+          resource_name,
+          role,
+          CURRENT_TIMESTAMP() AS detected_at,
+          severity,
+          'OPEN' AS status,
           TO_JSON(STRUCT(status AS request_status, exists_now, expires_at)) AS details
         FROM (
-          SELECT request_id, principal_email, resource_name, role,
+          SELECT
+            request_id,
+            principal_email,
+            resource_name,
+            role,
             CASE
-              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
-              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
-              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
+              WHEN status = 'APPROVED'
+                AND exists_now = FALSE
+                THEN 'APPROVED_NOT_APPLIED'
+              WHEN status IN ('REJECTED', 'CANCELLED')
+                AND exists_now = TRUE
+                THEN 'REJECTED_BUT_EXISTS'
+              WHEN status = 'APPROVED'
+                AND expires_at IS NOT NULL
+                AND expires_at < CURRENT_TIMESTAMP()
+                AND exists_now = TRUE
+                THEN 'EXPIRED_BUT_EXISTS'
               ELSE NULL
             END AS issue_type,
             CASE
-              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
-              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
-              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
+              WHEN status = 'APPROVED'
+                AND exists_now = FALSE
+                THEN 'HIGH'
+              WHEN status IN ('REJECTED', 'CANCELLED')
+                AND exists_now = TRUE
+                THEN 'MEDIUM'
+              WHEN status = 'APPROVED'
+                AND expires_at IS NOT NULL
+                AND expires_at < CURRENT_TIMESTAMP()
+                AND exists_now = TRUE THEN 'HIGH'
               ELSE NULL
             END AS severity,
-            status, exists_now, expires_at
+            status,
+            exists_now,
+            expires_at
           FROM joined
         )
         WHERE issue_type IS NOT NULL
@@ -348,17 +399,41 @@ class Repository:
     def run_update_bindings_history_job(self, execution_id: str) -> int:
         sql = f"""
         INSERT INTO `{self._project_id}.{self._dataset_id}.iam_permission_bindings_history` (
-          execution_id, recorded_at, resource_name, resource_id, resource_full_path,
-          principal_email, principal_type, iam_role, iam_condition, ticket_ref,
-          request_reason, status_ja, approved_at, next_review_at, approver, request_id, note
+          execution_id,
+          recorded_at,
+          resource_name,
+          resource_id,
+          resource_full_path,
+          principal_email,
+          principal_type,
+          iam_role,
+          iam_condition,
+          ticket_ref,
+          request_reason,
+          status_ja,
+          approved_at,
+          next_review_at,
+          approver,
+          request_id,
+          note
         )
         SELECT
           @execution_id AS execution_id,
           CURRENT_TIMESTAMP() AS recorded_at,
-          p.resource_name, p.resource_id, p.full_resource_path, p.principal_email, p.principal_type,
-          p.role AS iam_role, p.iam_condition, req.ticket_ref, req.reason AS request_reason,
-          status_map.status_ja, req.approved_at, req.expires_at AS next_review_at,
-          req.approver_email AS approver, req.request_id,
+          p.resource_name,
+          p.resource_id,
+          p.full_resource_path,
+          p.principal_email,
+          p.principal_type,
+          p.role AS iam_role,
+          p.iam_condition,
+          req.ticket_ref,
+          req.reason AS request_reason,
+          status_map.status_ja,
+          req.approved_at,
+          req.expires_at AS next_review_at,
+          req.approver_email AS approver,
+          req.request_id,
           'Snapshot from iam_policy_permissions' AS note
         FROM `{self.iam_policy_permissions_table}` AS p
         LEFT JOIN `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest` AS req

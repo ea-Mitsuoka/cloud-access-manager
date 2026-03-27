@@ -7,9 +7,7 @@ import uuid
 from dataclasses import replace
 from typing import Any
 
-
 from flask import Flask, jsonify, request
-from google.cloud import bigquery
 from google.api_core.exceptions import PermissionDenied as GcpPermissionDenied
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
