@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import traceback
 import uuid
+from dataclasses import replace # 追加
 from pathlib import Path
 from typing import Any
 
@@ -409,7 +410,7 @@ def revoke_expired_permissions():
 
             try:
                 # This request was originally a GRANT, but we need to revoke it.
-                req.request_type = "REVOKE"
+                req = replace(req, request_type="REVOKE")
                 result = iam_executor.execute(req)
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
