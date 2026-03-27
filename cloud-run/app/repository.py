@@ -297,3 +297,79 @@ class Repository:
         errors = self._client.insert_rows_json(self.pipeline_job_reports_table, rows)
         if errors:
             raise RuntimeError(f"failed to insert pipeline job report: {errors}")
+
+    def run_reconciliation_job(self) -> int:
+        sql = f"""
+        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` (
+          issue_id, issue_type, request_id, principal_email, resource_name,
+          role, detected_at, severity, status, details
+        )
+        WITH requests AS (
+          SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at
+          FROM `{self.requests_table}`
+        ),
+        actual AS (
+          SELECT principal_email, resource_name, role, TRUE AS exists_now
+          FROM `{self.iam_policy_permissions_table}`
+        ),
+        joined AS (
+          SELECT r.*, IFNULL(a.exists_now, FALSE) AS exists_now
+          FROM requests r
+          LEFT JOIN actual a USING (principal_email, resource_name, role)
+        )
+        SELECT
+          FORMAT('%s-%s-%s', request_id, issue_type, FORMAT_TIMESTAMP('%Y%m%d%H%M%S', CURRENT_TIMESTAMP())) AS issue_id,
+          issue_type, request_id, principal_email, resource_name, role,
+          CURRENT_TIMESTAMP() AS detected_at, severity, 'OPEN' AS status,
+          TO_JSON(STRUCT(status AS request_status, exists_now, expires_at)) AS details
+        FROM (
+          SELECT request_id, principal_email, resource_name, role,
+            CASE
+              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
+              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
+              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
+              ELSE NULL
+            END AS issue_type,
+            CASE
+              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
+              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
+              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
+              ELSE NULL
+            END AS severity,
+            status, exists_now, expires_at
+          FROM joined
+        )
+        WHERE issue_type IS NOT NULL
+        """
+        job = self._client.query(sql)
+        job.result()
+        return job.num_dml_affected_rows or 0
+
+    def run_update_bindings_history_job(self, execution_id: str) -> int:
+        sql = f"""
+        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_permission_bindings_history` (
+          execution_id, recorded_at, resource_name, resource_id, resource_full_path,
+          principal_email, principal_type, iam_role, iam_condition, ticket_ref,
+          request_reason, status_ja, approved_at, next_review_at, approver, request_id, note
+        )
+        SELECT
+          @execution_id AS execution_id,
+          CURRENT_TIMESTAMP() AS recorded_at,
+          p.resource_name, p.resource_id, p.full_resource_path, p.principal_email, p.principal_type,
+          p.role AS iam_role, p.iam_condition, req.ticket_ref, req.reason AS request_reason,
+          status_map.status_ja, req.approved_at, req.expires_at AS next_review_at,
+          req.approver_email AS approver, req.request_id,
+          'Snapshot from iam_policy_permissions' AS note
+        FROM `{self.iam_policy_permissions_table}` AS p
+        LEFT JOIN `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest` AS req
+          ON p.principal_email = req.principal_email
+          AND p.role = req.role
+          AND p.resource_name = req.resource_name
+        LEFT JOIN `{self._project_id}.{self._dataset_id}.iam_status_master` AS status_map
+          ON req.status = status_map.status_code
+        """
+        params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+        job = self._client.query(sql, job_config=job_config)
+        job.result()
+        return job.num_dml_affected_rows or 0

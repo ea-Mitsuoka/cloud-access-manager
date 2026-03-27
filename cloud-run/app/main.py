@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import os
-import secrets  # 追加
+import secrets
 import traceback
 import uuid
-from dataclasses import replace  # 追加
-from pathlib import Path
+from dataclasses import replace
 from typing import Any
+
 
 from flask import Flask, jsonify, request
 from google.cloud import bigquery
@@ -286,16 +286,7 @@ def reconcile_iam_issues():
     job_type = "IAM_RECONCILIATION"
 
     try:
-        sql_content = _read_and_format_sql("../../sql/003_reconciliation.sql")
-        job = repo._client.query(sql_content)
-        job.result()  # Wait for the job to complete
-
-        # BigQuery INSERT DML does not return rows inserted directly in job.result()
-        # We need to query the count of newly inserted rows into iam_reconciliation_issues
-        # for this specific execution_id if we want treport it.
-        # However, the current reconciliation SQL does not use execution_id in insert,
-        # so we will just report success for now.
-
+        inserted_rows = repo.run_reconciliation_job()
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
             job_type=job_type,
@@ -303,7 +294,7 @@ def reconcile_iam_issues():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"inserted_issues": 0},
+            counts={"inserted_issues": inserted_rows},
             details={"sql_file": "003_reconciliation.sql"},
         )
         return jsonify({"execution_id": execution_id, "result": "SUCCESS"})
@@ -443,15 +434,7 @@ def update_iam_bindings_history():
     job_type = "IAM_BINDINGS_HISTORY_UPDATE"
 
     try:
-        sql_content = _read_and_format_sql("../../sql/008_update_bindings_history.sql")
-
-        query_params = [
-            bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
-        ]
-        job_config = bigquery.QueryJobConfig(query_parameters=query_params)
-
-        job = repo._client.query(sql_content, job_config=job_config)
-        job.result()  # Wait for the job to complete
+        inserted_rows = repo.run_update_bindings_history_job(execution_id)
 
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
@@ -460,14 +443,14 @@ def update_iam_bindings_history():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"inserted_rows": job.num_dml_affected_rows},
+            counts={"inserted_rows": inserted_rows},
             details={"sql_file": "008_update_bindings_history.sql"},
         )
         return jsonify(
             {
                 "execution_id": execution_id,
                 "result": "SUCCESS",
-                "inserted_rows": job.num_dml_affected_rows,
+                "inserted_rows": inserted_rows,
             }
         )
     except Exception as exc:  # pragma: no cover
@@ -570,17 +553,3 @@ def _permission_hint(job_type: str) -> str:
             "executor SA and verify cloudidentity.googleapis.com is enabled."
         )
     return "Verify IAM permissions for this collection job."
-
-
-def _read_and_format_sql(filename: str) -> str:
-    # Assuming SQL files are in the 'sql' directory
-    # relative to the project root.
-    # The cloud-run app is in cloud-run/app,
-    # so '../../sql' points to the 'sql' directory.
-    sql_path = Path(__file__).parent.joinpath(filename).resolve()
-    with open(sql_path, "r") as f:
-        sql_content = f.read()
-    return sql_content.replace(
-        "`your_project.your_dataset.",
-        f"`{PROJECT_ID}.{DATASET_ID}.",
-    )
