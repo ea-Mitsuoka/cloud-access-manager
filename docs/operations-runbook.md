@@ -225,6 +225,11 @@ gcloud artifacts repositories create iam-access-repo
   - **Access Context Manager 管理者 (`roles/accesscontextmanager.policyAdmin`)**
   - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
 
+**VPC-SCとGoogle Apps Script (GAS) の致命的な相性に関する重要事項:**
+もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのWebhook通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
+これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「Webhookによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
+そのため、今回は\*\*「いつでもVPC-SCを有効化できるコード（スイッチ）は用意しておくが、GASの連携方式を根本から見直すまではフラグを `false` のまま運用する」\*\*という方針にご注意ください。
+
 ## 5. tfstateバックエンドのブートストラップ手順
 
 **前提:**
