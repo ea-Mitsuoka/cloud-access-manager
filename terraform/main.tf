@@ -282,6 +282,7 @@ resource "google_cloud_run_v2_service" "executor" {
 
   template {
     service_account = google_service_account.executor.email
+    timeout         = "900s"
 
     containers {
       image = var.cloud_run_image
