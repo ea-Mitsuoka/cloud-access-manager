@@ -83,14 +83,19 @@ jobs:
           path: .
           if-no-files-found: error
 
+      - name: Check for WIF provider
+        id: check_wif
+        run: echo "wif_enabled=${{ secrets.WIF_PROVIDER != '' }}" >> $GITHUB_OUTPUT
+
       - name: Authenticate to Google Cloud
-        if: secrets.WIF_PROVIDER != ''
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: 'google-github-actions/auth@v1'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Create tfvars file
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         run: |
           CLOUD_RUN_IMAGE=$(cat image_name.txt)
           echo "tool_project_id = "${{ vars.TOOL_PROJECT_ID }}"" > terraform/environment.auto.tfvars
@@ -110,22 +115,26 @@ jobs:
           echo "scheduler_time_zone = "Asia/Tokyo"" >> terraform/environment.auto.tfvars
 
       - name: Setup Terraform
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.x
 
       - name: Terraform Init
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         id: init
         run: terraform init -backend-config=../backend.hcl
         working-directory: terraform
 
       - name: Terraform Plan
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         id: plan
         run: terraform plan -no-color -input=false -out=tfplan
         working-directory: terraform
         continue-on-error: true
 
       - name: Post Plan to PR
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -150,6 +159,7 @@ jobs:
             })
 
       - name: Upload Plan Artifact
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
@@ -170,20 +180,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Check for WIF provider
+        id: check_wif
+        run: echo "wif_enabled=${{ secrets.WIF_PROVIDER != '' }}" >> $GITHUB_OUTPUT
+
       - name: Authenticate to Google Cloud
-        if: secrets.WIF_PROVIDER != ''
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: 'google-github-actions/auth@v1'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Setup gcloud
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: 'google-github-actions/setup-gcloud@v1'
 
       - name: Configure Docker
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         run: gcloud auth configure-docker ${{ vars.REGION }}-docker.pkg.dev
 
       - name: Build and push container image
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         id: build-image
         run: |
           IMAGE_NAME="${{ vars.REGION }}-docker.pkg.dev/${{ vars.TOOL_PROJECT_ID }}/iam-access-repo/iam-access-executor:${{ github.sha }}"
@@ -193,6 +210,7 @@ jobs:
           echo $IMAGE_NAME > image_name.txt
 
       - name: Upload image name artifact
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: image-name
@@ -219,22 +237,29 @@ jobs:
           path: terraform
           if-no-files-found: error
 
+      - name: Check for WIF provider
+        id: check_wif
+        run: echo "wif_enabled=${{ secrets.WIF_PROVIDER != '' }}" >> $GITHUB_OUTPUT
+
       - name: Authenticate to Google Cloud
-        if: secrets.WIF_PROVIDER != ''
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: 'google-github-actions/auth@v1'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }} # Set WIF_PROVIDER in repository secrets
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }} # Set WIF_SERVICE_ACCOUNT in repository secrets
 
       - name: Setup Terraform
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.x
 
       - name: Terraform Init
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         run: terraform init -backend-config=../backend.hcl
         working-directory: terraform
 
       - name: Terraform Apply
+        if: steps.check_wif.outputs.wif_enabled == 'true'
         run: terraform apply -input=false tfplan
         working-directory: terraform
