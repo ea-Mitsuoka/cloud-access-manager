@@ -115,6 +115,7 @@ graph TD
 |   ( ) 新規付与 (Grant)                                         |
 |   ( ) 変更 (Change)                                            |
 |   ( ) 削除 (Revoke)                                            |
+|   ( ) 緊急 (Emergency)                                         |
 |                                                               |
 | 対象プリンシパル (Principal Email) *                             |
 |   [ user@example.com                               ]          |
