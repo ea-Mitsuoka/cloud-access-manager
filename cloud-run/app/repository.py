@@ -5,7 +5,7 @@ from typing import Any
 
 from google.cloud import bigquery
 
-from .models import AccessRequest, ExecutionResult
+from .models import AccessRequest, ExpiredAccessRequest, ExecutionResult
 
 
 class Repository:
@@ -230,27 +230,32 @@ class Repository:
 
     def search_expired_approved_access_requests(
         self,
-    ) -> list[AccessRequest]:
+    ) -> list[ExpiredAccessRequest]:
         sql = f"""
         SELECT
-            request_id,
-            request_type,
-            principal_email,
-            resource_name,
-            role,
-            status,
-            approved_at,
-            expires_at
-        FROM `{self.requests_table}`
-        WHERE status = 'APPROVED'
-          AND expires_at IS NOT NULL
-          AND expires_at < CURRENT_TIMESTAMP()
+            req.request_id,
+            req.request_type,
+            req.principal_email,
+            req.resource_name,
+            req.role,
+            req.status,
+            req.approved_at,
+            req.expires_at,
+            (perm.principal_email IS NOT NULL) AS is_permission_active
+        FROM `{self.requests_table}` AS req
+        LEFT JOIN `{self.iam_policy_permissions_table}` AS perm
+            ON req.principal_email = perm.principal_email
+            AND req.role = perm.role
+            AND req.resource_name = perm.resource_name
+        WHERE req.status = 'APPROVED'
+          AND req.expires_at IS NOT NULL
+          AND req.expires_at < CURRENT_TIMESTAMP()
         """
         rows = self._client.query(sql).result()
         requests = []
         for row in rows:
             requests.append(
-                AccessRequest(
+                ExpiredAccessRequest(
                     request_id=row["request_id"],
                     request_type=row["request_type"],
                     principal_email=row["principal_email"],
@@ -259,6 +264,7 @@ class Repository:
                     status=row["status"],
                     approved_at=row["approved_at"],
                     expires_at=row["expires_at"],
+                    is_permission_active=row["is_permission_active"],
                 )
             )
         return requests

@@ -342,14 +342,7 @@ def revoke_expired_permissions():
         failed_count = 0
 
         for req in expired_requests:
-            # Check if the permission still actually exists
-            iam_policy_permission = repo.get_iam_policy_permission(
-                principal_email=req.principal_email,
-                role=req.role,
-                resource_name=req.resource_name,
-            )
-
-            if not iam_policy_permission:
+            if not req.is_permission_active:
                 # Permission already gone, skip revocation
                 result = ExecutionResult(
                     result="SKIPPED",
@@ -369,8 +362,8 @@ def revoke_expired_permissions():
 
             try:
                 # This request was originally a GRANT, but we need to revoke it.
-                req = replace(req, request_type="REVOKE")
-                result = iam_executor.execute(req)
+                req_to_revoke = replace(req, request_type="REVOKE")
+                result = iam_executor.execute(req_to_revoke)
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )

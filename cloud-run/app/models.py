@@ -17,6 +17,12 @@ class AccessRequest:
 
 
 @dataclass(frozen=True)
+class ExpiredAccessRequest(AccessRequest):
+    expires_at: datetime | None
+    is_permission_active: bool
+
+
+@dataclass(frozen=True)
 class ExecutionResult:
     result: str  # SUCCESS / FAILED / SKIPPED
     action: str
