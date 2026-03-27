@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Cloud Run service for IAM Access Management"
 authors = ["Your Name <you@example.com>"]
 readme = "README.md"
+packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
