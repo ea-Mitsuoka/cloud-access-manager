@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import secrets # 追加
+import secrets  # 追加
 import traceback
 import uuid
 from dataclasses import replace  # 追加
