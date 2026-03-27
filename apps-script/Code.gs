@@ -271,19 +271,31 @@ function callCloudRunExecute_(props, requestId) {
     headers['X-Webhook-Token'] = props.webhookSecret;
   }
 
-  const resp = UrlFetchApp.fetch(props.cloudRunUrl, {
+  const options = {
     method: 'post',
     payload,
     contentType: 'application/json',
     muteHttpExceptions: true,
     headers
-  });
+  };
 
-  const code = resp.getResponseCode();
-  if (code >= 300) {
-    throw new Error(`Cloud Run execute failed (${code}): ${resp.getContentText()}`);
+  const maxRetries = 3;
+  for (let i = 0; i < maxRetries; i += 1) {
+    try {
+      const resp = UrlFetchApp.fetch(props.cloudRunUrl, options);
+      const code = resp.getResponseCode();
+      if (code >= 300) {
+        throw new Error(`Cloud Run execute failed (${code}): ${resp.getContentText()}`);
+      }
+      return; // 成功した場合はループを抜ける
+    } catch (err) {
+      if (i === maxRetries - 1) {
+        throw err; // 最大リトライ回数に達した場合はエラーを投げる
+      }
+      Utilities.sleep(1000 * (i + 1)); // 失敗時は待機 (1秒, 2秒...)
+    }
   }
-}
+  }
 
 function appendReviewSheet_(request) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
