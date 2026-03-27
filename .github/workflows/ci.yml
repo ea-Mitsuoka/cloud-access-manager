@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.x
 
@@ -23,7 +23,7 @@ jobs:
         working-directory: terraform
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -44,10 +44,10 @@ jobs:
         working-directory: cloud-run
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
 
@@ -74,7 +74,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Check for WIF provider
         id: check_wif
@@ -82,7 +82,7 @@ jobs:
 
       - name: Authenticate to Google Cloud
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: 'google-github-actions/auth@v1'
+        uses: 'google-github-actions/auth@v3'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload image name artifact
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: image-name
           path: image_name.txt
@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Check for WIF provider
         id: check_wif
@@ -133,7 +133,7 @@ jobs:
 
       - name: Download image name artifact
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v8
         with:
           name: image-name
           path: .
@@ -141,7 +141,7 @@ jobs:
 
       - name: Authenticate to Google Cloud
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: 'google-github-actions/auth@v1'
+        uses: 'google-github-actions/auth@v3'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
@@ -168,7 +168,7 @@ jobs:
 
       - name: Setup Terraform
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.x
 
@@ -212,7 +212,7 @@ jobs:
 
       - name: Upload Plan Artifact
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan
           path: terraform/tfplan
@@ -230,7 +230,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Check for WIF provider
         id: check_wif
@@ -238,7 +238,7 @@ jobs:
 
       - name: Download Plan Artifact
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v8
         with:
           name: tfplan
           path: terraform
@@ -246,14 +246,14 @@ jobs:
 
       - name: Authenticate to Google Cloud
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: 'google-github-actions/auth@v1'
+        uses: 'google-github-actions/auth@v3'
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Setup Terraform
         if: steps.check_wif.outputs.wif_enabled == 'true'
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.x
 
