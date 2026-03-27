@@ -474,7 +474,7 @@ def _authorize() -> bool:
     if _authorize_scheduler_oidc():
         return True
     if not SHARED_SECRET:
-        return True
+        return False
     token = request.headers.get("X-Webhook-Token", "")
     return secrets.compare_digest(token, SHARED_SECRET)
 
