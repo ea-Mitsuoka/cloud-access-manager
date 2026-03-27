@@ -9,9 +9,6 @@ from app.main import app
 from app.models import ExpiredAccessRequest
 
 
-
-
-
 @pytest.fixture
 def client() -> FlaskClient:
     return app.test_client()
