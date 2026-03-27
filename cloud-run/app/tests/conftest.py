@@ -15,7 +15,9 @@ os.environ.setdefault("SCHEDULER_INVOKER_EMAIL", "scheduler@example.com")
 # 2. pytestのコレクション（収集）段階でエラーになるのを防ぐため、
 # Google Cloudのデフォルト認証(ADC)をグローバルにモック化する
 mock_credentials = MagicMock()
-auth_patcher = patch("google.auth.default", return_value=(mock_credentials, "test-project-id"))
+auth_patcher = patch(
+    "google.auth.default", return_value=(mock_credentials, "test-project-id")
+)
 auth_patcher.start()
 
 # パッチを適用したままテストを実行できるようにするため、auth_patcherを停止しない
