@@ -9,7 +9,7 @@
 - **Poetry**: Python の依存関係管理およびパッケージングツール。
 - **gcloud CLI**: Google Cloud のコマンドラインツール。
 - **Terraform**: Infrastructure as Code ツール。
-- **Python**: バージョン 3.10 以降。
+- **Python**: バージョン 3.12 (プロジェクトの `pyproject.toml` で指定)。
 - **Docker**: コンテナイメージをビルドするため（ローカルテストではオプション）。
 
 また、開発およびテスト用の Google Cloud プロジェクトへのアクセス権があり、`gcloud` CLI が認証済みである必要があります (`gcloud auth login`)。
