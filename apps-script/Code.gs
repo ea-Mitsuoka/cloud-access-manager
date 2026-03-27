@@ -45,21 +45,23 @@ function onOpen() {
 function onFormSubmit(e) {
   const props = getProps_();
   const named = e.namedValues || {};
+  const rawRequestType = pick_(named, FIELD_REQUEST_TYPE);
+  const isEmergency = rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
+  const reason = (isEmergency ? '[緊急] ' : '') + pickFirst_(named, [FIELD_REASON, FIELD_REASON_ALT]);
 
   const request = {
     request_id: Utilities.getUuid(),
-    request_type: normalizeRequestType_(pick_(named, FIELD_REQUEST_TYPE)),
+    request_type: normalizeRequestType_(rawRequestType),
     principal_email: pick_(named, FIELD_PRINCIPAL),
     resource_name: pick_(named, FIELD_RESOURCE),
     role: pick_(named, FIELD_ROLE),
-    reason: pickFirst_(named, [FIELD_REASON, FIELD_REASON_ALT]),
+    reason: reason,
     requester_email: pick_(named, FIELD_REQUESTER),
     approver_email: pick_(named, FIELD_APPROVER),
     status: STATUS_PENDING,
     requested_at: new Date().toISOString(),
     ticket_ref: ''
   };
-
   validateRequest_(request);
   insertRequestToBigQuery_(props, request);
   insertRequestHistoryEvent_(props, {
@@ -79,6 +81,29 @@ function onFormSubmit(e) {
     details_json: JSON.stringify({ source: 'google_form' })
   });
   appendReviewSheet_(request);
+
+  // 緊急アクセスの場合は即時承認フローへ回す
+  if (isEmergency) {
+    updateStatusInBigQuery_(props, request.request_id, STATUS_APPROVED);
+    insertRequestHistoryEvent_(props, {
+      request_id: request.request_id,
+      event_type: EVENT_STATUS_CHANGED,
+      old_status: STATUS_PENDING,
+      new_status: STATUS_APPROVED,
+      reason_snapshot: request.reason,
+      request_type: request.request_type,
+      principal_email: request.principal_email,
+      resource_name: request.resource_name,
+      role: request.role,
+      requester_email: request.requester_email,
+      approver_email: request.approver_email,
+      acted_by: 'SYSTEM_AUTO_APPROVE',
+      actor_source: 'SYSTEM',
+      details_json: JSON.stringify({ note: 'Break-glass auto approval' })
+    });
+    callCloudRunExecute_(props, request.request_id);
+    refreshRequestReviewStatusForRequestIds_([request.request_id]);
+  }
 }
 
 function onEdit(e) {
@@ -141,7 +166,7 @@ function onEdit(e) {
 
 function insertRequestToBigQuery_(props, request) {
   const sql = `
-    INSERT INTO \`${props.projectId}.${props.datasetId}.iam_access_requests\`
+    INSERT INTO `${props.projectId}.${props.datasetId}.iam_access_requests`
     (
       request_id, request_type, principal_email, resource_name, role,
       reason, requester_email, approver_email, status, requested_at, ticket_ref,
@@ -175,7 +200,7 @@ function updateStatusInBigQuery_(props, requestId, normalizedStatus) {
     : "status = @status, updated_at = CURRENT_TIMESTAMP()";
 
   const sql = `
-    UPDATE \`${props.projectId}.${props.datasetId}.iam_access_requests\`
+    UPDATE `${props.projectId}.${props.datasetId}.iam_access_requests`
     SET ${statusExpr}
     WHERE request_id = @request_id
   `;
@@ -197,7 +222,7 @@ function getRequestSnapshot_(props, requestId) {
       requester_email,
       approver_email,
       status
-    FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\`
+    FROM `${props.projectId}.${props.datasetId}.iam_access_requests`
     WHERE request_id = @request_id
     LIMIT 1
   `;
@@ -207,7 +232,7 @@ function getRequestSnapshot_(props, requestId) {
 
 function insertRequestHistoryEvent_(props, event) {
   const sql = `
-    INSERT INTO \`${props.projectId}.${props.datasetId}.iam_access_request_history\`
+    INSERT INTO `${props.projectId}.${props.datasetId}.iam_access_request_history`
     (
       history_id,
       request_id,
@@ -412,6 +437,7 @@ function normalizeRequestType_(raw) {
   const v = String(raw || '').trim();
   if (v === '削除') return 'REVOKE';
   if (v === '変更') return 'CHANGE';
+  if (v.indexOf('緊急') !== -1) return 'GRANT'; // 緊急付与も処理上はGRANTとして扱う
   return 'GRANT';
 }
 
@@ -598,20 +624,20 @@ function queryLatestRequestStatusMap_(props, requestIds) {
         principal_email,
         resource_name,
         role
-      FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\`
+      FROM `${props.projectId}.${props.datasetId}.iam_access_requests`
       WHERE request_id IN UNNEST(@request_ids)
     ),
     latest_exec AS (
       SELECT
         request_id,
         ARRAY_AGG(STRUCT(result, executed_at) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS ex
-      FROM \`${props.projectId}.${props.datasetId}.iam_access_change_log\`
+      FROM `${props.projectId}.${props.datasetId}.iam_access_change_log`
       WHERE request_id IN UNNEST(@request_ids)
       GROUP BY request_id
     ),
     actual AS (
       SELECT principal_email, resource_name, role
-      FROM \`${props.projectId}.${props.datasetId}.iam_policy_permissions\`
+      FROM `${props.projectId}.${props.datasetId}.iam_policy_permissions`
     )
     SELECT
       req.request_id AS request_id,

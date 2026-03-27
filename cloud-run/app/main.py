@@ -135,6 +135,12 @@ def execute_request():
             }
         )
 
+    if "[緊急]" in (req.reason or ""):
+        logging.warning(
+            f"[BREAK-GLASS] Emergency access execution triggered! "
+            f"Principal: {req.principal_email}, Role: {req.role}, Resource: {req.resource_name}, Reason: {req.reason}"
+        )
+
     try:
         result = iam_executor.execute(req)
     except Exception as exc:  # pragma: no cover

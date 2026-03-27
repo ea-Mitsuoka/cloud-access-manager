@@ -518,3 +518,20 @@ resource "google_monitoring_alert_policy" "cloud_run_errors" {
     length(google_monitoring_notification_channel.alert_webhook) > 0 ? google_monitoring_notification_channel.alert_webhook[0].name : ""
   ])
 }
+
+resource "google_monitoring_alert_policy" "break_glass_alert" {
+  count        = (trimspace(var.alert_notification_email) != "" || trimspace(var.alert_notification_webhook_url) != "") ? 1 : 0
+  project      = var.tool_project_id
+  display_name = "IAM Access Manager: Break-glass (Emergency) Access Detected"
+  combiner     = "OR"
+  conditions {
+    display_name = "Break-glass Execution Logs"
+    condition_matched_log {
+      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${google_cloud_run_v2_service.executor.name}\" AND textPayload:\"[BREAK-GLASS]\""
+    }
+  }
+  notification_channels = compact([
+    length(google_monitoring_notification_channel.alert_email) > 0 ? google_monitoring_notification_channel.alert_email[0].name : "",
+    length(google_monitoring_notification_channel.alert_webhook) > 0 ? google_monitoring_notification_channel.alert_webhook[0].name : ""
+  ])
+}
