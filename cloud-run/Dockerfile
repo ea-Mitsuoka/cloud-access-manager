@@ -1,14 +1,43 @@
+# Stage 1: Builder
+# Install dependencies using Poetry
+FROM python:3.12-slim as builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 
+    PYTHONUNBUFFERED=1 
+    POETRY_VERSION=1.8.2
+
+# Install poetry
+RUN pip install "poetry==${POETRY_VERSION}"
+
+# Set the working directory
+WORKDIR /app
+
+# Copy only the files needed for dependency installation
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies, without dev dependencies
+RUN poetry install --no-interaction --no-ansi --no-dev
+
+
+# Stage 2: Final
+# Create the final, lean image
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 
+    PYTHONUNBUFFERED=1 
+    # Point to the virtual environment created by Poetry
+    VIRTUAL_ENV=/app/.venv 
+    # Add the virtual environment's bin directory to the PATH
+    PATH="/app/.venv/bin:$PATH" 
+    PORT=8080
 
 WORKDIR /app
 
-COPY app/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Copy the virtual environment from the builder stage
+COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
+# Copy the application code
 COPY app /app/app
 
-ENV PORT=8080
+# Run the application
 CMD exec gunicorn --bind :${PORT} --workers 1 --threads 8 app.main:app
