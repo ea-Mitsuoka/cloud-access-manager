@@ -49,7 +49,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -61,6 +61,15 @@ jobs:
 
       - name: Run tests
         run: poetry run pytest
+        env:
+          BQ_PROJECT_ID: "test-project"
+          BQ_DATASET_ID: "test-dataset"
+          EXECUTOR_IDENTITY: "test-executor"
+          WEBHOOK_SHARED_SECRET: "test-secret"
+          MGMT_TARGET_PROJECT_ID: "managed-project"
+          MGMT_TARGET_ORGANIZATION_ID: ""
+          WORKSPACE_CUSTOMER_ID: "my_customer"
+          SCHEDULER_INVOKER_EMAIL: "scheduler@example.com"
 
   build:
     name: Build Container Image
