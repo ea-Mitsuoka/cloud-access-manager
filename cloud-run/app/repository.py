@@ -40,7 +40,7 @@ class Repository:
 
     @property
     def pipeline_job_reports_table(self) -> str:
-        return f"{self._project_id}.{self._dataset_id}.pipeline_job_reports"
+        return f"{self._project_id}.{self._dataset_id}.iam_pipeline_job_reports"
 
     def get_approved_request(self, request_id: str) -> AccessRequest | None:
         sql = f"""

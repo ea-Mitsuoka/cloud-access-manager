@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_reconciliation_issues`
 PARTITION BY DATE(detected_at)
 CLUSTER BY issue_type, status, severity;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.pipeline_job_reports` (
+CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_pipeline_job_reports` (
   execution_id STRING NOT NULL,
   job_type STRING NOT NULL, -- RESOURCE_COLLECTION / GROUP_COLLECTION / ...
   result STRING NOT NULL, -- SUCCESS / FAILED_PERMISSION / FAILED

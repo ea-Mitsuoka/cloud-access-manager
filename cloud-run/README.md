@@ -44,7 +44,7 @@ curl -X POST "https://<service-url>/collect/resources"
 ```
 
 定期的な実行のために、TerraformはOIDCを使用してこのエンドポイントを毎日呼び出すCloud Schedulerをプロビジョニングします。
-権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`pipeline_job_reports`にも記録されます。
+権限エラーは、実行可能な`hint`とともに`FAILED_PERMISSION`として返され、BigQueryの`iam_pipeline_job_reports`にも記録されます。
 
 ## Googleグループ収集
 
