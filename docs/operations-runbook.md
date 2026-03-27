@@ -262,6 +262,18 @@ printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBH
 gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d= -f2)
 ```
 
+### 5.1 オブジェクトのバージョニング有効化の推奨
+
+Terraform Stateファイルを保存するGCSバケット (`${TFSTATE_BUCKET}` に設定されているバケット) については、**オブジェクトのバージョニング機能を必ず有効化**することを強く推奨します。
+
+運用中に誤ってStateファイルが破損したり上書きされたりした場合、バージョニングが有効になっていないと、以前の管理状態への復旧が極めて困難になります。これは、インフラストラクチャの安定運用において非常に重要です。
+
+**GCP Console または `gsutil` コマンドでの有効化例:**
+
+```bash
+gsutil versioning set on gs://${TFSTATE_BUCKET}
+```
+
 ## 6. サービスアカウント作成コマンド（手動ブートストラップが必要な場合）
 
 通常は Terraform が作成します (`google_service_account.executor` in `terraform/main.tf`)。
@@ -354,7 +366,7 @@ bq query --use_legacy_sql=false
 
 ```bash
 # 収集ジョブの成功/失敗レポート（権限不足は FAILED_PERMISSION）
-bq query --use_legacy_sql=false
+bq query --use_legacy_sql=false 
 "SELECT job_type, result, error_code, hint, occurred_at
  FROM `$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2).$(grep '^BQ_DATASET_ID=' ../saas.env | cut -d= -f2).iam_pipeline_job_reports`
  ORDER BY occurred_at DESC LIMIT 50"
