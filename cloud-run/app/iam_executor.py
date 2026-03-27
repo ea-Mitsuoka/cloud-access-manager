@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any
 
 from googleapiclient import discovery
+from googleapiclient.errors import HttpError
 
 from .models import AccessRequest, ExecutionResult
+
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 0.5
 
 
 class IamExecutor:
@@ -20,30 +25,60 @@ class IamExecutor:
     def execute(self, req: AccessRequest) -> ExecutionResult:
         action = self._normalize_action(req.request_type)
         member = self._to_member(req.principal_email)
-        target_type, _ = self._parse_resource(req.resource_name)
 
-        policy = self._get_policy(req.resource_name)
-        before_hash = self._policy_hash(policy)
-        changed = self._apply_diff(policy, req.role, member, action)
+        for i in range(MAX_RETRIES):
+            try:
+                policy = self._get_policy(req.resource_name)
+                before_hash = self._policy_hash(policy)
+                original_policy_for_diff = json.loads(json.dumps(policy))
 
-        if not changed:
-            return ExecutionResult(
-                result="SKIPPED",
-                action=action,
-                target=req.resource_name,
-                before_hash=before_hash,
-                after_hash=before_hash,
-                details={"reason": "no diff"},
-            )
+                changed = self._apply_diff(
+                    original_policy_for_diff, req.role, member, action
+                )
 
-        updated = self._set_policy(req.resource_name, policy)
-        after_hash = self._policy_hash(updated)
-        return ExecutionResult(
-            result="SUCCESS",
+                if not changed:
+                    return ExecutionResult(
+                        result="SKIPPED",
+                        action=action,
+                        target=req.resource_name,
+                        before_hash=before_hash,
+                        after_hash=before_hash,
+                        details={"reason": "no diff"},
+                    )
+
+                # The policy to set must include the original etag.
+                updated_policy_to_set = original_policy_for_diff
+                updated_policy_to_set["etag"] = policy["etag"]
+
+                updated = self._set_policy(
+                    req.resource_name, updated_policy_to_set
+                )
+                after_hash = self._policy_hash(updated)
+                return ExecutionResult(
+                    result="SUCCESS",
+                    action=action,
+                    target=req.resource_name,
+                    before_hash=before_hash,
+                    after_hash=after_hash,
+                )
+
+            except HttpError as e:
+                if e.resp.status == 409:  # Conflict
+                    if i < MAX_RETRIES - 1:
+                        time.sleep(RETRY_BACKOFF_SECONDS * (i + 1))
+                        continue  # Retry
+                raise  # Re-raise other HttpErrors or on last retry
+
+        # This part should not be reached if retries are exhausted and the last error was re-raised.
+        # But as a fallback, return a failure.
+        return ExecutionResult(  # pragma: no cover
+            result="FAILED",
             action=action,
             target=req.resource_name,
-            before_hash=before_hash,
-            after_hash=after_hash,
+            before_hash=None,
+            after_hash=None,
+            error_code="CONFLICT_RETRIES_EXHAUSTED",
+            error_message=f"Failed to apply IAM policy after {MAX_RETRIES} attempts due to conflicts.",
         )
 
     @staticmethod
