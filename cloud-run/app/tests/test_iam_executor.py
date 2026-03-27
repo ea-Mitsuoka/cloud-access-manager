@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, MagicMock
 from app.iam_executor import IamExecutor
 
 
@@ -49,3 +50,90 @@ def test_parse_resource():
     )
     with pytest.raises(ValueError, match="unsupported resource_name format"):
         IamExecutor._parse_resource("buckets/my-bucket")
+
+
+@patch("app.iam_executor.discovery")
+def test_get_policy_project(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    executor._get_policy("projects/my-project")
+    mock_service.projects().getIamPolicy.assert_called_with(
+        resource="projects/my-project"
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_get_policy_folder(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    executor._get_policy("folders/12345")
+    mock_service.folders().getIamPolicy.assert_called_with(
+        resource="folders/12345"
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_get_policy_organization(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    executor._get_policy("organizations/67890")
+    mock_service.organizations().getIamPolicy.assert_called_with(
+        resource="organizations/67890"
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_get_policy_unsupported(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    with pytest.raises(ValueError):
+        executor._get_policy("buckets/my-bucket")
+
+
+@patch("app.iam_executor.discovery")
+def test_set_policy_project(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    policy = {"bindings": []}
+    executor._set_policy("projects/my-project", policy)
+    mock_service.projects().setIamPolicy.assert_called_with(
+        resource="projects/my-project", body={"policy": policy}
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_set_policy_folder(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    policy = {"bindings": []}
+    executor._set_policy("folders/12345", policy)
+    mock_service.folders().setIamPolicy.assert_called_with(
+        resource="folders/12345", body={"policy": policy}
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_set_policy_organization(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    policy = {"bindings": []}
+    executor._set_policy("organizations/67890", policy)
+    mock_service.organizations().setIamPolicy.assert_called_with(
+        resource="organizations/67890", body={"policy": policy}
+    )
+
+
+@patch("app.iam_executor.discovery")
+def test_set_policy_unsupported(mock_discovery):
+    mock_service = MagicMock()
+    mock_discovery.build.return_value = mock_service
+    executor = IamExecutor()
+    with pytest.raises(ValueError):
+        executor._set_policy("buckets/my-bucket", {})

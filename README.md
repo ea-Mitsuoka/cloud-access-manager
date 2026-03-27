@@ -341,8 +341,6 @@ graph TD
 
 ### 10.4 MVP制約
 
-- Cloud Run実装は MVPとして `projects/{project_id}` のIAM更新のみ対応。
-- `folders/...` `organizations/...` は今後拡張対象（エラーで明示）。
 - 認証は `X-Webhook-Token` 共通鍵方式（本番はIngress制限やIAP併用推奨）。
 - `organization_id = ""` の場合、`managed_project_id` と一致する `projects/{id}` の申請のみ実行対象とする（対象外は `OUT_OF_SCOPE` で拒否）。
 - `organization_id != ""` の場合、Cloud Resource Manager の ancestry で `projects/{id}` が指定組織配下か検証し、対象外は `OUT_OF_SCOPE` で拒否する。
