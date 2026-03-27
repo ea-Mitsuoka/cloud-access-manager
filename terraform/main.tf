@@ -12,6 +12,18 @@ locals {
     owner  = "security"
     scope  = local.organization_scope_enabled ? "organization" : "project"
   }
+
+  executor_project_roles = [
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/cloudasset.viewer",
+  ]
+
+  executor_organization_roles = [
+    "roles/resourcemanager.projectIamAdmin",
+    "roles/browser",
+    "roles/cloudasset.viewer",
+    "roles/resourcemanager.folderAdmin",
+  ]
 }
 
 resource "google_project_service" "services" {
@@ -158,10 +170,10 @@ resource "google_bigquery_table" "iam_reconciliation_issues" {
   ])
 }
 
-resource "google_bigquery_table" "pipeline_job_reports" {
+resource "google_bigquery_table" "iam_pipeline_job_reports" {
   project    = var.tool_project_id
   dataset_id = google_bigquery_dataset.iam.dataset_id
-  table_id   = "pipeline_job_reports"
+  table_id   = "iam_pipeline_job_reports"
 
   time_partitioning {
     type  = "DAY"
@@ -206,55 +218,23 @@ resource "google_project_iam_member" "executor_bigquery_job_user" {
   member  = "serviceAccount:${google_service_account.executor.email}"
 }
 
-resource "google_project_iam_member" "executor_managed_project_iam_admin" {
-  count   = local.organization_scope_enabled ? 0 : 1
-  project = local.effective_managed_project_id
-  role    = "roles/resourcemanager.projectIamAdmin"
-  member  = "serviceAccount:${google_service_account.executor.email}"
+# Project-only scope roles for executor SA
+resource "google_project_iam_member" "executor_managed_project_roles" {
+  for_each = toset(local.executor_project_roles)
+  count    = local.organization_scope_enabled ? 0 : 1
+  project  = local.effective_managed_project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.executor.email}"
 }
 
-resource "google_project_iam_member" "executor_managed_project_cloudasset_viewer" {
-  count   = local.organization_scope_enabled ? 0 : 1
-  project = local.effective_managed_project_id
-  role    = "roles/cloudasset.viewer"
-  member  = "serviceAccount:${google_service_account.executor.email}"
+# Organization scope roles for executor SA
+resource "google_organization_iam_member" "executor_managed_organization_roles" {
+  for_each = toset(local.executor_organization_roles)
+  count    = local.organization_scope_enabled ? 1 : 0
+  org_id   = var.organization_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.executor.email}"
 }
-
-resource "google_organization_iam_member" "executor_org_project_iam_admin" {
-  count  = local.organization_scope_enabled ? 1 : 0
-  org_id = var.organization_id
-  role   = "roles/resourcemanager.projectIamAdmin"
-  member = "serviceAccount:${google_service_account.executor.email}"
-}
-
-resource "google_organization_iam_member" "executor_org_browser" {
-  count  = local.organization_scope_enabled ? 1 : 0
-  org_id = var.organization_id
-  role   = "roles/browser"
-  member = "serviceAccount:${google_service_account.executor.email}"
-}
-
-resource "google_organization_iam_member" "executor_org_cloudasset_viewer" {
-  count  = local.organization_scope_enabled ? 1 : 0
-  org_id = var.organization_id
-  role   = "roles/cloudasset.viewer"
-  member = "serviceAccount:${google_service_account.executor.email}"
-}
-
-resource "google_organization_iam_member" "executor_org_folder_admin" {
-  count  = local.organization_scope_enabled ? 1 : 0
-  org_id = var.organization_id
-  role   = "roles/resourcemanager.folderAdmin"
-  member = "serviceAccount:${google_service_account.executor.email}"
-}
-
-resource "google_organization_iam_member" "executor_org_organization_admin" {
-  count  = local.organization_scope_enabled ? 1 : 0
-  org_id = var.organization_id
-  role   = "roles/resourcemanager.organizationAdmin"
-  member = "serviceAccount:${google_service_account.executor.email}"
-}
-
 
 resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
   project   = var.tool_project_id
@@ -318,14 +298,9 @@ resource "google_cloud_run_v2_service" "executor" {
     google_project_service.services,
     google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
     google_project_iam_member.executor_bigquery_job_user,
-    google_project_iam_member.executor_managed_project_iam_admin,
-    google_project_iam_member.executor_managed_project_cloudasset_viewer,
-    google_organization_iam_member.executor_org_project_iam_admin,
-    google_organization_iam_member.executor_org_browser,
-    google_organization_iam_member.executor_org_cloudasset_viewer,
-    google_organization_iam_member.executor_org_folder_admin,
-    google_organization_iam_member.executor_org_organization_admin,
     google_secret_manager_secret_iam_member.executor_secret_accessor,
+    google_project_iam_member.executor_managed_project_roles,
+    google_organization_iam_member.executor_managed_organization_roles,
   ]
 }
 
