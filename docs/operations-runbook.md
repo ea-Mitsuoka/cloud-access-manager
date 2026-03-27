@@ -181,9 +181,9 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は作成してください。
 
 ```bash
-gcloud artifacts repositories create iam-access-repo 
-  --repository-format=docker 
-  --location=${REGION} 
+gcloud artifacts repositories create iam-access-repo
+  --repository-format=docker
+  --location=${REGION}
   --project=${TOOL_PROJECT_ID}
 ```
 
