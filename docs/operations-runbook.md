@@ -129,8 +129,8 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 1. **CI用のサービスアカウント作成:**
 
    ```bash
-   gcloud iam service-accounts create iam-access-ci-sa 
-     --project="${TOOL_PROJECT_ID}" 
+   gcloud iam service-accounts create iam-access-ci-sa
+     --project="${TOOL_PROJECT_ID}"
      --display-name="IAM Access CI/CD"
    ```
 
@@ -138,21 +138,21 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 
    ```bash
    # プールの作成
-   gcloud iam workload-identity-pools create "github-pool" 
-     --project="${TOOL_PROJECT_ID}" 
-     --location="global" 
+   gcloud iam workload-identity-pools create "github-pool"
+     --project="${TOOL_PROJECT_ID}"
+     --location="global"
      --display-name="GitHub Actions Pool"
 
    # プールのIDを取得
    WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" --project="${TOOL_PROJECT_ID}" --location="global" --format="value(name)")
 
    # プロバイダの作成
-   gcloud iam workload-identity-pools providers create-oidc "github-provider" 
-     --project="${TOOL_PROJECT_ID}" 
-     --location="global" 
-     --workload-identity-pool="github-pool" 
-     --display-name="GitHub Actions Provider" 
-     --issuer-uri="https://token.actions.githubusercontent.com" 
+   gcloud iam workload-identity-pools providers create-oidc "github-provider"
+     --project="${TOOL_PROJECT_ID}"
+     --location="global"
+     --workload-identity-pool="github-pool"
+     --display-name="GitHub Actions Provider"
+     --issuer-uri="https://token.actions.githubusercontent.com"
      --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
    ```
 
@@ -163,9 +163,9 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
    REPO="your-github-organization/your-repository-name" # 例: "google-cloud-japan/cloud-access-manager"
    CI_SA_EMAIL="iam-access-ci-sa@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
 
-   gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}" 
-     --project="${TOOL_PROJECT_ID}" 
-     --role="roles/iam.workloadIdentityUser" 
+   gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}"
+     --project="${TOOL_PROJECT_ID}"
+     --role="roles/iam.workloadIdentityUser"
      --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
    ```
 
@@ -271,8 +271,8 @@ gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d
 ```bash
 TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
 
-gcloud iam service-accounts create iam-access-executor 
-  --project "$TOOL_PROJECT_ID" 
+gcloud iam service-accounts create iam-access-executor
+  --project "$TOOL_PROJECT_ID"
   --display-name "IAM Access Executor"
 ```
 
@@ -346,7 +346,7 @@ gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^R
 
 ```bash
 # Cloud Run 実行結果
-bq query --use_legacy_sql=false 
+bq query --use_legacy_sql=false
 "SELECT request_id, result, error_code, error_message, executed_at
  FROM `$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2).$(grep '^BQ_DATASET_ID=' ../saas.env | cut -d= -f2).iam_access_change_log`
  ORDER BY executed_at DESC LIMIT 50"
@@ -354,9 +354,9 @@ bq query --use_legacy_sql=false
 
 ```bash
 # 収集ジョブの成功/失敗レポート（権限不足は FAILED_PERMISSION）
-bq query --use_legacy_sql=false 
+bq query --use_legacy_sql=false
 "SELECT job_type, result, error_code, hint, occurred_at
- FROM `$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2).$(grep '^BQ_DATASET_ID=' ../saas.env | cut -d= -f2).pipeline_job_reports`
+ FROM `$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2).$(grep '^BQ_DATASET_ID=' ../saas.env | cut -d= -f2).iam_pipeline_job_reports`
  ORDER BY occurred_at DESC LIMIT 50"
 ```
 
