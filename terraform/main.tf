@@ -24,10 +24,8 @@ locals {
     "roles/cloudasset.viewer",
     "roles/resourcemanager.folderAdmin",
   ]
-}
 
-resource "google_project_service" "services" {
-  for_each = toset([
+  base_enabled_services = toset([
     "bigquery.googleapis.com",
     "cloudasset.googleapis.com",
     "cloudidentity.googleapis.com",
@@ -39,6 +37,19 @@ resource "google_project_service" "services" {
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
   ])
+  conditional_enabled_services = toset(
+    var.enable_vpc_sc ? ["accesscontextmanager.googleapis.com"] : []
+  )
+  all_enabled_services = setunion(local.base_enabled_services, local.conditional_enabled_services)
+}
+
+# プロジェクト番号を取得（VPC-SCの境界設定に必要）
+data "google_project" "tool_project" {
+  project_id = var.tool_project_id
+}
+
+resource "google_project_service" "services" {
+  for_each = local.all_enabled_services
 
   project = var.tool_project_id
   service = each.value
@@ -246,7 +257,8 @@ resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
 resource "google_cloud_run_v2_service" "executor" {
   name     = var.cloud_run_service_name
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL"
+  # VPC-SC有効時は内部トラフィック＋LB経由のみに制限
+  ingress  = var.enable_vpc_sc ? "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING" : "INGRESS_TRAFFIC_ALL"
 
   template {
     service_account = google_service_account.executor.email
@@ -445,4 +457,24 @@ resource "google_cloud_scheduler_job" "iam_bindings_history_update_daily" {
     google_project_service.services,
     google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
   ]
+}
+
+# --- VPC Service Controls (Optional) ---
+resource "google_access_context_manager_service_perimeter" "tool_perimeter" {
+  count  = var.enable_vpc_sc ? 1 : 0
+  parent = var.access_policy_name
+  name   = "${var.access_policy_name}/servicePerimeters/iam_access_manager_perimeter"
+  title  = "iam-access-manager-perimeter"
+
+  status {
+    restricted_services = [
+      "run.googleapis.com",
+      "bigquery.googleapis.com",
+      "secretmanager.googleapis.com",
+      "cloudresourcemanager.googleapis.com",
+      "cloudasset.googleapis.com",
+      "cloudidentity.googleapis.com"
+    ]
+    resources = ["projects/${data.google_project.tool_project.number}"]
+  }
 }

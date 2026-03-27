@@ -70,3 +70,12 @@ ______________________________________________________________________
 
 - **問題:** Google Apps ScriptからCloud Runへの呼び出しが、一過性のエラーやCloud Runのコールドスタート時に失敗すると、リトライされずに処理が中断していた。
 - **解決策:** `apps-script/Code.gs`の`callCloudRunExecute_`関数に、最大3回のリトライとエクスポネンシャル・バックオフ（1秒、2秒...と待機時間を増やす）のロジックを実装し、Cloud Runとの連携処理の堅牢性を向上させた。
+
+### 12. セキュリティ強化: VPC-SCとCloud RunのIngress制限を構成可能に
+
+- **問題:** Cloud Runのエンドポイントがインターネットに公開されており、第三者からのアクセスが可能だった。
+- **解決策:** Terraformに変数を追加し、`enable_vpc_sc`フラグを`true`にすることで以下のセキュリティ設定が自動的に有効になるようにした。
+  - **Cloud Run Ingress**: `INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING`に変更され、内部トラフィックとロードバランサ経由に限定される。
+  - **VPC Service Controls**: 関連するGoogle APIへのアクセスを制限するサービス境界（Perimeter）が構築される。
+  - **APIの有効化**: VPC-SCに必要な`accesscontextmanager.googleapis.com` APIがフラグに連動して有効化される。
+- **効果**: これにより、本番環境向けの高度なセキュリティ要件に、Terraformの変数を変更するだけで柔軟に対応できるようになった。

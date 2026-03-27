@@ -59,6 +59,22 @@ ask_yes_no() {
   done
 }
 
+update_config() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+
+  escaped_value=$(printf '%s\n' "$value" | sed 's/[&/\]/\\&/g')
+
+  if grep -q -E "^${key}=" "$file"; then
+    tmp_file=$(mktemp)
+    sed "s~^${key}=.*~${key}=${escaped_value}~" "$file" > "$tmp_file"
+    mv "$tmp_file" "$file"
+  else
+    echo "${key}=${value}" >> "$file"
+  fi
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Required command not found: $1" >&2
@@ -132,6 +148,65 @@ echo "Resource schedule      : $RESOURCE_COLLECTION_SCHEDULE"
 echo "Scheduler time zone    : $SCHEDULER_TIME_ZONE"
 echo "TF state bucket        : $TFSTATE_BUCKET"
 echo "TF state prefix        : $TFSTATE_PREFIX"
+echo
+
+# VPC-SC setting interactive
+echo "--- VPC Service Controls Setup (Optional) ---"
+if [[ -z "${ORGANIZATION_ID:-}" ]]; then
+    echo "VPC-SC requires Organization Scope. Skipping."
+    update_config "enable_vpc_sc" "false" "$CONFIG_FILE"
+else
+    current_vpc_sc_enabled=$(grep -E '^enable_vpc_sc=' "$CONFIG_FILE" | cut -d= -f2)
+    default_answer="n"
+    if [[ "$current_vpc_sc_enabled" == "true" ]]; then
+        default_answer="y"
+    fi
+
+    if ask_yes_no "Enable VPC Service Controls for enhanced security? (Requires Organization Admin roles)" "$default_answer"; then
+        update_config "enable_vpc_sc" "true" "$CONFIG_FILE"
+        current_access_policy_name=$(grep -E '^access_policy_name=' "$CONFIG_FILE" | cut -d= -f2)
+        
+        while true; do
+            read -r -p "Enter Access Policy name (e.g. accessPolicies/123456789): " access_policy_name
+            access_policy_name="${access_policy_name:-$current_access_policy_name}"
+            if [[ -n "$access_policy_name" ]]; then
+                update_config "access_policy_name" "$access_policy_name" "$CONFIG_FILE"
+                echo "VPC-SC enabled. Access Policy: $access_policy_name"
+                break
+            else
+                echo "Access Policy name cannot be empty."
+            fi
+        done
+
+        echo
+        echo "Terraform executor needs org-level roles to manage VPC-SC."
+        current_user=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n 1)
+        read -r -p "Enter the principal (user or SA) for terraform apply [default: $current_user]: " tf_principal
+        tf_principal="${tf_principal:-$current_user}"
+
+        echo
+        echo "The following roles will be granted at the organization level ($ORGANIZATION_ID) to '$tf_principal':"
+        echo "  - Organization Admin (roles/resourcemanager.organizationAdmin)"
+        echo "  - Access Context Manager Admin (roles/accesscontextmanager.policyAdmin)"
+        echo
+        if ask_yes_no "Proceed with granting these roles?" "n"; then
+            gcloud organizations add-iam-policy-binding "$ORGANIZATION_ID" \
+                --member="user:$tf_principal" \
+                --role="roles/resourcemanager.organizationAdmin" \
+                --condition=None >/dev/null
+            gcloud organizations add-iam-policy-binding "$ORGANIZATION_ID" \
+                --member="user:$tf_principal" \
+                --role="roles/accesscontextmanager.policyAdmin" \
+                --condition=None >/dev/null
+            echo "Successfully granted organization-level roles."
+        else
+            echo "Skipped granting roles. Terraform apply may fail if the principal lacks permissions."
+        fi
+    else
+        update_config "enable_vpc_sc" "false" "$CONFIG_FILE"
+        echo "VPC-SC disabled."
+    fi
+fi
 echo
 
 if ! ask_yes_no "Proceed with bootstrap + deploy workflow?" y; then

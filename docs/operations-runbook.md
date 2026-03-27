@@ -66,6 +66,11 @@ ______________________________________________________________________
 
 - `roles/storage.admin` on `tool_project`
 
+**VPC-SC有効化に特有の権限 (組織レベルで必要):**
+
+- `roles/accesscontextmanager.policyAdmin`
+- `roles/resourcemanager.organizationAdmin`
+
 ### 2.3 ロール付与コマンド例
 
 ```bash
@@ -82,6 +87,10 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPA
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPAL" --role roles/run.admin
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPAL" --role roles/iam.serviceAccountAdmin
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPAL" --role roles/resourcemanager.projectIamAdmin
+
+# (VPC-SC有効化時のみ) Terraform実行主体に組織レベルの権限を付与
+# gcloud organizations add-iam-policy-binding "$ORG_ID" --member "$TF_PRINCIPAL" --role roles/accesscontextmanager.policyAdmin
+# gcloud organizations add-iam-policy-binding "$ORG_ID" --member "$TF_PRINCIPAL" --role roles/resourcemanager.organizationAdmin
 
 # Cloud Run実行サービスアカウント
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/bigquery.jobUser
@@ -182,15 +191,41 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は作成してください。
 
 ```bash
-gcloud artifacts repositories create iam-access-repo
-  --repository-format=docker
-  --location=${REGION}
+gcloud artifacts repositories create iam-access-repo 
+  --repository-format=docker 
+  --location=${REGION} 
   --project=${TOOL_PROJECT_ID}
 ```
 
 もし異なる名前のリポジトリを使用する場合は、`.github/workflows/ci.yml` 内のイメージ名を更新してください。
 
-## 4. tfstateバックエンドのブートストラップ手順
+## 4. 高度なセキュリティ設定 (VPC-SC)
+
+本システムはオプションで、VPC Service Controls (VPC-SC) を有効にして、Cloud Runサービスと関連APIをサービス境界で保護する機能を提供します。
+
+### 4.1 機能概要
+
+- **Cloud Run Ingress制限:** `enable_vpc_sc = true` の場合、Cloud Runへのアクセスは内部トラフィックおよびロードバランサ経由に限定されます。
+- **サービス境界の構築:** `tool_project` を含むサービス境界が作成され、Cloud Run, BigQuery, Secret ManagerなどのAPIへのアクセスが境界内からに制限されます。
+
+### 4.2 有効化手順
+
+1. **`saas.env` の設定:**
+
+   - `enable_vpc_sc` を `true` に設定します。
+   - `access_policy_name` に、親となるアクセスポリシー名 (例: `accessPolicies/123456789012`) を設定します。
+
+1. **Terraformの適用:**
+   `bash scripts/sync-config.sh` を実行後、`terraform apply` を実行します。`bootstrap-deploy.sh`の対話形式でも設定可能です。
+
+### 4.3 運用上の注意と必須権限
+
+- **デフォルトは無効:** `enable_vpc_sc` はデフォルトで `false` のため、既存環境への影響はありません。
+- **必須権限:** VPC-SCは組織リソースのため、Terraform実行主体には**組織レベル**で以下のIAMロールが**両方とも必要**です。権限がない場合、`terraform apply`は失敗します。対話形式のデプロイスクリプト `scripts/bootstrap-deploy.sh` は、VPC-SC有効化の際にこの権限付与を支援します。
+  - **Access Context Manager 管理者 (`roles/accesscontextmanager.policyAdmin`)**
+  - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
+
+## 5. tfstateバックエンドのブートストラップ手順
 
 **前提:**
 
@@ -222,7 +257,7 @@ printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBH
 gcloud storage buckets describe gs://$(grep '^TFSTATE_BUCKET=' saas.env | cut -d= -f2)
 ```
 
-## 5. サービスアカウント作成コマンド（手動ブートストラップが必要な場合）
+## 6. サービスアカウント作成コマンド（手動ブートストラップが必要な場合）
 
 通常は Terraform が作成します (`google_service_account.executor` in `terraform/main.tf`)。
 
@@ -236,7 +271,7 @@ gcloud iam service-accounts create iam-access-executor
   --display-name "IAM Access Executor"
 ```
 
-## 6. コマンド付き運用手順書
+## 7. コマンド付き運用手順書
 
 **最短導線（対話形式）:**
 
@@ -244,7 +279,7 @@ gcloud iam service-accounts create iam-access-executor
 bash scripts/bootstrap-deploy.sh
 ```
 
-### 6.1 初回セットアップ
+### 7.1 初回セットアップ
 
 ```bash
 cp saas.env.example saas.env
@@ -257,7 +292,7 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 6.2 反映後の設定
+### 7.2 反映後の設定
 
 ```bash
 cd terraform
@@ -266,14 +301,14 @@ terraform output cloud_run_url
 
 - 出力値を `apps-script/script-properties.json` の `CLOUD_RUN_EXECUTE_URL` に反映します。
 
-### 6.3 SQL適用（帳票準拠）
+### 7.3 SQL適用（帳票準拠）
 
 ```bash
 # BigQuery UI か bq query で build/sql/*.sql を順に実行
 # 実行順は sql/README.md を参照
 ```
 
-### 6.4 変更リリース（通常運用）
+### 7.4 変更リリース（通常運用）
 
 ```bash
 bash scripts/sync-config.sh
@@ -282,7 +317,7 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 6.5 収集ジョブ手動実行（フォルダ/プロジェクト・Googleグループ）
+### 7.5 収集ジョブ手動実行（フォルダ/プロジェクト・Googleグループ）
 
 ```bash
 cd terraform
@@ -292,7 +327,7 @@ bash ../scripts/collect-resource-inventory.sh --cloud-run-url "$CLOUD_RUN_URL"
 bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
 ```
 
-### 6.6 Cloud Scheduler（日次自動実行）確認
+### 7.6 Cloud Scheduler（日次自動実行）確認
 
 ```bash
 cd terraform
@@ -302,7 +337,7 @@ gcloud scheduler jobs describe iam-resource-inventory-daily --location "$(grep '
 gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 ```
 
-### 6.7 障害時の一次切り分け
+### 7.7 障害時の一次切り分け
 
 ```bash
 # Cloud Run 実行結果
@@ -320,7 +355,7 @@ bq query --use_legacy_sql=false
  ORDER BY occurred_at DESC LIMIT 50"
 ```
 
-## 7. 未テスト項目の申し送り運用
+## 8. 未テスト項目の申し送り運用
 
 - 未テスト事項は `docs/untested-items-handover.md` に記録して管理します。
 - 新機能や権限変更を入れた場合は、同ファイルへ項目追加してからリリースします。

@@ -55,6 +55,18 @@ variable "workspace_customer_id" {
   default     = "my_customer"
 }
 
+variable "enable_vpc_sc" {
+  type        = bool
+  description = "Enable VPC Service Controls perimeter for the tool project (Requires Organization Admin & Access Context Manager roles)"
+  default     = false
+}
+
+variable "access_policy_name" {
+  type        = string
+  description = "Access Policy name (e.g. accessPolicies/123456789012). Required if enable_vpc_sc is true."
+  default     = ""
+}
+
 variable "resource_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/resources"
