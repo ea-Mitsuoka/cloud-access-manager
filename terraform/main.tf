@@ -108,10 +108,10 @@ resource "google_bigquery_table" "iam_access_change_log" {
   ])
 }
 
-resource "google_bigquery_table" "iam_policy_permissions_raw_history" {
+resource "google_bigquery_table" "iam_policy_bindings_raw_history" {
   project    = var.tool_project_id
   dataset_id = google_bigquery_dataset.iam.dataset_id
-  table_id   = "iam_policy_permissions_raw_history"
+  table_id   = "iam_policy_bindings_raw_history"
 
   time_partitioning {
     type  = "DAY"

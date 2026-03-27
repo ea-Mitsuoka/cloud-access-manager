@@ -199,12 +199,30 @@ if [[ ! -d "$sql_dir" ]] || [[ -z "$(find "$sql_dir" -name '*.sql')" ]]; then
   echo "Warning: No SQL files found in $sql_dir. Skipping BigQuery setup." >&2
   echo "Ensure you have run 'bash scripts/sync-config.sh' first." >&2
 else
-  # Execute SQL files. The sync-config.sh script should have replaced placeholders.
-  for sql_file in $(find "$sql_dir" -name '*.sql' | sort); do
-    echo "Executing: $sql_file"
-    if ! bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$sql_file"; then
-      echo "Error executing $sql_file. Please check BigQuery permissions and SQL syntax." >&2
-      exit 1
+  # NOTE: The execution order is important.
+  # Views depend on tables, so we can't just run them in alphabetical order.
+  # This order is based on sql/README.md.
+  sql_execution_order=(
+    "001_tables.sql"
+    "004_workbook_tables.sql"
+    "002_views.sql"
+    "005_workbook_views.sql"
+    "007_seed_workbook_from_existing.sql"
+    "003_reconciliation.sql"
+    "006_matrix_pivot.sql"
+    "008_update_bindings_history.sql"
+  )
+
+  for sql_filename in "${sql_execution_order[@]}"; do
+    sql_file="$sql_dir/$sql_filename"
+    if [[ -f "$sql_file" ]]; then
+      echo "Executing: $sql_file"
+      if ! bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$sql_file"; then
+        echo "Error executing $sql_file. Please check BigQuery permissions and SQL syntax." >&2
+        exit 1
+      fi
+    else
+        echo "Warning: SQL file not found, skipping: $sql_file"
     fi
   done
   echo "All SQL files applied successfully."

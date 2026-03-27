@@ -156,9 +156,10 @@ graph TD
 
 ### 3.4 記録・可視化層（BigQuery + 管理表）
 
-- `iam_policy_permissions` は最新スナップショット（洗い替え）として維持する。
-- `iam_policy_permissions_history` は履歴（追記）として新設する。
-- 申請/承認/実行ログとJOINしたビューを作成し、管理表へ反映する。
+- **`iam_policy_permissions`**: 外部システムによって定期的に洗い替えされる、最新のIAM状態のスナップショット。
+- **`iam_policy_bindings_raw_history`**: 棚卸しジョブによって収集された、加工前の「生の」IAM設定のスナップショット履歴。監査の元データとなる。
+- **`iam_permission_bindings_history`**: `iam_policy_permissions` の最新状態に、`iam_access_requests` から取得した申請理由や承認者などの情報を結合した「帳票用の整形済み」履歴。
+- **ビュー (`v_sheet_*`)**: 上記のテーブルを結合し、管理表（スプレッドシート）の各シートに表示するために最適化されたビュー群。
 
 ## 4. データ要件（BigQuery）
 
@@ -172,13 +173,13 @@ graph TD
 
 - `iam_policy_bindings_raw_history`
 
-  - 用途: 棚卸しジョブによって収集された、特定の時点での生のIAMバインディングのスナップショット履歴。監査の元データとなる。
+  - 用途: **生のIAM設定履歴**。棚卸しジョブによって収集された、特定の時点での加工されていないIAMバインディングのスナップショット。監査証跡の元データとして機能する。
   - 主要列: `execution_id, assessment_timestamp, scope, resource_type, resource_name, principal_type, principal_email, role`
   - 更新: `WRITE_APPEND`
 
 - `iam_permission_bindings_history`
 
-  - 用途: 帳票（ワークブック）用に整形された履歴テーブル。現在のIAM設定に申請・承認情報を結合したもので、定期的に`sql/008_update_bindings_history.sql`によって更新される。
+  - 用途: **帳票用の整形済み履歴**。現在のIAM設定 (`iam_policy_permissions`) に、関連する申請・承認情報 (`iam_access_requests` など) を結合したもの。`sql/008_update_bindings_history.sql` によって定期的に生成され、人間が読みやすい形式で権限の背景や理由を提供する。
   - 主要列: `execution_id, recorded_at, resource_name, resource_id, resource_full_path, principal_email, principal_type, iam_role, iam_condition, ticket_ref, request_reason, status_ja, approved_at, next_review_at, approver, request_id, note`
   - 更新: `WRITE_APPEND`
 
@@ -254,10 +255,10 @@ graph TD
 
 ### 5.4 管理表更新
 
-- 最新権限: `iam_policy_permissions`
-- 申請/承認/実行履歴: `iam_access_requests`, `iam_access_change_log`
-- 棚卸し推移（生の履歴）: `iam_policy_bindings_raw_history`
-- 棚卸し推移（帳票用整形履歴）: `iam_permission_bindings_history`
+- **最新権限**: `iam_policy_permissions` (洗い替え)
+- **申請/承認/実行履歴**: `iam_access_requests`, `iam_access_change_log`, `iam_access_request_history`
+- **棚卸し推移（生の履歴）**: `iam_policy_bindings_raw_history`
+- **棚卸し推移（帳票用整形履歴）**: `iam_permission_bindings_history`
 
 ### 5.5 定期棚卸し
 
@@ -290,7 +291,7 @@ graph TD
 
 - 申請から承認・実行まで手動介入なしで完了できる。
 - 実行結果が `iam_access_change_log` に100%記録される。
-- 棚卸し実行ごとに `iam_policy_permissions_history` が追記される。
+- 棚卸し実行ごとに `iam_policy_bindings_raw_history` が追記される。
 - 管理表で「現在状態」と「履歴」が分離表示される。
 - 不整合が `iam_reconciliation_issues` で検知できる。
 
@@ -351,7 +352,8 @@ graph TD
 
 - 認証は、以下の2つの方式をサポートします。
   - **OIDCトークン認証:** Cloud Schedulerからの呼び出しなど、Googleサービスアカウントからのリクエストを安全に認証します。これは推奨される方式です。
-  - **共通鍵認証 (`X-Webhook-Token`):** OIDCトークンが利用できない他のシステム（例: Google Apps Script）からの呼び出しのために、共通鍵による認証もサポートします（本番環境ではIngress制限やIAPとの併用を推奨）。
+  - **共通鍵認証 (`X-Webhook-Token`):** OIDCトークンが利用できない他のシステム（例: Google Apps Script）からの呼び出しのために、共通鍵による認証もサポートします。
+    - **設定:** この認証方式を利用する場合、事前にGCPのSecret Managerでシークレットを作成しておく必要があります。作成したシークレットの名前と、そのシークレットに格納する秘密の値を、`saas.env` ファイルでそれぞれ `WEBHOOK_SECRET_NAME` と `WEBHOOK_SHARED_SECRET` として設定します。
 - `organization_id = ""` の場合、`managed_project_id` と一致する `projects/{id}` の申請のみ実行対象とする（対象外は `OUT_OF_SCOPE` で拒否）。
 - `organization_id != ""` の場合、Cloud Resource Manager の ancestry で `projects/{id}` が指定組織配下か検証し、対象外は `OUT_OF_SCOPE` で拒否する。
 
@@ -361,19 +363,58 @@ graph TD
    - `tool_project_id`: ツールをデプロイするプロジェクト
    - `managed_project_id`: 管理対象プロジェクト（空なら `tool_project_id` を利用）
    - `organization_id = ""` の場合は「プロジェクト単体管理」として扱う。
+   - **共通鍵認証を利用する場合:** `WEBHOOK_SECRET_NAME` にSecret Managerのシークレット名を、`WEBHOOK_SHARED_SECRET` にそのシークレットの値を設定します。
 1. `bash scripts/sync-config.sh` を実行して、`environment.auto.tfvars` / `cloud-run/.env` / `apps-script/script-properties.json` / `build/sql/*.sql` を生成する。
 1. `bash scripts/bootstrap-tfstate.sh` を実行して tfstate 用 GCS バケットを作成/更新する。
 1. `terraform/` ディレクトリで以下を実行する。
    - `terraform init -backend-config=../backend.hcl`
    - `terraform plan -var-file=../environment.auto.tfvars`
    - `terraform apply -var-file=../environment.auto.tfvars`
+
+Terraformの適用により、以下の主要なリソースが作成されます。
+
+- **Cloud Run サービス**: IAMリクエストを処理するバックエンド (`iam-access-executor`)
+- **Cloud Scheduler ジョブ**: リソース棚卸しや期限切れ権限の剥奪などを定期実行
+- **BigQuery データセット**
+- **BigQuery テーブル**:
+  - `iam_access_requests`: 申請・承認のステータスを管理
+  - `iam_access_change_log`: IAM変更の実行ログ
+  - `iam_policy_permissions_raw_history`: IAMポリシーの生データ履歴
+  - `iam_reconciliation_issues`: 申請内容と実際の権限の差異を記録
+  - `pipeline_job_reports`: データ収集などのバッチ処理の実行レポート
+
+#### 10.5.1 手動でのSQLスクリプト実行
+
+Terraformによるインフラ構築後、BigQuery上でいくつかのSQLスクリプトを実行して、追加のテーブルやビューを作成する必要があります。これらのテーブルは、申請履歴の監査や、管理帳票のデータソースとして利用されます。
+
+1. **基本テーブルの作成 (`001_tables.sql`)**
+
+   - 申請の変更履歴を記録する `iam_access_request_history` テーブルなどを作成します。
+   - **実行方法:** GCPコンソールのBigQueryエディタなどで `sql/001_tables.sql` の内容を実行します。
+     - **注意:** このスクリプトにはTerraformが作成するテーブルの `CREATE TABLE IF NOT EXISTS` 文も含まれていますが、既存のテーブルには影響ありません。
+
+1. **管理帳票用テーブルとビューの作成**
+
+   - 以下のスクリプトを順番に実行し、スプレッドシートの管理帳票と連携するためのテーブルおよびビューを準備します。
+     - `sql/004_workbook_tables.sql`: 帳票で利用するマスタデータや履歴テーブルを作成します。
+     - `sql/002_views.sql`: 基本的なデータ閲覧用のビューを作成します。
+     - `sql/005_workbook_views.sql`: 帳票の各シートに対応するビューを作成します。
+
+1. **その他のSQL**
+
+   - `sql/003_reconciliation.sql` や `sql/008_update_bindings_history.sql` などは、定期的な棚卸しやデータ更新のためのバッチSQLです。これらは通常、Cloud RunやCloud Schedulerから実行されるか、運用者が手動で実行します。
+
+### 10.6 出力情報の確認
+
+Terraformの実行後、以下のコマンドで作成されたリソースの情報を確認できます。
+
 1. `terraform output cloud_run_url` の値を Apps Script の `CLOUD_RUN_EXECUTE_URL` に設定する。
 1. `terraform output management_scope` で管理対象スコープを確認する。
 1. `terraform output effective_managed_project_id` で実際の管理対象プロジェクトを確認する。
 1. `terraform output resource_inventory_scheduler_job` で日次収集ジョブ名を確認する。
 1. `terraform output group_collection_scheduler_job` で Googleグループ日次収集ジョブ名を確認する。
 
-### 10.6 運用モード (Organization vs. Project-only)
+### 10.7 運用モード (Organization vs. Project-only)
 
 本システムは、お客様の環境やセキュリティ要件に応じて、2つの運用モードをサポートします。
 
@@ -392,7 +433,7 @@ graph TD
     - リソース棚卸しは、そのプロジェクト内のリソースのみが対象です。
     - Googleグループ収集機能は、組織レベルの権限を必要とするため、正常に動作しない可能性が高いです。
 
-### 10.7 CI/CD
+### 10.8 CI/CD
 
 このリポジトリでは、GitHub Actions を利用してCI/CDパイプラインが設定されています。
 
