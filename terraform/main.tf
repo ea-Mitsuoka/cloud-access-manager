@@ -258,7 +258,7 @@ resource "google_cloud_run_v2_service" "executor" {
   name     = var.cloud_run_service_name
   location = var.region
   # VPC-SC有効時は内部トラフィック＋LB経由のみに制限
-  ingress  = var.enable_vpc_sc ? "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING" : "INGRESS_TRAFFIC_ALL"
+  ingress = var.enable_vpc_sc ? "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING" : "INGRESS_TRAFFIC_ALL"
 
   template {
     service_account = google_service_account.executor.email
