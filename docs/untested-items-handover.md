@@ -27,8 +27,8 @@
 | UT-003 | BigQuery | `iam_access_request_history` へ `REQUESTED/STATUS_CHANGED` が記録されること | 利用目的・承認履歴の監査欠落 | 申請→却下/承認を実行し、履歴テーブルをクエリ確認 | 未着手 | 開発者 |
 | UT-004 | BigQuery | `v_iam_request_approval_history` の監査ビュー確認 | 監査時に履歴参照できない | ビューから `reason`/`old_status`/`new_status` を取得確認 | 未着手 | 開発者 |
 | UT-005 | Terraform | クリーン環境で `bootstrap-tfstate`→`terraform apply` の一連確認 | 初回導入で失敗 | Runbook通りに初回手順を通し、output取得まで確認 | 未着手 | 開発者 |
-| UT-006 | Cloud Scheduler | 日次収集ジョブ（組織リソース収集）が自動実行されること | 自動棚卸しが止まる | Scheduler job の手動実行＋`pipeline_job_reports`確認 | 未着手 | 開発者 |
-| UT-007 | 権限不足時耐性 | リソース収集/グループ収集が権限不足でも全体運用継続できること | 一部失敗で全体停止 | 意図的に権限を絞り、`FAILED_PERMISSION` 記録と継続動作を確認 | 未着手 | 開発者 |
+| UT-006 | Cloud Scheduler | 日次収集ジョブ（組織リソース収集）が自動実行されること | 自動棚卸しが止まる | `test_collectors_flow.py` シナリオテストで自動検証 | 完了 | 開発者 |
+| UT-007 | 権限不足時耐性 | リソース収集/グループ収集が権限不足でも全体運用継続できること | 一部失敗で全体停止 | `test_collectors_flow.py` シナリオテストで自動検証 | 完了 | 開発者 |
 | UT-008 | Monitoring | Cloud Runでエラー発生時に、設定した通知チャネル（メール/Webhook）へアラートが飛ぶこと | アプリケーション障害に気づけず、SLA違反やデータ不整合につながる | 1. `saas.env` に `ALERT_NOTIFICATION_EMAIL` を設定し `terraform apply`。 <br> 2. `gcloud logging write` 等で意図的に `ERROR` レベルのログをCloud Runサービスに注入。 <br> 3. 設定したメールアドレスに `IAM Access Manager: Error Detected` アラートが届くことを確認。 | 未着手 | 運用者/開発者 |
 | UT-009 | Core Feature | 「緊急付与」申請が自動承認され、`[BREAK-GLASS]` アラートが即時通知されること | 緊急アクセスが機能しない、または実行が検知されず不正利用のリスクが高まる | 1. `saas.env` に通知先を設定し `terraform apply`。 <br> 2. Googleフォームの申請種別に「緊急付与」を追加。 <br> 3. 「緊急付与」でフォームを申請。 <br> 4. BigQueryでステータスが即時 `APPROVED` になっていることを確認。 <br> 5. `iam_access_request_history` に `SYSTEM_AUTO_APPROVE` 承認履歴を確認。 <br> 6. 通知チャネルに `Break-glass...` アラートが届くことを確認。 | 未着手 | 開発者/運用者 |
 
