@@ -424,7 +424,31 @@ bq query --use_legacy_sql=false
  ORDER BY occurred_at DESC LIMIT 50"
 ```
 
-## 9. 未テスト項目の申し送り運用
+## 9. リソースの削除保護
+
+本システムのTerraform構成では、データの永続性と監査証跡の完全性を保証するため、特に重要なリソースに対して削除保護が設定されています。
+
+### 9.1 BigQuery監査テーブルの保護
+
+- **対象リソース:** 申請履歴 (`iam_access_requests`) や実行ログ (`iam_access_change_log`) など、監査証跡として機能するすべてのBigQueryテーブル。
+- **保護の仕組み:** Terraformリソースに `lifecycle { prevent_destroy = true }` が設定されています。
+- **影響:** この設定により、`terraform destroy` コマンドを実行しても、これらのテーブルは**削除されません**。Terraformは削除操作の前にエラーを発生させて停止します。
+- **目的:** 誤操作による監査データの完全な喪失を防ぐことが目的です。
+
+#### テーブルを意図的に削除する場合
+
+万が一、これらのテーブルを意図的に削除する必要が生じた場合（例: プロジェクト全体の廃止時）、以下の手順を踏む必要があります。
+
+1. **Terraformコードの変更:**
+   `terraform/main.tf` を開き、対象となる `google_bigquery_table` リソースから `lifecycle { prevent_destroy = true }` ブロックをコメントアウトまたは削除します。
+1. **Terraformの適用:**
+   変更を適用します (`terraform apply`)。
+1. **Terraformによる削除:**
+   `terraform destroy` を再度実行すると、保護が解除されたテーブルが削除されます。
+
+この操作は、監査データが不要であることを完全に確認してから、慎重に行ってください。
+
+## 10. 未テスト項目の申し送り運用
 
 - 未テスト事項は `docs/untested-items-handover.md` に記録して管理します。
 - 新機能や権限変更を入れた場合は、同ファイルへ項目追加してからリリースします。

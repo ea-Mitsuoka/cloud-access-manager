@@ -77,6 +77,10 @@ resource "google_bigquery_table" "iam_access_requests" {
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_access_requests"
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   time_partitioning {
     type  = "DAY"
     field = "requested_at"
@@ -108,6 +112,10 @@ resource "google_bigquery_table" "iam_access_change_log" {
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_access_change_log"
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   time_partitioning {
     type  = "DAY"
     field = "executed_at"
@@ -136,6 +144,10 @@ resource "google_bigquery_table" "iam_policy_bindings_raw_history" {
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_policy_bindings_raw_history"
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   time_partitioning {
     type  = "DAY"
     field = "assessment_timestamp"
@@ -159,6 +171,10 @@ resource "google_bigquery_table" "iam_reconciliation_issues" {
   project    = var.tool_project_id
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_reconciliation_issues"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   time_partitioning {
     type  = "DAY"
@@ -185,6 +201,10 @@ resource "google_bigquery_table" "iam_pipeline_job_reports" {
   project    = var.tool_project_id
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_pipeline_job_reports"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 
   time_partitioning {
     type  = "DAY"
