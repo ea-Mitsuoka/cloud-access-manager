@@ -3,11 +3,11 @@
 この順序で実行してください：
 
 1. `001_tables.sql` (コアテーブル)
-2. `004_workbook_tables.sql` (ワークブック互換のマスタ/履歴テーブル)
-3. `002_views.sql` (コアオペレーショナルビュー)
-4. `005_workbook_views.sql` (シート互換ビュー)
-5. `007_seed_workbook_from_existing.sql` (既存のオペレーショナルテーブルからのオプショナルなシード)
-6. `003_reconciliation.sql` (突合バッチ)
+1. `004_workbook_tables.sql` (ワークブック互換のマスタ/履歴テーブル)
+1. `002_views.sql` (コアオペレーショナルビュー)
+1. `005_workbook_views.sql` (シート互換ビュー)
+1. `007_seed_workbook_from_existing.sql` (既存のオペレーショナルテーブルからのオプショナルなシード)
+1. `003_reconciliation.sql` (突合バッチ)
 
 注意：
 

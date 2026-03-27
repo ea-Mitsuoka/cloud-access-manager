@@ -403,21 +403,21 @@ graph TD
 
 ##### Secrets
 
-| 名前                  | 説明                                                                                                |
+| 名前 | 説明 |
 | --------------------- | --------------------------------------------------------------------------------------------------- |
-| `WIF_PROVIDER`        | Google CloudのWorkload Identity連携で使用するWorkload Identity Poolのプロバイダ名。                   |
-| `WIF_SERVICE_ACCOUNT` | Google CloudのWorkload Identity連携で使用するサービスアカウントのメールアドレス。                     |
+| `WIF_PROVIDER` | Google CloudのWorkload Identity連携で使用するWorkload Identity Poolのプロバイダ名。 |
+| `WIF_SERVICE_ACCOUNT` | Google CloudのWorkload Identity連携で使用するサービスアカウントのメールアドレス。 |
 
 ##### Variables
 
-| 名前                        | 説明                               |
+| 名前 | 説明 |
 | --------------------------- | ---------------------------------- |
-| `TOOL_PROJECT_ID`           | CI/CDツールが使用するGCPプロジェクトID |
-| `REGION`                    | GCPリソースのリージョン            |
-| `MANAGED_PROJECT_ID`        | Terraformが管理するGCPプロジェクトID |
-| `ORGANIZATION_ID`           | GCPの組織ID                        |
-| `BQ_DATASET_ID`             | BigQueryのデータセットID             |
-| `WORKSPACE_CUSTOMER_ID`     | Google Workspaceの顧客ID           |
+| `TOOL_PROJECT_ID` | CI/CDツールが使用するGCPプロジェクトID |
+| `REGION` | GCPリソースのリージョン |
+| `MANAGED_PROJECT_ID` | Terraformが管理するGCPプロジェクトID |
+| `ORGANIZATION_ID` | GCPの組織ID |
+| `BQ_DATASET_ID` | BigQueryのデータセットID |
+| `WORKSPACE_CUSTOMER_ID` | Google Workspaceの顧客ID |
 
 ## 12. SaaS向け設定一元化
 

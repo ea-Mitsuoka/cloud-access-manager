@@ -125,7 +125,7 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
      --display-name="IAM Access CI/CD"
    ```
 
-2. **WIFプールとプロバイダの作成:**
+1. **WIFプールとプロバイダの作成:**
 
    ```bash
    # プールの作成
@@ -147,7 +147,7 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
      --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
    ```
 
-3. **CI用サービスアカウントへの権限付与:**
+1. **CI用サービスアカウントへの権限付与:**
    CI用サービスアカウントがリポジトリの `main` ブランチからの操作のみを受け付けるように設定します。
 
    ```bash
@@ -160,7 +160,7 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
      --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
    ```
 
-4. **CI用サービスアカウントに必要なロールを付与:**
+1. **CI用サービスアカウントに必要なロールを付与:**
    CI用サービスアカウントには、Terraformの実行、Dockerイメージのビルドとプッシュに必要な権限が必要です。これは、「2.2 Terraform実行主体」と同様の権限セットになります。
 
    ```bash
@@ -171,10 +171,11 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
    # ... その他Terraformが必要とするロール
    ```
 
-5. **GitHub Secretの設定:**
+1. **GitHub Secretの設定:**
    リポジトリの `Settings > Secrets and variables > Actions` で、以下のSecretを設定します。
-    - `WIF_PROVIDER`: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` の形式。
-    - `WIF_SERVICE_ACCOUNT`: 上記で作成したCI用SAのメールアドレス (`iam-access-ci-sa@...`)。
+
+   - `WIF_PROVIDER`: `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` の形式。
+   - `WIF_SERVICE_ACCOUNT`: 上記で作成したCI用SAのメールアドレス (`iam-access-ci-sa@...`)。
 
 ### 3.2 Artifact Registryリポジトリ
 
