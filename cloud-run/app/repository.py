@@ -300,7 +300,8 @@ class Repository:
 
     def run_reconciliation_job(self) -> int:
         sql = f"""
-        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` (
+        INSERT INTO
+          `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` (
           issue_id,
           issue_type,
           request_id,
@@ -398,7 +399,8 @@ class Repository:
 
     def run_update_bindings_history_job(self, execution_id: str) -> int:
         sql = f"""
-        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_permission_bindings_history` (
+        INSERT INTO
+        `{self._project_id}.{self._dataset_id}.iam_permission_bindings_history` (
           execution_id,
           recorded_at,
           resource_name,
@@ -436,11 +438,13 @@ class Repository:
           req.request_id,
           'Snapshot from iam_policy_permissions' AS note
         FROM `{self.iam_policy_permissions_table}` AS p
-        LEFT JOIN `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest` AS req
+        LEFT JOIN
+          `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest` AS req
           ON p.principal_email = req.principal_email
           AND p.role = req.role
           AND p.resource_name = req.resource_name
-        LEFT JOIN `{self._project_id}.{self._dataset_id}.iam_status_master` AS status_map
+        LEFT JOIN
+          `{self._project_id}.{self._dataset_id}.iam_status_master` AS status_map
           ON req.status = status_map.status_code
         """
         params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
