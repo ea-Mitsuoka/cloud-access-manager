@@ -13,29 +13,15 @@ def test_normalize_action():
 
 def test_to_member():
     assert IamExecutor._to_member("user@example.com") == "user:user@example.com"
-    assert (
-        IamExecutor._to_member(
-            "sa@project.iam"
-            ".gserviceaccount.com"
-        )
-        == (
-            "serviceAccount:sa@project.iam"
-            ".gserviceaccount.com"
-        )
+    assert IamExecutor._to_member("sa@project.iam" ".gserviceaccount.com") == (
+        "serviceAccount:sa@project.iam" ".gserviceaccount.com"
     )
     assert (
-        IamExecutor._to_member("group:group@example.com")
-        == "group:group@example.com"
+        IamExecutor._to_member("group:group@example.com") == "group:group@example.com"
     )
-    assert (
-        IamExecutor._to_member(
-            "serviceAccount:another-sa@project.iam.gserviceaccount.com"
-        )
-        == (
-            "serviceAccount:another-sa@project.iam"
-            ".gserviceaccount.com"
-        )
-    )
+    assert IamExecutor._to_member(
+        "serviceAccount:another-sa@project.iam.gserviceaccount.com"
+    ) == ("serviceAccount:another-sa@project.iam" ".gserviceaccount.com")
 
 
 def test_parse_resource():
@@ -69,9 +55,7 @@ def test_get_policy_folder(mock_discovery):
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
     executor._get_policy("folders/12345")
-    mock_service.folders().getIamPolicy.assert_called_with(
-        resource="folders/12345"
-    )
+    mock_service.folders().getIamPolicy.assert_called_with(resource="folders/12345")
 
 
 @patch("app.iam_executor.discovery")

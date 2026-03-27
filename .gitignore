@@ -19,6 +19,7 @@ build/
 
 # Python cache files
 __pycache__/
+.pyc
 
 # IDE files
 .netrc

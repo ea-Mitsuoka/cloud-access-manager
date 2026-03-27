@@ -4,3 +4,4 @@ extend-ignore = E203,W503
 per-file-ignores =
     main.py:E501
     scope_validator.py:E501
+    iam_executor.py:E501

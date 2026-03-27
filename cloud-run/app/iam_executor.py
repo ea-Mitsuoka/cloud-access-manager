@@ -50,9 +50,7 @@ class IamExecutor:
                 updated_policy_to_set = original_policy_for_diff
                 updated_policy_to_set["etag"] = policy["etag"]
 
-                updated = self._set_policy(
-                    req.resource_name, updated_policy_to_set
-                )
+                updated = self._set_policy(req.resource_name, updated_policy_to_set)
                 after_hash = self._policy_hash(updated)
                 return ExecutionResult(
                     result="SUCCESS",
@@ -78,7 +76,10 @@ class IamExecutor:
             before_hash=None,
             after_hash=None,
             error_code="CONFLICT_RETRIES_EXHAUSTED",
-            error_message=f"Failed to apply IAM policy after {MAX_RETRIES} attempts due to conflicts.",
+            error_message=(
+                f"Failed to apply IAM policy after {MAX_RETRIES} attempts "
+                f"due to conflicts."
+            ),
         )
 
     @staticmethod
@@ -104,37 +105,21 @@ class IamExecutor:
             return "folders", resource_name.split("/", 1)[1]
         if resource_name.startswith("organizations/"):
             return "organizations", resource_name.split("/", 1)[1]
-        raise ValueError(
-            f"unsupported resource_name format: {resource_name}"
-        )
+        raise ValueError(f"unsupported resource_name format: {resource_name}")
 
     def _get_policy(self, resource: str) -> dict[str, Any]:
         if resource.startswith("projects/"):
-            return (
-                self._crm.projects().getIamPolicy(resource=resource).execute()
-            )
+            return self._crm.projects().getIamPolicy(resource=resource).execute()
         elif resource.startswith("folders/"):
-            return (
-                self._crm.folders()
-                .getIamPolicy(resource=resource)
-                .execute()
-            )
+            return self._crm.folders().getIamPolicy(resource=resource).execute()
         elif resource.startswith("organizations/"):
-            return (
-                self._crm.organizations()
-                .getIamPolicy(resource=resource)
-                .execute()
-            )
+            return self._crm.organizations().getIamPolicy(resource=resource).execute()
         else:
             raise ValueError(
-                "Unsupported resource type for getIamPolicy: {}".format(
-                    resource
-                )
+                "Unsupported resource type for getIamPolicy: {}".format(resource)
             )
 
-    def _set_policy(
-        self, resource: str, policy: dict[str, Any]
-    ) -> dict[str, Any]:
+    def _set_policy(self, resource: str, policy: dict[str, Any]) -> dict[str, Any]:
         body = {"policy": policy}
         if resource.startswith("projects/"):
             return (
@@ -144,9 +129,7 @@ class IamExecutor:
             )
         elif resource.startswith("folders/"):
             return (
-                self._crm.folders()
-                .setIamPolicy(resource=resource, body=body)
-                .execute()
+                self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
             )
         elif resource.startswith("organizations/"):
             return (
@@ -156,16 +139,12 @@ class IamExecutor:
             )
         else:
             raise ValueError(
-                "Unsupported resource type for setIamPolicy: {}".format(
-                    resource
-                )
+                "Unsupported resource type for setIamPolicy: {}".format(resource)
             )
 
     @staticmethod
     def _policy_hash(policy: dict[str, Any]) -> str:
-        payload = json.dumps(
-            policy, sort_keys=True, separators=(",", ":")
-        )
+        payload = json.dumps(policy, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @staticmethod

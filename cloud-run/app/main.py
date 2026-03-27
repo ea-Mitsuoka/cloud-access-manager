@@ -30,9 +30,7 @@ EXECUTOR_IDENTITY = os.environ.get("EXECUTOR_IDENTITY", "cloud-run")
 SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "")
 TARGET_PROJECT_ID = os.environ.get("MGMT_TARGET_PROJECT_ID", "").strip()
 TARGET_ORG_ID = os.environ.get("MGMT_TARGET_ORGANIZATION_ID", "").strip()
-WORKSPACE_CUSTOMER_ID = os.environ.get(
-    "WORKSPACE_CUSTOMER_ID", "my_customer"
-).strip()
+WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").strip()
 SCHEDULER_INVOKER_EMAIL = os.environ.get("SCHEDULER_INVOKER_EMAIL", "").strip()
 
 repo = Repository(project_id=PROJECT_ID, dataset_id=DATASET_ID)
@@ -83,9 +81,7 @@ def execute_request():
             after_hash=None,
             details={"reason": f"status is {req.status}"},
         )
-        repo.insert_change_log(
-            execution_id, request_id, EXECUTOR_IDENTITY, result
-        )
+        repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
         return jsonify(
             {
                 "execution_id": execution_id,
@@ -105,9 +101,7 @@ def execute_request():
             error_code="OUT_OF_SCOPE",
             error_message=scope_error,
         )
-        repo.insert_change_log(
-            execution_id, request_id, EXECUTOR_IDENTITY, result
-        )
+        repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
         return (
             jsonify(
                 {
@@ -130,9 +124,7 @@ def execute_request():
             after_hash=None,
             details={"reason": "already executed"},
         )
-        repo.insert_change_log(
-            execution_id, request_id, EXECUTOR_IDENTITY, result
-        )
+        repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
         return jsonify(
             {
                 "execution_id": execution_id,
@@ -178,14 +170,10 @@ def collect_resources():
         return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    execution_id = (
-        str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
-    )
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
-        rows, counts, scope = resource_collector.collect_rows(
-            execution_id=execution_id
-        )
+        rows, counts, scope = resource_collector.collect_rows(execution_id=execution_id)
         inserted = repo.insert_resource_inventory_rows(rows)
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
@@ -211,12 +199,8 @@ def collect_resources():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": (
-                report["error_code"]
-            ),
-            "error_message": (
-                report["error_message"]
-            ),
+            "error_code": (report["error_code"]),
+            "error_message": (report["error_message"]),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -238,25 +222,17 @@ def collect_groups():
         return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    execution_id = (
-        str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
-    )
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
         group_rows, membership_rows, counts = group_collector.collect(
             execution_id=execution_id
         )
-        replaced_groups = repo.replace_groups(
-            group_rows, source=group_collector.source
-        )
-        inserted_memberships = repo.insert_group_membership_rows(
-            membership_rows
-        )
+        replaced_groups = repo.replace_groups(group_rows, source=group_collector.source)
+        inserted_memberships = repo.insert_group_membership_rows(membership_rows)
         counts_for_report = {
             "groups_replaced": replaced_groups,
-            "memberships_inserted": (
-                inserted_memberships
-            ),
+            "memberships_inserted": (inserted_memberships),
             **counts,
         }
         repo.insert_pipeline_job_report(
@@ -283,12 +259,8 @@ def collect_groups():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": (
-                report["error_code"]
-            ),
-            "error_message": (
-                report["error_message"]
-            ),
+            "error_code": (report["error_code"]),
+            "error_message": (report["error_message"]),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -310,15 +282,11 @@ def reconcile_iam_issues():
         return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    execution_id = (
-        str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
-    )
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "IAM_RECONCILIATION"
 
     try:
-        sql_content = _read_and_format_sql(
-            "../../sql/003_reconciliation.sql"
-        )
+        sql_content = _read_and_format_sql("../../sql/003_reconciliation.sql")
         job = repo._client.query(sql_content)
         job.result()  # Wait for the job to complete
 
@@ -351,12 +319,8 @@ def reconcile_iam_issues():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": (
-                report["error_code"]
-            ),
-            "error_message": (
-                report["error_message"]
-            ),
+            "error_code": (report["error_code"]),
+            "error_message": (report["error_message"]),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -368,9 +332,7 @@ def revoke_expired_permissions():
         return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    execution_id = (
-        str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
-    )
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "EXPIRED_PERMISSION_REVOCATION"
 
     try:
@@ -395,17 +357,13 @@ def revoke_expired_permissions():
                     target=req.resource_name,
                     before_hash=None,
                     after_hash=None,
-                    details={
-                        "reason": "Permission already removed or never existed"
-                    },
+                    details={"reason": "Permission already removed or never existed"},
                 )
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
                 # Update status in iam_access_requests to prevent re-processing
-                repo.update_request_status(
-                    req.request_id, "REVOKED_ALREADY_GONE"
-                )
+                repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
                 skipped_count += 1
                 continue
 
@@ -420,9 +378,7 @@ def revoke_expired_permissions():
                     repo.update_request_status(req.request_id, "REVOKED")
                     revoked_count += 1
                 else:
-                    repo.update_request_status(
-                        req.request_id, "REVOKE_FAILED"
-                    )
+                    repo.update_request_status(req.request_id, "REVOKE_FAILED")
                     failed_count += 1
             except Exception as inner_exc:
                 result = ExecutionResult(
@@ -477,12 +433,8 @@ def revoke_expired_permissions():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": (
-                report["error_code"]
-            ),
-            "error_message": (
-                report["error_message"]
-            ),
+            "error_code": (report["error_code"]),
+            "error_message": (report["error_message"]),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]
@@ -494,20 +446,14 @@ def update_iam_bindings_history():
         return jsonify({"error": "unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    execution_id = (
-        str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
-    )
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "IAM_BINDINGS_HISTORY_UPDATE"
 
     try:
-        sql_content = _read_and_format_sql(
-            "../../sql/008_update_bindings_history.sql"
-        )
+        sql_content = _read_and_format_sql("../../sql/008_update_bindings_history.sql")
 
         query_params = [
-            bigquery.ScalarQueryParameter(
-                "execution_id", "STRING", execution_id
-            )
+            bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
         ]
         job_config = bigquery.QueryJobConfig(query_parameters=query_params)
 
@@ -543,12 +489,8 @@ def update_iam_bindings_history():
         json_response = {
             "execution_id": execution_id,
             "result": report["result"],
-            "error_code": (
-                report["error_code"]
-            ),
-            "error_message": (
-                report["error_message"]
-            ),
+            "error_code": (report["error_code"]),
+            "error_message": (report["error_message"]),
             "hint": report["hint"],
         }
         return jsonify(json_response), report["http_status"]

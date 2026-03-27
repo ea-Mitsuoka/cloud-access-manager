@@ -15,9 +15,7 @@ class ScopeConfig:
 class ScopeValidator:
     def __init__(self, config: ScopeConfig) -> None:
         self._config = config
-        self._crm = discovery.build(
-            "cloudresourcemanager", "v3", cache_discovery=False
-        )
+        self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
         self._org_cache: dict[str, str | None] = {}
 
     def validate_resource_name(self, resource_name: str) -> str | None:
@@ -48,10 +46,8 @@ class ScopeValidator:
             )
 
         if org_id is None:
-            return (
-                "failed to resolve organization for resource: {}".format(
-                    resource_name
-                )
+            return "failed to resolve organization for resource: {}".format(
+                resource_name
             )
         if org_id != self._config.target_org_id:
             return (
