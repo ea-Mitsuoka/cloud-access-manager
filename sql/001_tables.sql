@@ -1,6 +1,6 @@
 -- Replace `your_project.your_dataset` before execution.
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_policy_permissions_history` (
+CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_policy_bindings_raw_history` (
   execution_id STRING NOT NULL,
   assessment_timestamp TIMESTAMP NOT NULL,
   scope STRING,

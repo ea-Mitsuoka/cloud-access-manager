@@ -1,6 +1,6 @@
 -- Replace `ea-yukihidemitsuoka2.iam_access_mgmt` before execution.
 
-CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions_history` (
+CREATE TABLE IF NOT EXISTS `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions_raw_history` (
   execution_id STRING NOT NULL,
   assessment_timestamp TIMESTAMP NOT NULL,
   scope STRING,

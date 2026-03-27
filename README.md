@@ -43,7 +43,7 @@ graph TD
         CR --> K["BigQuery: google_group_membership_history"];
         CR --> L["BigQuery: iam_reconciliation_issues"];
         CR --> M["BigQuery: pipeline_job_reports"];
-        CR --> N["BigQuery: iam_policy_permissions_history"];
+        CR --> N["BigQuery: iam_policy_bindings_raw_history"];
         CR --> O["BigQuery: iam_permission_bindings_history"];
     end
 
@@ -170,10 +170,16 @@ graph TD
 
 ### 4.2 新設テーブル
 
-- `iam_policy_permissions_history`
+- `iam_policy_bindings_raw_history`
 
-  - 用途: 棚卸し履歴の蓄積
+  - 用途: 棚卸しジョブによって収集された、特定の時点での生のIAMバインディングのスナップショット履歴。監査の元データとなる。
   - 主要列: `execution_id, assessment_timestamp, scope, resource_type, resource_name, principal_type, principal_email, role`
+  - 更新: `WRITE_APPEND`
+
+- `iam_permission_bindings_history`
+
+  - 用途: 帳票（ワークブック）用に整形された履歴テーブル。現在のIAM設定に申請・承認情報を結合したもので、定期的に`sql/008_update_bindings_history.sql`によって更新される。
+  - 主要列: `execution_id, recorded_at, resource_name, resource_id, resource_full_path, principal_email, principal_type, iam_role, iam_condition, ticket_ref, request_reason, status_ja, approved_at, next_review_at, approver, request_id, note`
   - 更新: `WRITE_APPEND`
 
 - `iam_access_requests`
@@ -250,7 +256,8 @@ graph TD
 
 - 最新権限: `iam_policy_permissions`
 - 申請/承認/実行履歴: `iam_access_requests`, `iam_access_change_log`
-- 棚卸し推移: `iam_policy_permissions_history`
+- 棚卸し推移（生の履歴）: `iam_policy_bindings_raw_history`
+- 棚卸し推移（帳票用整形履歴）: `iam_permission_bindings_history`
 
 ### 5.5 定期棚卸し
 
@@ -337,7 +344,8 @@ graph TD
     - 単一プロジェクト管理: `managed_project_id` に `roles/resourcemanager.projectIamAdmin`
     - 組織管理: `organization_id` に `roles/resourcemanager.projectIamAdmin` + `roles/browser`
 - `iam_policy_permissions` は既存の洗い替えジョブを継続利用する。
-- `iam_policy_permissions_history` は棚卸しジョブ側で `WRITE_APPEND` する。
+- `iam_policy_bindings_raw_history` は棚卸しジョブ側で `WRITE_APPEND` する（生の履歴）。
+- `iam_permission_bindings_history` は `008_update_bindings_history.sql` によって生成される（帳票用整形履歴）。
 
 ### 10.4 MVP制約
 
