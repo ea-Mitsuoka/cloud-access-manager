@@ -14,6 +14,7 @@ class AccessRequest:
     role: str
     status: str
     approved_at: datetime | None
+    reason: str | None
 
 
 @dataclass(frozen=True)

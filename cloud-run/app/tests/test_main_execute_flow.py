@@ -49,6 +49,7 @@ def _create_dummy_request(status: str = "APPROVED") -> AccessRequest:
         role="roles/viewer",
         status=status,
         approved_at=None,
+        reason="test reason",
     )
 
 

@@ -34,6 +34,7 @@ def test_revoke_expired_permissions_when_permission_exists(
         approved_at=None,
         expires_at=None,
         is_permission_active=True,
+        reason="test reason",
     )
     mock_repo.search_expired_approved_access_requests.return_value = [expired_req]
     mock_iam_executor.execute.return_value.result = "SUCCESS"
@@ -82,6 +83,7 @@ def test_revoke_expired_permissions_when_permission_is_gone(
         approved_at=None,
         expires_at=None,
         is_permission_active=False,
+        reason="test reason",
     )
     mock_repo.search_expired_approved_access_requests.return_value = [expired_req]
 

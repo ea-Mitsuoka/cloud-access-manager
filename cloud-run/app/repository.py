@@ -51,7 +51,8 @@ class Repository:
           resource_name,
           role,
           status,
-          approved_at
+          approved_at,
+          reason
         FROM `{self.requests_table}`
         WHERE request_id = @request_id
         LIMIT 1
@@ -75,6 +76,7 @@ class Repository:
             role=row["role"],
             status=row["status"],
             approved_at=row["approved_at"],
+            reason=row["reason"],
         )
 
     def has_success_execution(self, request_id: str) -> bool:
