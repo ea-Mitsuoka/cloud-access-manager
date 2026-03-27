@@ -349,7 +349,9 @@ graph TD
 
 ### 10.4 MVP制約
 
-- 認証は `X-Webhook-Token` 共通鍵方式（本番はIngress制限やIAP併用推奨）。
+- 認証は、以下の2つの方式をサポートします。
+  - **OIDCトークン認証:** Cloud Schedulerからの呼び出しなど、Googleサービスアカウントからのリクエストを安全に認証します。これは推奨される方式です。
+  - **共通鍵認証 (`X-Webhook-Token`):** OIDCトークンが利用できない他のシステム（例: Google Apps Script）からの呼び出しのために、共通鍵による認証もサポートします（本番環境ではIngress制限やIAPとの併用を推奨）。
 - `organization_id = ""` の場合、`managed_project_id` と一致する `projects/{id}` の申請のみ実行対象とする（対象外は `OUT_OF_SCOPE` で拒否）。
 - `organization_id != ""` の場合、Cloud Resource Manager の ancestry で `projects/{id}` が指定組織配下か検証し、対象外は `OUT_OF_SCOPE` で拒否する。
 
