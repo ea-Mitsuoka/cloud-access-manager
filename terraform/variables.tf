@@ -102,3 +102,15 @@ variable "scheduler_time_zone" {
   description = "Time zone for Cloud Scheduler jobs"
   default     = "Asia/Tokyo"
 }
+
+variable "alert_notification_email" {
+  type        = string
+  description = "Email address for anomaly alerts (optional)"
+  default     = ""
+}
+
+variable "alert_notification_webhook_url" {
+  type        = string
+  description = "Webhook URL for anomaly alerts like Slack or Google Chat (optional)"
+  default     = ""
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import traceback
@@ -21,6 +22,9 @@ from .repository import Repository
 from .scope_validator import ScopeConfig, ScopeValidator
 
 app = Flask(__name__)
+
+# Set up basic logging
+logging.basicConfig(level=logging.INFO)
 
 PROJECT_ID = os.environ["BQ_PROJECT_ID"]
 DATASET_ID = os.environ["BQ_DATASET_ID"]
@@ -134,6 +138,7 @@ def execute_request():
     try:
         result = iam_executor.execute(req)
     except Exception as exc:  # pragma: no cover
+        logging.error(f"Execution failed for request {request_id}: {exc}", exc_info=True)
         result = ExecutionResult(
             result="FAILED",
             action="GRANT" if req.request_type != "REVOKE" else "REVOKE",
@@ -507,6 +512,7 @@ def _authorize_scheduler_oidc() -> bool:
 def _build_collection_error_report(
     *, job_type: str, execution_id: str, exc: Exception
 ) -> dict[str, Any]:
+    logging.error(f"Pipeline job {job_type} failed (Execution ID: {execution_id}): {exc}")
     error_code = type(exc).__name__
     error_message = str(exc)
     hint = "Check Cloud Run logs for details."
