@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets # 追加
 import traceback
 import uuid
 from dataclasses import replace  # 追加
@@ -559,7 +560,7 @@ def _authorize() -> bool:
     if not SHARED_SECRET:
         return True
     token = request.headers.get("X-Webhook-Token", "")
-    return token == SHARED_SECRET
+    return secrets.compare_digest(token, SHARED_SECRET)
 
 
 def _authorize_scheduler_oidc() -> bool:
