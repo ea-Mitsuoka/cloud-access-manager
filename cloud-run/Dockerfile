@@ -2,9 +2,9 @@
 # Install dependencies using Poetry
 FROM python:3.12-slim as builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 
-    PYTHONUNBUFFERED=1 
-    POETRY_VERSION=1.8.2
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV POETRY_VERSION=1.8.2
 
 # Install poetry
 RUN pip install "poetry==${POETRY_VERSION}"
@@ -23,13 +23,15 @@ RUN poetry install --no-interaction --no-ansi --no-dev
 # Create the final, lean image
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 
-    PYTHONUNBUFFERED=1 
-    # Point to the virtual environment created by Poetry
-    VIRTUAL_ENV=/app/.venv 
-    # Add the virtual environment's bin directory to the PATH
-    PATH="/app/.venv/bin:$PATH" 
-    PORT=8080
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Point to the virtual environment created by Poetry
+ENV VIRTUAL_ENV=/app/.venv
+
+# Add the virtual environment's bin directory to the PATH
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PORT=8080
 
 WORKDIR /app
 
