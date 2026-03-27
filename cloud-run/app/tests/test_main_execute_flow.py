@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 import pytest
 from flask.testing import FlaskClient
 
@@ -8,19 +8,23 @@ from flask.testing import FlaskClient
 from app.main import app
 from app.models import AccessRequest, ExecutionResult
 
+
 @pytest.fixture
 def client() -> FlaskClient:
     return app.test_client()
+
 
 @pytest.fixture
 def mock_repo():
     with patch("app.main.repo", autospec=True) as mock:
         yield mock
 
+
 @pytest.fixture
 def mock_iam_executor():
     with patch("app.main.iam_executor", autospec=True) as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_scope_validator():
@@ -29,10 +33,12 @@ def mock_scope_validator():
         mock.validate_resource_name.return_value = None
         yield mock
 
+
 @pytest.fixture
 def mock_auth():
     with patch("app.main._authorize", return_value=True) as mock:
         yield mock
+
 
 def _create_dummy_request(status: str = "APPROVED") -> AccessRequest:
     return AccessRequest(
@@ -45,9 +51,11 @@ def _create_dummy_request(status: str = "APPROVED") -> AccessRequest:
         approved_at=None,
     )
 
+
 # -------------------------------------------------------------------
 # コアビジネスロジックの担保テスト（ユースケース・テスト）
 # -------------------------------------------------------------------
+
 
 def test_execute_golden_path_success(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
@@ -58,7 +66,11 @@ def test_execute_golden_path_success(
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     mock_repo.has_success_execution.return_value = False
     mock_iam_executor.execute.return_value = ExecutionResult(
-        result="SUCCESS", action="GRANT", target="projects/my-managed-project", before_hash=None, after_hash="hash"
+        result="SUCCESS",
+        action="GRANT",
+        target="projects/my-managed-project",
+        before_hash=None,
+        after_hash="hash",
     )
 
     response = client.post("/execute", json={"request_id": "req-core-123"})
@@ -121,7 +133,9 @@ def test_execute_rejects_out_of_scope_resource(
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     # スコープバリデーターがエラー文字列を返す
-    mock_scope_validator.validate_resource_name.return_value = "resource is out of managed scope"
+    mock_scope_validator.validate_resource_name.return_value = (
+        "resource is out of managed scope"
+    )
 
     response = client.post("/execute", json={"request_id": "req-core-123"})
 
