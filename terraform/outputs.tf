@@ -1,13 +1,13 @@
 output "dataset_id" {
-  value = google_bigquery_dataset.iam.dataset_id
+  value = module.bigquery.dataset_id
 }
 
 output "cloud_run_url" {
-  value = google_cloud_run_v2_service.executor.uri
+  value = module.cloud_run.uri
 }
 
 output "executor_service_account" {
-  value = google_service_account.executor.email
+  value = module.service_accounts.executor_service_account_email
 }
 
 output "management_scope" {
@@ -21,36 +21,36 @@ output "tool_project_id" {
 }
 
 output "effective_managed_project_id" {
-  value       = trimspace(var.managed_project_id) == "" ? var.tool_project_id : var.managed_project_id
+  value       = local.effective_managed_project_id
   description = "Effective managed target project. Falls back to tool_project_id when empty."
 }
 
 output "scheduler_invoker_service_account" {
-  value       = google_service_account.scheduler_invoker.email
+  value       = module.service_accounts.scheduler_invoker_service_account_email
   description = "Service account used by Cloud Scheduler OIDC calls."
 }
 
 output "resource_inventory_scheduler_job" {
-  value       = google_cloud_scheduler_job.resource_inventory_daily.name
+  value       = module.scheduler.resource_inventory_scheduler_job_name
   description = "Cloud Scheduler job name for daily resource inventory collection."
 }
 
 output "group_collection_scheduler_job" {
-  value       = google_cloud_scheduler_job.group_collection_daily.name
+  value       = module.scheduler.group_collection_scheduler_job_name
   description = "Cloud Scheduler job name for daily Google group collection."
 }
 
 output "reconciliation_scheduler_job" {
-  value       = google_cloud_scheduler_job.reconciliation_daily.name
+  value       = module.scheduler.reconciliation_scheduler_job_name
   description = "Cloud Scheduler job name for daily reconciliation."
 }
 
 output "revoke_expired_permissions_scheduler_job" {
-  value       = google_cloud_scheduler_job.revoke_expired_permissions_daily.name
+  value       = module.scheduler.revoke_expired_permissions_scheduler_job_name
   description = "Cloud Scheduler job name for daily revocation of expired permissions."
 }
 
 output "iam_bindings_history_update_scheduler_job" {
-  value       = google_cloud_scheduler_job.iam_bindings_history_update_daily.name
+  value       = module.scheduler.iam_bindings_history_update_scheduler_job_name
   description = "Cloud Scheduler job name for daily update of IAM bindings history."
 }
