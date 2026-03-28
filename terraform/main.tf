@@ -351,6 +351,7 @@ resource "google_cloud_scheduler_job" "resource_inventory_daily" {
   region    = var.region
   schedule  = var.resource_collection_schedule
   time_zone = var.scheduler_time_zone
+  attempt_deadline = "900s"
 
   # 一過性のエラーに備えて最大3回まで自動リトライ
   retry_config {
@@ -383,6 +384,7 @@ resource "google_cloud_scheduler_job" "group_collection_daily" {
   region    = var.region
   schedule  = var.group_collection_schedule
   time_zone = var.scheduler_time_zone
+  attempt_deadline = "900s"
 
   retry_config {
     retry_count = 3
@@ -414,6 +416,7 @@ resource "google_cloud_scheduler_job" "reconciliation_daily" {
   region    = var.region
   schedule  = var.reconciliation_schedule
   time_zone = var.scheduler_time_zone
+  attempt_deadline = "900s"
 
   retry_config {
     retry_count = 3
@@ -445,6 +448,7 @@ resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
   region    = var.region
   schedule  = var.revoke_expired_permissions_schedule
   time_zone = var.scheduler_time_zone
+  attempt_deadline = "900s"
 
   retry_config {
     retry_count = 3
@@ -476,6 +480,7 @@ resource "google_cloud_scheduler_job" "iam_bindings_history_update_daily" {
   region    = var.region
   schedule  = var.iam_bindings_history_update_schedule
   time_zone = var.scheduler_time_zone
+  attempt_deadline = "900s"
 
   retry_config {
     retry_count = 3
