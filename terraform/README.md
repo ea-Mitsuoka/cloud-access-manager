@@ -66,5 +66,6 @@
 - `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `group_collection_scheduler_job` など)。
 - 有効化されたAPIは `lifecycle.prevent_destroy = true` と `disable_on_destroy = false` で保護されているため、`destroy` を実行しても無効化されません。
 - **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。これらのテーブルを意図的に削除する必要がある場合は、まずこのライフサイクル設定をコードから削除する必要があります。
+- **重要:** Webhook認証に使用されるSecret Managerのシークレット（`var.webhook_secret_name`で指定）は、Terraformによって自動的にプロビジョニングされます。初回デプロイ時に手動で作成する必要はありません。ただし、プロビジョニング後にSecret Managerコンソールから任意の値に変更することができます。
 - コンテナイメージは別途ビルド/プッシュし、`cloud_run_image` 変数で渡す必要があります。
 - 詳細なロール一覧や運用コマンドについては、`docs/operations-runbook.md` を参照してください。

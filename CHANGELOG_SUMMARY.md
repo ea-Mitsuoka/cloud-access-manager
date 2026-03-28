@@ -145,3 +145,9 @@ ______________________________________________________________________
   - `repository.py` および `main.py` を修正し、既存の `/jobs/update-iam-bindings-history` (日次バッチ) の処理内に、生のIAM履歴の追記と、プリンシパルマスタの `MERGE` (同期) 処理を組み込んだ。
   - `repository.py` の `update_request_status` 実行時に、明示的に `updated_at = CURRENT_TIMESTAMP()` をセットするよう修正した。
 - **効果:** コードとドキュメントの乖離が完全に解消され、システムがデータの鮮度を自律的に維持できるようになった。
+
+## 22. Terraform初回デプロイ時のシークレット関連クラッシュの修正
+
+- **問題:** 新しいGCP環境でTerraformを初めて実行する際、`var.webhook_secret_name`で指定されたSecret Managerのシークレットが手動で事前に作成されていない場合、TerraformがそのシークレットにIAM権限を付与しようとしてクラッシュしていた。
+- **解決策:** Terraformの設定（`terraform/main.tf`）を修正し、`var.webhook_secret_name`で指定されたシークレットを`google_secret_manager_secret`リソースとしてTerraform自身が作成するように変更した。また、初期ダミー値を持つシークレットバージョンも同時に作成し、その後の手動変更を`ignore_changes`で無視するように設定した。これにより、シークレットが存在しない状態でのIAM権限付与エラーを回避し、初回デプロイが成功するようにした。
+- **効果:** まっさらなGCP環境への初回デプロイの安定性が向上し、運用者が事前にシークレットを手動で作成する必要がなくなった。

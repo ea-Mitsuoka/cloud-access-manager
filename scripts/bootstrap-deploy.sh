@@ -215,50 +215,30 @@ if ! ask_yes_no "Proceed with bootstrap + deploy workflow?" y; then
 fi
 
 echo
-echo "[1/8] Syncing generated config files..."
+echo "[1/7] Syncing generated config files..."
 bash "$ROOT_DIR/scripts/sync-config.sh" "$CONFIG_FILE"
 
 echo
-echo "[2/8] Bootstrapping tfstate bucket..."
+echo "[2/7] Bootstrapping tfstate bucket..."
 bash "$ROOT_DIR/scripts/bootstrap-tfstate.sh" "$CONFIG_FILE"
 
 echo
-echo "[3/8] Preparing webhook secret in Secret Manager..."
-if gcloud secrets describe "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" >/dev/null 2>&1; then
-  echo "Secret exists: $WEBHOOK_SECRET_NAME"
-else
-  echo "Creating secret: $WEBHOOK_SECRET_NAME"
-  gcloud secrets create "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --replication-policy=automatic
-fi
-
-if ask_yes_no "Add a new secret version now?" n; then
-  read -r -s -p "Enter webhook secret value: " secret_value
-  echo
-  if [[ -z "$secret_value" ]]; then
-    echo "Secret value was empty. Skipping add version."
-  else
-    printf '%s' "$secret_value" | gcloud secrets versions add "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --data-file=-
-    echo "Added new secret version."
-  fi
-fi
-
-echo
-echo "[4/8] Terraform init..."
+echo "[3/7] Terraform init..."
 cd "$ROOT_DIR/terraform"
 terraform init -backend-config="$ROOT_DIR/backend.hcl"
 
 echo
-echo "[5/8] Terraform plan..."
+echo "[4/7] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
 
 if [[ "$SKIP_APPLY" == "true" ]]; then
   echo
-  echo "[6/8] Apply skipped by --skip-apply."
+  echo "[5/7] Apply skipped by --skip-apply."
   exit 0
 fi
 
 echo
-echo "[6/8] Terraform apply..."
+echo "[5/7] Terraform apply..."
 if [[ "$AUTO_APPROVE" == "true" ]]; then
   terraform apply -auto-approve -var-file="$ROOT_DIR/environment.auto.tfvars"
 else
@@ -266,7 +246,7 @@ else
 fi
 
 echo
-echo "[7/8] Applying BigQuery SQL definitions..."
+echo "[6/7] Applying BigQuery SQL definitions..."
 require_cmd bq
 
 sql_dir="$ROOT_DIR/build/sql"
@@ -304,7 +284,7 @@ else
 fi
 
 echo
-echo "[8/8] Initial Data Collection"
+echo "[7/7] Initial Data Collection"
 if ask_yes_no "Run initial data collection jobs (resources and groups)? This may take a few minutes." y; then
   if terraform output cloud_run_url >/dev/null 2>&1; then
     cloud_run_url="$(terraform output -raw cloud_run_url)"
