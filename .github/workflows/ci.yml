@@ -168,6 +168,7 @@ jobs:
           echo "workspace_customer_id = "${{ vars.WORKSPACE_CUSTOMER_ID }}"" >> terraform/environment.auto.tfvars
           echo "resource_collection_schedule = "0 3 * * *"" >> terraform/environment.auto.tfvars
           echo "group_collection_schedule = "30 3 * * *"" >> terraform/environment.auto.tfvars
+          echo "iam_policy_collection_schedule = \"15 3 * * *\"" >> terraform/environment.auto.tfvars
           echo "reconciliation_schedule = "0 4 * * *"" >> terraform/environment.auto.tfvars
           echo "revoke_expired_permissions_schedule = "0 5 * * *"" >> terraform/environment.auto.tfvars
           echo "iam_bindings_history_update_schedule = "0 2 * * *"" >> terraform/environment.auto.tfvars

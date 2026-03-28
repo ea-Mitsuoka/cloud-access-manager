@@ -275,6 +275,21 @@ class Repository:
         """IAMポリシー権限テーブルの完全なテーブルID。"""
         return f"{self._project_id}.{self._dataset_id}.iam_policy_permissions"
 
+
+    def replace_iam_policy_permissions(self, rows: list[dict[str, Any]]) -> int:
+        """IAMポリシーテーブルを洗い替えます (WRITE_TRUNCATE)。"""
+        if not rows:
+            query = f"TRUNCATE TABLE `{self.iam_policy_permissions_table}`"
+            self._client.query(query).result()
+            return 0
+
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE")
+        job = self._client.load_table_from_json(
+            rows, self.iam_policy_permissions_table, job_config=job_config
+        )
+        job.result()
+        return job.output_rows
+
     def get_iam_policy_permission(
         self, principal_email: str, role: str, resource_name: str
     ) -> dict[str, Any] | None:

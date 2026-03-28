@@ -159,3 +159,31 @@ resource "google_bigquery_table" "iam_pipeline_job_reports" {
     { name = "occurred_at", type = "TIMESTAMP", mode = "REQUIRED" },
   ])
 }
+
+resource "google_bigquery_table" "iam_policy_permissions" {
+  project    = var.tool_project_id
+  dataset_id = google_bigquery_dataset.iam.dataset_id
+  table_id   = "iam_policy_permissions"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+
+  time_partitioning {
+    type  = "DAY"
+    field = "assessment_timestamp"
+  }
+
+  clustering = ["resource_type", "principal_email", "role"]
+
+  schema = jsonencode([
+    { name = "execution_id", type = "STRING", mode = "REQUIRED", description = "1回の評価実行を一意に識別するUUID" },
+    { name = "assessment_timestamp", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "scope", type = "STRING", mode = "REQUIRED" },
+    { name = "resource_type", type = "STRING", mode = "REQUIRED", description = "リソースの種類 (例: IAM_POLICY_NAME)" },
+    { name = "resource_name", type = "STRING", mode = "REQUIRED", description = "具体的なリソース名" },
+    { name = "principal_type", type = "STRING", mode = "NULLABLE" },
+    { name = "principal_email", type = "STRING", mode = "NULLABLE" },
+    { name = "role", type = "STRING", mode = "REQUIRED" },
+  ])
+}

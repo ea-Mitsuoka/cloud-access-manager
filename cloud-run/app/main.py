@@ -16,6 +16,7 @@ from googleapiclient.errors import HttpError
 
 from .iam_executor import IamExecutor
 from .models import ExecutionResult
+from .iam_policy_collector import IamPolicyCollector
 from .google_group_collector import GoogleGroupCollector
 from .resource_inventory_collector import ResourceInventoryCollector
 from .repository import Repository
@@ -50,6 +51,10 @@ resource_collector = ResourceInventoryCollector(
 group_collector = GoogleGroupCollector(
     workspace_customer_id=WORKSPACE_CUSTOMER_ID,
     source="cloudidentity",
+)
+iam_policy_collector = IamPolicyCollector(
+    target_project_id=TARGET_PROJECT_ID,
+    target_org_id=TARGET_ORG_ID,
 )
 
 
@@ -306,6 +311,52 @@ def collect_groups():
             "counts": counts,
         }
     )
+
+
+
+@app.post("/collect/iam-policies")
+def collect_iam_policies():
+    """管理対象スコープ内のIAMポリシーを収集し、DBを洗い替えます。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+
+    try:
+        rows, counts, scope = iam_policy_collector.collect_rows(execution_id=execution_id)
+        inserted = repo.replace_iam_policy_permissions(rows)
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type="IAM_POLICY_COLLECTION",
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={"inserted_rows": inserted, **counts},
+            details={"scope": scope},
+        )
+    except Exception as exc:  # pragma: no cover
+        report = _build_collection_error_report(
+            job_type="IAM_POLICY_COLLECTION", execution_id=execution_id, exc=exc
+        )
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return jsonify({
+            "execution_id": execution_id,
+            "result": report["result"],
+            "error_code": report["error_code"],
+            "error_message": report["error_message"],
+            "hint": report["hint"],
+        }), report["http_status"]
+
+    return jsonify({
+        "execution_id": execution_id,
+        "result": "SUCCESS",
+        "scope": scope,
+        "inserted_rows": inserted,
+        "counts": counts,
+    })
 
 
 @app.post("/reconcile")

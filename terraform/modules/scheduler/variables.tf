@@ -47,3 +47,8 @@ variable "scheduler_time_zone" {
   type        = string
   description = "Time zone for Cloud Scheduler jobs"
 }
+
+variable "iam_policy_collection_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /collect/iam-policies"
+}

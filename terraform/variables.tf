@@ -114,3 +114,9 @@ variable "alert_notification_webhook_url" {
   description = "Webhook URL for anomaly alerts like Slack or Google Chat (optional)"
   default     = ""
 }
+
+variable "iam_policy_collection_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /collect/iam-policies"
+  default     = "15 3 * * *"
+}

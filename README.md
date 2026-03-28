@@ -3,7 +3,7 @@
 ## 1. 目的
 
 - IAM付与申請から承認・実行・棚卸しまでを一気通貫で管理する。
-- 既存の `iam_policy_permissions` 収集機能を再利用し、最新可視化と履歴監査を分離する。
+- IAM権限の現状取得から申請・承認・実行・棚卸しまでを本システム単体で一気通貫で管理する。
 - 最小構成は `Googleフォーム + Google Apps Script + Cloud Run + BigQuery` とする。
 - インフラ構築は Terraform を必須とする。
 
@@ -378,13 +378,15 @@ graph TD
 ### 11.3. 実行時の前提
 
 - Cloud Run 実行SAには以下を付与する。
+
   - `roles/bigquery.dataEditor`（対象dataset単位）
   - `roles/bigquery.jobUser`（tool project）
   - IAM更新対象に応じた最小権限ロール
     - 単一プロジェクト管理: `managed_project_id` に `roles/resourcemanager.projectIamAdmin`
     - 組織管理: `organization_id` に `roles/resourcemanager.projectIamAdmin` + `roles/browser`
-- `iam_policy_permissions` は既存の洗い替えジョブを継続利用する。
+
 - `iam_policy_bindings_raw_history` は棚卸しジョブ側で `WRITE_APPEND` する（生の履歴）。
+
 - `iam_permission_bindings_history` は Pythonバッチジョブによって生成される（帳票用整形履歴）。
 
 ### 11.4. MVP制約

@@ -66,6 +66,11 @@ def mock_auth():
 
 # -------------------------------------------------------------------
 # データ収集パイプライン（棚卸し）のシナリオテスト
+@pytest.fixture
+def mock_iam_policy_collector():
+    with patch("app.main.iam_policy_collector", autospec=True) as mock:
+        yield mock
+
 # -------------------------------------------------------------------
 
 
@@ -203,3 +208,25 @@ def test_collectors_reject_unauthorized(client: FlaskClient):
 
     resp_groups = client.post("/collect/groups")
     assert resp_groups.status_code == 401
+
+
+def test_collect_iam_policies_success(
+    client: FlaskClient, mock_repo, mock_iam_policy_collector, mock_auth
+):
+    """【要件】IAMポリシーが正常に収集され、DBの洗い替えと成功レポートが記録されること"""
+    mock_iam_policy_collector.collect_rows.return_value = (
+        [{"resource_name": "projects/dummy", "role": "roles/viewer"}],
+        {"policies": 1, "bindings": 1},
+        "projects/my-managed-project",
+    )
+    mock_repo.replace_iam_policy_permissions.return_value = 1
+
+    response = client.post("/collect/iam-policies", json={"execution_id": "exec-789"})
+
+    assert response.status_code == 200
+    assert response.get_json()["result"] == "SUCCESS"
+    assert response.get_json()["inserted_rows"] == 1
+
+    mock_repo.replace_iam_policy_permissions.assert_called_once()
+    mock_repo.insert_pipeline_job_report.assert_called_once()
+    assert mock_repo.insert_pipeline_job_report.call_args[1]["job_type"] == "IAM_POLICY_COLLECTION"
