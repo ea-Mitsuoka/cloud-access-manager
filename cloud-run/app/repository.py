@@ -611,7 +611,9 @@ class Repository:
         ) S
         ON T.principal_email = S.principal_email
         WHEN MATCHED THEN
-          UPDATE SET principal_type = COALESCE(S.principal_type, T.principal_type), updated_at = CURRENT_TIMESTAMP()
+          UPDATE SET
+            principal_type = COALESCE(S.principal_type, T.principal_type),
+            updated_at = CURRENT_TIMESTAMP()
         WHEN NOT MATCHED THEN
           INSERT (principal_email, principal_type)
           VALUES (S.principal_email, S.principal_type)
@@ -623,7 +625,8 @@ class Repository:
     def run_update_raw_bindings_history_job(self, execution_id: str) -> int:
         """生のIAMバインディング履歴を記録します。"""
         sql = f"""
-        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_policy_bindings_raw_history` (
+        INSERT INTO
+          `{self._project_id}.{self._dataset_id}.iam_policy_bindings_raw_history` (
           execution_id, assessment_timestamp, scope, resource_type,
           resource_name, principal_type, principal_email, role
         )
@@ -632,7 +635,11 @@ class Repository:
           resource_name, principal_type, principal_email, role
         FROM `{self.iam_policy_permissions_table}`
         """
-        params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
-        job = self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params))
+        params = [
+            bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
+        ]
+        job = self._client.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        )
         job.result()
         return job.num_dml_affected_rows or 0

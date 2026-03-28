@@ -120,7 +120,9 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
     assert json_data["raw_inserted_rows"] == 10
 
     mock_repo.sync_principal_catalog.assert_called_once()
-    mock_repo.run_update_raw_bindings_history_job.assert_called_once_with(json_data["execution_id"])
+    mock_repo.run_update_raw_bindings_history_job.assert_called_once_with(
+        json_data["execution_id"]
+    )
     mock_repo.run_update_bindings_history_job.assert_called_once_with(
         json_data["execution_id"]
     )
@@ -134,6 +136,7 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
         counts={"inserted_rows": 10, "raw_inserted_rows": 10},
         details={"note": "Includes principal catalog sync and raw history update"},
     )
+
 
 def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: MagicMock):
     """IAMバインディング履歴更新ジョブの失敗ケースをテストします。
