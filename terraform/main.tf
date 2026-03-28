@@ -104,9 +104,31 @@ resource "google_organization_iam_member" "executor_managed_organization_roles" 
   role     = each.value
   member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
 }
-resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
+
+# Webhookシークレットの本体作成（初回デプロイ時のクラッシュ回避）
+resource "google_secret_manager_secret" "webhook_secret" {
   project   = var.tool_project_id
   secret_id = var.webhook_secret_name
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.services]
+}
+
+resource "google_secret_manager_secret_version" "webhook_secret_initial" {
+  secret      = google_secret_manager_secret.webhook_secret.id
+  secret_data = "INITIAL_DUMMY_SECRET_CHANGE_ME" # 初期ダミー値
+
+  lifecycle {
+    ignore_changes = [secret_data]  # 後から手動で本物の値に変更されても上書きしない
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
+  project   = var.tool_project_id
+  secret_id = google_secret_manager_secret.webhook_secret.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${module.service_accounts.executor_service_account_email}"
 }
