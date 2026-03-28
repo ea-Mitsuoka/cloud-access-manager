@@ -46,7 +46,7 @@ function onFormSubmit(e) {
   const props = getProps_();
   const named = e.namedValues || {};
   const rawRequestType = pick_(named, FIELD_REQUEST_TYPE);
-  const isEmergency = rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
+  const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
   const reason = (isEmergency ? '[緊急] ' : '') + pickFirst_(named, [FIELD_REASON, FIELD_REASON_ALT]);
 
   const request = {
@@ -435,9 +435,14 @@ function pickFirst_(namedValues, keys) {
 
 function normalizeRequestType_(raw) {
   const v = String(raw || '').trim();
-  if (v === '削除') return 'REVOKE';
+  
+  // 推奨案のラジオボタン選択肢に完全対応
+  if (v === '新規付与') return 'GRANT';
   if (v === '変更') return 'CHANGE';
-  if (v.indexOf('緊急') !== -1) return 'GRANT'; // 緊急付与も処理上はGRANTとして扱う
+  if (v === '削除') return 'REVOKE';
+  if (v === '緊急付与' || v.indexOf('緊急') !== -1) return 'GRANT';
+  
+  // 未知の入力（表記ゆれ等）に対する安全なフォールバック
   return 'GRANT';
 }
 
