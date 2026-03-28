@@ -1,0 +1,890 @@
+diff --git a/CHANGELOG_SUMMARY.md b/CHANGELOG_SUMMARY.md
+index e777517..5576b73 100644
+--- a/CHANGELOG_SUMMARY.md
++++ b/CHANGELOG_SUMMARY.md
+@@ -181,3 +181,9 @@ ______________________________________________________________________
+ - **問題:** 従来は、最新のIAMポリシー状態（`iam_policy_permissions`）の収集を外部システムに依存しており、システム単体でデータが完結しないアーキテクチャ上の課題があった。また、外部システムはPythonプロセス内でグループメンバーを展開する重いETL処理を行っており、タイムアウトやクォータ制限のリスクを抱えていた。
+ - **解決策:** Cloud Asset APIを用いてIAMポリシーを高速に収集し、BigQueryのテーブルを洗い替える専用コレクター（`/collect/iam-policies`）を本システム内に新設した。グループ展開の重い処理は行わず、生のバインディング情報をそのままロードするモダンなELTアプローチを採用。これに伴いTerraformのスケジューラ、CI/CD変数の配線、およびユースケーステストを追加した。
+ - **効果:** 外部システムへの依存が完全に排除され、本リポジトリ単体で完結する堅牢なSaaS基盤へと進化した。
++
++## 28. セキュリティ強化: GASからのOIDC認証連携（Webhookシークレット廃止）
++
++- **問題:** GASからCloud Runへの連携において、共通鍵（Webhook Shared Secret）を用いた認証を行っていたが、シークレット管理の負担や、将来のVPC-SC（VPC Service Controls）導入時のアーキテクチャ上の障壁となる課題があった。
++- **解決策:** GAS側でGCPの `IAM Credentials API` を呼び出し、Cloud RunをAudienceとする正しいOIDCトークンを動的に生成（Impersonation / 権限借用）して認証する方式（方針B）に変更した。Terraform側でGAS用のサービスアカウントを作成し、Cloud Runの `run.invoker` ロールを付与。また、Python側の独自認証ロジックを整理し、標準のOIDCトークン検証に統合した。
++- **効果:** 共通鍵の管理という負債が完全に解消され、セキュアでモダンなクラウドネイティブ認証が確立された。また、将来的にVPC-SCを有効化するエンタープライズ構成（方針A）へ移行する際の基盤が整った。
+diff --git a/README.md b/README.md
+index 5ae9ddd..31c7516 100644
+--- a/README.md
++++ b/README.md
+@@ -392,10 +392,7 @@ graph TD
+ 
+ ### 11.4. MVP制約
+ 
+-- 認証は、以下の2つの方式をサポートします。
+-  - **OIDCトークン認証:** Cloud Schedulerからの呼び出しなど、Googleサービスアカウントからのリクエストを安全に認証します。これは推奨される方式です。
+-  - **共通鍵認証 (`X-Webhook-Token`):** OIDCトークンが利用できない他のシステム（例: Google Apps Script）からの呼び出しのために、共通鍵による認証もサポートします。
+-    - **設定:** この認証方式を利用する場合、`WEBHOOK_SECRET_NAME` にSecret Managerのシークレット名を、`WEBHOOK_SHARED_SECRET` にそのシークレットの**初期値**を`saas.env` ファイルでそれぞれ設定します。シークレット自体はTerraformが自動的に作成し、初期値を設定します。初回デプロイ後にSecret Managerコンソールから値を変更することが可能です。
++- 認証は、OIDC（OpenID Connect）トークン認証をサポートします。Cloud Schedulerからのバッチ処理や、GASからのリクエスト（IAM Credentials APIによる権限借用）をセキュアに認証します。
+ - `organization_id = ""` の場合、`managed_project_id` と一致する `projects/{id}` の申請のみ実行対象とする（対象外は `OUT_OF_SCOPE` で拒否）。
+ - `organization_id != ""` の場合、Cloud Resource Manager の ancestry で `projects/{id}` が指定組織配下か検証し、対象外は `OUT_OF_SCOPE` で拒否する。
+ 
+@@ -405,7 +402,6 @@ graph TD
+    - `tool_project_id`: ツールをデプロイするプロジェクト
+    - `managed_project_id`: 管理対象プロジェクト（空なら `tool_project_id` を利用）
+    - `organization_id = ""` の場合は「プロジェクト単体管理」として扱う。
+-   - **共通鍵認証を利用する場合:** `WEBHOOK_SECRET_NAME` にSecret Managerのシークレット名を、`WEBHOOK_SHARED_SECRET` にそのシークレットの**初期値**を設定します。シークレット自体はTerraformが自動でプロビジョニングします。
+ 1. `bash scripts/sync-config.sh` を実行して、`environment.auto.tfvars` / `cloud-run/.env` / `apps-script/script-properties.json` / `build/sql/*.sql` を生成する。
+ 1. `bash scripts/bootstrap-tfstate.sh` を実行して tfstate 用 GCS バケットを作成/更新する。
+ 1. `terraform/` ディレクトリで以下を実行する。
+diff --git a/apps-script/Code.gs b/apps-script/Code.gs
+index 77b3bbd..e1ae148 100644
+--- a/apps-script/Code.gs
++++ b/apps-script/Code.gs
+@@ -8,7 +8,7 @@
+  *    - BQ_DATASET_ID
+  *    - BQ_LOCATION
+  *    - CLOUD_RUN_EXECUTE_URL
+- *    - WEBHOOK_SHARED_SECRET (optional)
++ *    - GAS_INVOKER_SA_EMAIL
+  *    - GEMINI_API_KEY (GeminiRoleAdvisor.gs を使う場合)
+  * 3) Create installable triggers:
+  *    - onFormSubmit (From spreadsheet, On form submit)
+@@ -289,12 +289,38 @@ function insertRequestHistoryEvent_(props, event) {
+   ]);
+ }
+ 
++function getOidcToken_(props) {
++  if (!props.gasInvokerEmail) throw new Error("Missing GAS_INVOKER_SA_EMAIL property");
++  const url = `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${props.gasInvokerEmail}:generateIdToken`;
++  const payload = {
++    audience: props.cloudRunUrl,
++    includeEmail: true
++  };
++  const options = {
++    method: 'post',
++    contentType: 'application/json',
++    payload: JSON.stringify(payload),
++    headers: {
++      Authorization: `Bearer ${ScriptApp.getOAuthToken()}`
++    },
++    muteHttpExceptions: true
++  };
++  const res = UrlFetchApp.fetch(url, options);
++  const code = res.getResponseCode();
++  const text = res.getContentText();
++  if (code >= 300) {
++    throw new Error(`Failed to get OIDC token from IAM Credentials API (${code}): ${text}`);
++  }
++  return JSON.parse(text).token;
++}
++
+ function callCloudRunExecute_(props, requestId) {
++  const token = getOidcToken_(props);
+   const payload = JSON.stringify({ request_id: requestId });
+-  const headers = { 'Content-Type': 'application/json' };
+-  if (props.webhookSecret) {
+-    headers['X-Webhook-Token'] = props.webhookSecret;
+-  }
++  const headers = { 
++    'Content-Type': 'application/json',
++    'Authorization': `Bearer ${token}`
++  };
+ 
+   const options = {
+     method: 'post',
+@@ -303,7 +329,6 @@ function callCloudRunExecute_(props, requestId) {
+     muteHttpExceptions: true,
+     headers
+   };
+-
+   const maxRetries = 3;
+   for (let i = 0; i < maxRetries; i += 1) {
+     try {
+@@ -315,11 +340,12 @@ function callCloudRunExecute_(props, requestId) {
+       return; // 成功した場合はループを抜ける
+     } catch (err) {
+       if (i === maxRetries - 1) {
+-        throw err; // 最大リトライ回数に達した場合はエラーを投げる
++        throw err;
+       }
+-      Utilities.sleep(1000 * (i + 1)); // 失敗時は待機 (1秒, 2秒...)
++      Utilities.sleep(1000 * (i + 1));
+     }
+   }
++}
+   }
+ 
+ function appendReviewSheet_(request) {
+@@ -366,7 +392,7 @@ function getProps_() {
+     datasetId: p.getProperty('BQ_DATASET_ID'),
+     location: p.getProperty('BQ_LOCATION'),
+     cloudRunUrl: p.getProperty('CLOUD_RUN_EXECUTE_URL'),
+-    webhookSecret: p.getProperty('WEBHOOK_SHARED_SECRET') || ''
++    gasInvokerEmail: p.getProperty('GAS_INVOKER_SA_EMAIL')
+   };
+   validateProps_(props);
+   return props;
+diff --git a/apps-script/README.md b/apps-script/README.md
+index f388cc3..bbfcd36 100644
+--- a/apps-script/README.md
++++ b/apps-script/README.md
+@@ -8,7 +8,7 @@
+ - `BQ_DATASET_ID`
+ - `BQ_LOCATION`
+ - `CLOUD_RUN_EXECUTE_URL` (例: `https://<service-url>/execute`)
+-- `WEBHOOK_SHARED_SECRET` (必須)
++- `GAS_INVOKER_SA_EMAIL` (必須: Terraform outputの gas_invoker_service_account を設定)
+ - `GEMINI_API_KEY` (Gemini提案アシスタントを使う場合に必須)
+ 
+ ルートの設定ファイルから以下のコマンドでJSONとして生成できます:
+diff --git a/apps-script/script-properties.json b/apps-script/script-properties.json
+index 4a23f48..4c73b3b 100644
+--- a/apps-script/script-properties.json
++++ b/apps-script/script-properties.json
+@@ -3,6 +3,6 @@
+   "BQ_DATASET_ID": "iam_access_mgmt",
+   "BQ_LOCATION": "asia-northeast1",
+   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
+-  "WEBHOOK_SHARED_SECRET": "<set-from-secret-manager>",
++  "GAS_INVOKER_EMAIL": "<set-from-gas-invoker-email>",
+   "GEMINI_API_KEY": ""
+ }
+diff --git a/cloud-run/.env.example b/cloud-run/.env.example
+index de693a3..f50717d 100644
+--- a/cloud-run/.env.example
++++ b/cloud-run/.env.example
+@@ -4,4 +4,4 @@ MGMT_TARGET_PROJECT_ID=your-managed-project-id
+ MGMT_TARGET_ORGANIZATION_ID=
+ WORKSPACE_CUSTOMER_ID=my_customer
+ EXECUTOR_IDENTITY=iam-runner@your-project-id.iam.gserviceaccount.com
+-WEBHOOK_SHARED_SECRET=change-me
++GAS_INVOKER_EMAIL=iam-gas-invoker@your-project.iam.gserviceaccount.com
+diff --git a/cloud-run/app/main.py b/cloud-run/app/main.py
+index 5aa95e5..805c879 100644
+--- a/cloud-run/app/main.py
++++ b/cloud-run/app/main.py
+@@ -2,7 +2,6 @@ from __future__ import annotations
+ 
+ import logging
+ import os
+-import secrets
+ import traceback
+ import uuid
+ from dataclasses import replace
+@@ -30,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
+ PROJECT_ID = os.environ["BQ_PROJECT_ID"]
+ DATASET_ID = os.environ["BQ_DATASET_ID"]
+ EXECUTOR_IDENTITY = os.environ.get("EXECUTOR_IDENTITY", "cloud-run")
+-SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "")
++GAS_INVOKER_EMAIL = os.environ.get("GAS_INVOKER_EMAIL", "").strip()
+ TARGET_PROJECT_ID = os.environ.get("MGMT_TARGET_PROJECT_ID", "").strip()
+ TARGET_ORG_ID = os.environ.get("MGMT_TARGET_ORGANIZATION_ID", "").strip()
+ WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").strip()
+@@ -583,27 +582,9 @@ def update_iam_bindings_history():
+ def _authorize() -> bool:
+     """
+     リクエストを認証します。
+-    Cloud SchedulerからのOIDCトークン、または共有シークレットトークンを検証します。
+-
+-    Returns:
+-        bool: 認証が成功した場合はTrue、そうでない場合はFalse。
+-    """
+-    if _authorize_scheduler_oidc():
+-        return True
+-    if not SHARED_SECRET:
+-        return False
+-    token = request.headers.get("X-Webhook-Token", "")
+-    return secrets.compare_digest(token, SHARED_SECRET)
+-
+-
+-def _authorize_scheduler_oidc() -> bool:
+-    """
+-    Cloud SchedulerからのOIDCトークンを検証します。
+-
+-    Returns:
+-        bool: OIDCトークンが有効で、期待される発行者からのものである場合はTrue。
++    Cloud Scheduler または GAS からの OIDC トークンを検証します。
+     """
+-    if not SCHEDULER_INVOKER_EMAIL:
++    if not SCHEDULER_INVOKER_EMAIL and not GAS_INVOKER_EMAIL:
+         return False
+ 
+     auth_header = request.headers.get("Authorization", "")
+@@ -614,17 +595,20 @@ def _authorize_scheduler_oidc() -> bool:
+     if not token:
+         return False
+ 
+-    # Cloud Scheduler OIDC token audience should match this service base URI.
+     expected_audience = request.url_root.rstrip("/")
+     try:
+         claims = google_id_token.verify_oauth2_token(
+             token, google_auth_requests.Request(), expected_audience
+         )
+-    except Exception:
++    except Exception as e:
++        logging.warning(f"OIDC verification failed: {e}")
+         return False
+ 
+     email = str(claims.get("email", "")).strip().lower()
+-    return email == SCHEDULER_INVOKER_EMAIL.lower()
++    allowed_emails = [
++        e.lower() for e in (SCHEDULER_INVOKER_EMAIL, GAS_INVOKER_EMAIL) if e
++    ]
++    return email in allowed_emails
+ 
+ 
+ def _build_collection_error_report(
+diff --git a/cloud-run/app/tests/conftest.py b/cloud-run/app/tests/conftest.py
+index 15d00db..9f8f051 100644
+--- a/cloud-run/app/tests/conftest.py
++++ b/cloud-run/app/tests/conftest.py
+@@ -10,7 +10,7 @@ os.environ.setdefault("MGMT_TARGET_PROJECT_ID", "test-target-project")
+ os.environ.setdefault("MGMT_TARGET_ORGANIZATION_ID", "")
+ os.environ.setdefault("WORKSPACE_CUSTOMER_ID", "my_customer")
+ os.environ.setdefault("EXECUTOR_IDENTITY", "test-executor")
+-os.environ.setdefault("WEBHOOK_SHARED_SECRET", "test-secret")
++os.environ.setdefault("GAS_INVOKER_EMAIL", "gas-invoker@example.com")
+ os.environ.setdefault("SCHEDULER_INVOKER_EMAIL", "scheduler@example.com")
+ 
+ 
+diff --git a/cloud-run/app/tests/test_jobs.py b/cloud-run/app/tests/test_jobs.py
+index 786137d..32b9aca 100644
+--- a/cloud-run/app/tests/test_jobs.py
++++ b/cloud-run/app/tests/test_jobs.py
+@@ -30,7 +30,14 @@ def mock_repo():
+         yield mock_repo
+ 
+ 
+-def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
++@pytest.fixture
++def mock_auth():
++    with patch("app.main._authorize", return_value=True) as mock:
++        yield mock
++
++
++def test_reconcile_job_success(
++        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+     """リコンサイルジョブの成功ケースをテストします。
+ 
+     Args:
+@@ -42,7 +49,7 @@ def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
+ 
+     # Act
+     response = client.post(
+-        "/reconcile", headers={"X-Webhook-Token": "test-secret"}
++        "/reconcile", headers={"Authorization": "Bearer test-token"}
+     )
+ 
+     # Assert
+@@ -63,7 +70,8 @@ def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
+     )
+ 
+ 
+-def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
++def test_reconcile_job_failure(
++        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+     """リコンサイルジョブの失敗ケースをテストします。
+ 
+     Args:
+@@ -75,7 +83,7 @@ def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
+ 
+     # Act
+     response = client.post(
+-        "/reconcile", headers={"X-Webhook-Token": "test-secret"}
++        "/reconcile", headers={"Authorization": "Bearer test-token"}
+     )
+ 
+     # Assert
+@@ -94,7 +102,8 @@ def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
+     assert call_args["error_message"] == "BigQuery is down"
+ 
+ 
+-def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: MagicMock):
++def test_update_iam_bindings_history_success(
++        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+     """IAMバインディング履歴更新ジョブの成功ケースをテストします。
+ 
+     Args:
+@@ -109,7 +118,7 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
+     # Act
+     response = client.post(
+         "/jobs/update-iam-bindings-history",
+-        headers={"X-Webhook-Token": "test-secret"},
++        headers={"Authorization": "Bearer test-token"},
+     )
+ 
+     # Assert
+@@ -138,7 +147,8 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
+     )
+ 
+ 
+-def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: MagicMock):
++def test_update_iam_bindings_history_failure(
++        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+     """IAMバインディング履歴更新ジョブの失敗ケースをテストします。
+ 
+     Args:
+@@ -151,7 +161,7 @@ def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: Mag
+     # Act
+     response = client.post(
+         "/jobs/update-iam-bindings-history",
+-        headers={"X-Webhook-Token": "test-secret"},
++        headers={"Authorization": "Bearer test-token"},
+     )
+ 
+     # Assert
+diff --git a/docs/operations-runbook.md b/docs/operations-runbook.md
+index 30bc62f..674b6a8 100644
+--- a/docs/operations-runbook.md
++++ b/docs/operations-runbook.md
+@@ -33,7 +33,7 @@ ______________________________________________________________________
+ - `roles/bigquery.dataEditor` on `tool_project:dataset`（dataset単位）
+ - `roles/bigquery.jobUser` on `tool_project`
+ - `roles/artifactregistry.reader` on `tool_project`（Artifact Registryのプライベートイメージを使う場合）
+-- `roles/secretmanager.secretAccessor` on webhook secret
++- `roles/secretmanager.secretAccessor` on GAS用OIDC認証
+ 
+ **管理対象への付与（要件に応じて）:**
+ 
+@@ -59,7 +59,7 @@ ______________________________________________________________________
+ - `roles/run.admin`
+ - `roles/iam.serviceAccountAdmin`
+ - `roles/resourcemanager.projectIamAdmin`
+-- `roles/secretmanager.admin`（webhook secret の作成/更新を行う場合）
++- `roles/secretmanager.admin`（GAS用OIDC認証 の作成/更新を行う場合）
+ - `roles/iam.serviceAccountUser` on executor SA
+ 
+ **`tfstate` バケット作成・管理用（初回ブートストラップ）:**
+@@ -78,7 +78,7 @@ TOOL_PROJECT_ID="<tool-project-id>"
+ MANAGED_PROJECT_ID="<managed-project-id>"
+ ORG_ID="<organization-id-or-empty>"
+ EXECUTOR_SA="iam-access-executor@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
+-WEBHOOK_SECRET_NAME="iam-access-webhook-token"
++GAS_TRIGGER_OWNER_EMAIL="iam-access-webhook-token"
+ TF_PRINCIPAL="user:your.name@example.com" # or serviceAccount:ci-terraform@...
+ 
+ # Terraform実行主体
+@@ -95,7 +95,7 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPA
+ # Cloud Run実行サービスアカウント
+ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/bigquery.jobUser
+ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/artifactregistry.reader
+-gcloud secrets add-iam-policy-binding "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/secretmanager.secretAccessor
++gcloud secrets add-iam-policy-binding "$GAS_TRIGGER_OWNER_EMAIL" --project "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/secretmanager.secretAccessor
+ 
+ # organization_idを使う場合のみ
+ if [[ -n "$ORG_ID" ]]; then
+@@ -206,7 +206,7 @@ gcloud artifacts repositories create iam-access-repo
+ ### 4.1 機能概要
+ 
+ - **検知対象:** Cloud Runサービスで`ERROR`レベル以上のログが出力された場合。これには、アプリケーションが明示的に補足した例外（権限不足、APIエラー等）が含まれます。
+-- **通知方法:** GCPのCloud Monitoringがログを監視し、設定された通知チャネル（メール、Webhook等）にアラートを送信します。
++- **通知方法:** GCPのCloud Monitoringがログを監視し、設定された通知チャネル（メール、OIDC等）にアラートを送信します。
+ - **冪等性:** 通知先の設定はTerraformで管理され、設定の有無に応じて通知チャネルとアラートポリシーが動的に作成・更新されます。
+ 
+ ### 4.2 設定方法
+@@ -236,7 +236,7 @@ gcloud artifacts repositories create iam-access-repo
+ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に移動します。
+ 
+ - **ポリシー:** `IAM Access Manager: Error Detected` という名前のアラートポリシーが作成されていることを確認します。
+-- **通知チャネル:** ポリシーの詳細画面から、設定したメールアドレスやWebhookに対応する通知チャネルが作成され、ポリシーに紐づいていることを確認できます。
++- **通知チャネル:** ポリシーの詳細画面から、設定したメールアドレスやOIDCに対応する通知チャネルが作成され、ポリシーに紐づいていることを確認できます。
+ 
+ ### 4.4 特別アラート: 緊急アクセス（Break-glass）の検知と運用上の注意
+ 
+@@ -278,8 +278,8 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
+   - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
+ 
+ **VPC-SCとGoogle Apps Script (GAS) の致命的な相性に関する重要事項:**
+-もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのWebhook通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
+-これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「Webhookによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
++もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのOIDC通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
++これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「OIDCによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
+ そのため、今回は\*\*「いつでもVPC-SCを有効化できるコード（スイッチ）は用意しておくが、GASの連携方式を根本から見直すまではフラグを `false` のまま運用する」\*\*という方針にご注意ください。
+ 
+ ## 6. tfstateバックエンドのブートストラップ手順
+@@ -287,7 +287,7 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
+ **前提:**
+ 
+ - `saas.env` に `TFSTATE_BUCKET`, `TFSTATE_PREFIX`, `TFSTATE_LOCATION` を設定済み
+-- `saas.env` に `WEBHOOK_SECRET_NAME` を設定済み
++- `saas.env` に `GAS_TRIGGER_OWNER_EMAIL` を設定済み
+ 
+ **実行:**
+ 
+@@ -298,16 +298,6 @@ cd terraform
+ terraform init -backend-config=../backend.hcl
+ ```
+ 
+-**Webhook secretの作成（初回のみ）:**
+-
+-```bash
+-TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
+-WEBHOOK_SECRET_NAME="$(grep '^WEBHOOK_SECRET_NAME=' saas.env | cut -d= -f2)"
+-
+-gcloud secrets create "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --replication-policy=automatic || true
+-printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --data-file=-
+-```
+-
+ **確認:**
+ 
+ ```bash
+diff --git a/environment.auto.tfvars b/environment.auto.tfvars
+index 654eb22..3d91904 100644
+--- a/environment.auto.tfvars
++++ b/environment.auto.tfvars
+@@ -6,7 +6,7 @@ region                = "asia-northeast1"
+ dataset_id            = "iam_access_mgmt"
+ cloud_run_service_name = "iam-access-executor"
+ cloud_run_image       = "asia-northeast1-docker.pkg.dev/ea-yukihidemitsuoka2/YOUR_REPO/iam-access-executor:latest"
+-webhook_secret_name   = "iam-access-webhook-token"
++gas_trigger_owner_email="your-google-account@example.com"
+ workspace_customer_id = "my_customer"
+ resource_collection_schedule = "0 3 * * *"
+ group_collection_schedule = "30 3 * * *"
+diff --git a/saas.env.example b/saas.env.example
+index 2235a48..a438648 100644
+--- a/saas.env.example
++++ b/saas.env.example
+@@ -7,7 +7,7 @@ REGION=asia-northeast1
+ BQ_DATASET_ID=iam_access_mgmt
+ CLOUD_RUN_SERVICE_NAME=iam-access-executor
+ CLOUD_RUN_IMAGE=asia-northeast1-docker.pkg.dev/your-tool-project-id/your-repo/iam-access-executor:latest
+-WEBHOOK_SECRET_NAME=iam-access-webhook-token
++GAS_TRIGGER_OWNER_EMAIL=you@example.com
+ WORKSPACE_CUSTOMER_ID=my_customer
+ RESOURCE_COLLECTION_SCHEDULE="0 3 * * *"
+ GROUP_COLLECTION_SCHEDULE="30 3 * * *"
+@@ -23,5 +23,5 @@ GEMINI_API_KEY=
+ ALERT_NOTIFICATION_EMAIL=
+ ALERT_NOTIFICATION_WEBHOOK_URL=
+ 
+-# Terraform provisioning requires this exact dummy string initially.
+-WEBHOOK_SHARED_SECRET=INITIAL_DUMMY_SECRET_CHANGE_ME
++# 追記するもの (GoogleフォームのGASトリガーを仕掛けたユーザーのメアド)
++GAS_TRIGGER_OWNER_EMAIL="your-google-account@example.com"
+\ No newline at end of file
+diff --git a/scripts/bootstrap-deploy.sh b/scripts/bootstrap-deploy.sh
+index eb7be57..4af72f7 100755
+--- a/scripts/bootstrap-deploy.sh
++++ b/scripts/bootstrap-deploy.sh
+@@ -108,7 +108,6 @@ required=(
+   BQ_DATASET_ID
+   CLOUD_RUN_SERVICE_NAME
+   CLOUD_RUN_IMAGE
+-  WEBHOOK_SECRET_NAME
+   WORKSPACE_CUSTOMER_ID
+   RESOURCE_COLLECTION_SCHEDULE
+   GROUP_COLLECTION_SCHEDULE
+@@ -142,7 +141,6 @@ echo "Region                 : $REGION"
+ echo "Dataset                : $BQ_DATASET_ID"
+ echo "Cloud Run service      : $CLOUD_RUN_SERVICE_NAME"
+ echo "Cloud Run image        : $CLOUD_RUN_IMAGE"
+-echo "Webhook secret name    : $WEBHOOK_SECRET_NAME"
+ echo "Workspace customer ID  : $WORKSPACE_CUSTOMER_ID"
+ echo "Resource schedule      : $RESOURCE_COLLECTION_SCHEDULE"
+ echo "Scheduler time zone    : $SCHEDULER_TIME_ZONE"
+diff --git a/scripts/collect-google-groups.sh b/scripts/collect-google-groups.sh
+index cb96e44..beab05f 100755
+--- a/scripts/collect-google-groups.sh
++++ b/scripts/collect-google-groups.sh
+@@ -1,58 +1,35 @@
+-#!/usr/bin/env bash
++#!/bin/bash
+ set -euo pipefail
+ 
+-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+-CONFIG_FILE="$ROOT_DIR/saas.env"
+ CLOUD_RUN_URL=""
+-
+-while [[ $# -gt 0 ]]; do
+-  case "$1" in
+-    --cloud-run-url)
+-      CLOUD_RUN_URL="$2"
+-      shift 2
+-      ;;
+-    --config)
+-      CONFIG_FILE="$2"
+-      shift 2
+-      ;;
+-    -h|--help)
+-      cat <<'USAGE'
+-Usage: bash scripts/collect-google-groups.sh --cloud-run-url <url> [--config <saas.env>]
+-USAGE
+-      exit 0
+-      ;;
+-    *)
+-      echo "Unknown option: $1" >&2
+-      exit 1
+-      ;;
+-  esac
++while [[ "$#" -gt 0 ]]; do
++    case $1 in
++        --cloud-run-url) CLOUD_RUN_URL="$2"; shift ;;
++        *) echo "Unknown parameter passed: $1"; exit 1 ;;
++    esac
++    shift
+ done
+ 
+ if [[ -z "$CLOUD_RUN_URL" ]]; then
+-  echo "--cloud-run-url is required" >&2
+-  exit 1
+-fi
+-
+-if [[ ! -f "$CONFIG_FILE" ]]; then
+-  echo "Config file not found: $CONFIG_FILE" >&2
+-  exit 1
++    echo "Error: --cloud-run-url is required."
++    echo "Usage: $0 --cloud-run-url <URL>"
++    exit 1
+ fi
+ 
+-# shellcheck disable=SC1090
+-set -a
+-source "$CONFIG_FILE"
+-set +a
++echo "Fetching Scheduler SA email from Terraform outputs..."
++SCHEDULER_SA=$(cd terraform && terraform output -raw scheduler_invoker_service_account 2>/dev/null || true)
+ 
+-if [[ -z "${TOOL_PROJECT_ID:-}" || -z "${WEBHOOK_SECRET_NAME:-}" ]]; then
+-  echo "TOOL_PROJECT_ID and WEBHOOK_SECRET_NAME are required in $CONFIG_FILE" >&2
+-  exit 1
++if [[ -z "$SCHEDULER_SA" ]]; then
++    echo "Error: Could not retrieve scheduler_invoker_service_account from Terraform."
++    exit 1
+ fi
+ 
+-token="$(gcloud secrets versions access latest --secret "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID")"
++echo "Fetching OIDC identity token by impersonating ${SCHEDULER_SA}..."
++TOKEN=$(gcloud auth print-identity-token --impersonate-service-account="${SCHEDULER_SA}" --audiences="${CLOUD_RUN_URL}" --include-email)
+ 
+-curl -sS -X POST "${CLOUD_RUN_URL%/}/collect/groups" \
++echo "Triggering job at ${CLOUD_RUN_URL}/collect/groups ..."
++curl -s -X POST "${CLOUD_RUN_URL}/collect/groups" \
++  -H "Authorization: Bearer ${TOKEN}" \
+   -H "Content-Type: application/json" \
+-  -H "X-Webhook-Token: $token" \
+-  -d '{}'
+-
+-echo
++  -d '{"execution_id": "manual-run"}'
++echo ""
+diff --git a/scripts/collect-resource-inventory.sh b/scripts/collect-resource-inventory.sh
+index 89d0b4f..bbd9579 100755
+--- a/scripts/collect-resource-inventory.sh
++++ b/scripts/collect-resource-inventory.sh
+@@ -1,58 +1,35 @@
+-#!/usr/bin/env bash
++#!/bin/bash
+ set -euo pipefail
+ 
+-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+-CONFIG_FILE="$ROOT_DIR/saas.env"
+ CLOUD_RUN_URL=""
+-
+-while [[ $# -gt 0 ]]; do
+-  case "$1" in
+-    --cloud-run-url)
+-      CLOUD_RUN_URL="$2"
+-      shift 2
+-      ;;
+-    --config)
+-      CONFIG_FILE="$2"
+-      shift 2
+-      ;;
+-    -h|--help)
+-      cat <<'USAGE'
+-Usage: bash scripts/collect-resource-inventory.sh --cloud-run-url <url> [--config <saas.env>]
+-USAGE
+-      exit 0
+-      ;;
+-    *)
+-      echo "Unknown option: $1" >&2
+-      exit 1
+-      ;;
+-  esac
++while [[ "$#" -gt 0 ]]; do
++    case $1 in
++        --cloud-run-url) CLOUD_RUN_URL="$2"; shift ;;
++        *) echo "Unknown parameter passed: $1"; exit 1 ;;
++    esac
++    shift
+ done
+ 
+ if [[ -z "$CLOUD_RUN_URL" ]]; then
+-  echo "--cloud-run-url is required" >&2
+-  exit 1
+-fi
+-
+-if [[ ! -f "$CONFIG_FILE" ]]; then
+-  echo "Config file not found: $CONFIG_FILE" >&2
+-  exit 1
++    echo "Error: --cloud-run-url is required."
++    echo "Usage: $0 --cloud-run-url <URL>"
++    exit 1
+ fi
+ 
+-# shellcheck disable=SC1090
+-set -a
+-source "$CONFIG_FILE"
+-set +a
++echo "Fetching Scheduler SA email from Terraform outputs..."
++SCHEDULER_SA=$(cd terraform && terraform output -raw scheduler_invoker_service_account 2>/dev/null || true)
+ 
+-if [[ -z "${TOOL_PROJECT_ID:-}" || -z "${WEBHOOK_SECRET_NAME:-}" ]]; then
+-  echo "TOOL_PROJECT_ID and WEBHOOK_SECRET_NAME are required in $CONFIG_FILE" >&2
+-  exit 1
++if [[ -z "$SCHEDULER_SA" ]]; then
++    echo "Error: Could not retrieve scheduler_invoker_service_account from Terraform."
++    exit 1
+ fi
+ 
+-token="$(gcloud secrets versions access latest --secret "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID")"
++echo "Fetching OIDC identity token by impersonating ${SCHEDULER_SA}..."
++TOKEN=$(gcloud auth print-identity-token --impersonate-service-account="${SCHEDULER_SA}" --audiences="${CLOUD_RUN_URL}" --include-email)
+ 
+-curl -sS -X POST "${CLOUD_RUN_URL%/}/collect/resources" \
++echo "Triggering job at ${CLOUD_RUN_URL}/collect/resources ..."
++curl -s -X POST "${CLOUD_RUN_URL}/collect/resources" \
++  -H "Authorization: Bearer ${TOKEN}" \
+   -H "Content-Type: application/json" \
+-  -H "X-Webhook-Token: $token" \
+-  -d '{}'
+-
+-echo
++  -d '{"execution_id": "manual-run"}'
++echo ""
+diff --git a/scripts/sync-config.sh b/scripts/sync-config.sh
+index 4206c60..a51621b 100755
+--- a/scripts/sync-config.sh
++++ b/scripts/sync-config.sh
+@@ -20,7 +20,6 @@ required=(
+   BQ_DATASET_ID
+   CLOUD_RUN_SERVICE_NAME
+   CLOUD_RUN_IMAGE
+-  WEBHOOK_SECRET_NAME
+   WORKSPACE_CUSTOMER_ID
+   RESOURCE_COLLECTION_SCHEDULE
+   SCHEDULER_TIME_ZONE
+@@ -51,7 +50,7 @@ region                = "$REGION"
+ dataset_id            = "$BQ_DATASET_ID"
+ cloud_run_service_name = "$CLOUD_RUN_SERVICE_NAME"
+ cloud_run_image       = "$CLOUD_RUN_IMAGE"
+-webhook_secret_name   = "$WEBHOOK_SECRET_NAME"
++gas_trigger_owner_email="${GAS_TRIGGER_OWNER_EMAIL}"
+ workspace_customer_id = "$WORKSPACE_CUSTOMER_ID"
+ resource_collection_schedule = "$RESOURCE_COLLECTION_SCHEDULE"
+ group_collection_schedule = "${GROUP_COLLECTION_SCHEDULE:-$RESOURCE_COLLECTION_SCHEDULE}"
+@@ -66,7 +65,7 @@ MGMT_TARGET_PROJECT_ID=$MANAGED_EFFECTIVE
+ MGMT_TARGET_ORGANIZATION_ID=${ORGANIZATION_ID:-}
+ WORKSPACE_CUSTOMER_ID=$WORKSPACE_CUSTOMER_ID
+ EXECUTOR_IDENTITY=iam-access-executor@$TOOL_PROJECT_ID.iam.gserviceaccount.com
+-WEBHOOK_SHARED_SECRET=${WEBHOOK_SHARED_SECRET:-}
++GAS_INVOKER_EMAIL=${GAS_INVOKER_EMAIL:-}
+ ENV
+ 
+ cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
+@@ -75,7 +74,7 @@ cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
+   "BQ_DATASET_ID": "$BQ_DATASET_ID",
+   "BQ_LOCATION": "$BQ_LOCATION",
+   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
+-  "WEBHOOK_SHARED_SECRET": "<set-from-secret-manager>",
++  "GAS_INVOKER_EMAIL": "<set-from-gas-invoker-email>",
+   "GEMINI_API_KEY": "${GEMINI_API_KEY:-}"
+ }
+ JSON
+diff --git a/terraform/README.md b/terraform/README.md
+index b0b6797..e4a31cb 100644
+--- a/terraform/README.md
++++ b/terraform/README.md
+@@ -87,6 +87,6 @@
+ - `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `group_collection_scheduler_job` など)。
+ - 有効化されたAPIは `lifecycle.prevent_destroy = true` と `disable_on_destroy = false` で保護されているため、`destroy` を実行しても無効化されません。
+ - **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。これらのテーブルを意図的に削除する必要がある場合は、まずこのライフサイクル設定をコードから削除する必要があります。
+-- **重要:** Webhook認証に使用されるSecret Managerのシークレット（`var.webhook_secret_name`で指定）は、Terraformによって自動的にプロビジョニングされます。初回デプロイ時に手動で作成する必要はありません。ただし、プロビジョニング後にSecret Managerコンソールから任意の値に変更することができます。
++- **重要:** GASからのOIDC認証連携を利用する場合、`var.gas_trigger_owner_email` に指定したユーザー（GASトリガーのオーナー）に対して、Terraformが自動的にサービスアカウントトークン作成者ロール（`roles/iam.serviceAccountTokenCreator`）を付与します。これにより、GASスクリプト内から安全にCloud Run呼び出し用のOIDCトークンを動的に生成できるようになります。
+ - コンテナイメージは別途ビルド/プッシュし、`cloud_run_image` 変数で渡す必要があります。
+ - 詳細なロール一覧や運用コマンドについては、`docs/operations-runbook.md` を参照してください。
+diff --git a/terraform/main.tf b/terraform/main.tf
+index f962e5c..5f4e31c 100644
+--- a/terraform/main.tf
++++ b/terraform/main.tf
+@@ -36,6 +36,7 @@ locals {
+     "cloudresourcemanager.googleapis.com",
+     "secretmanager.googleapis.com",
+     "iam.googleapis.com",
++    "iamcredentials.googleapis.com",
+   ])
+   conditional_enabled_services = toset(
+     var.enable_vpc_sc ? ["accesscontextmanager.googleapis.com"] : []
+@@ -72,8 +73,9 @@ module "bigquery" {
+ }
+ 
+ module "service_accounts" {
+-  source          = "./modules/service_accounts"
+-  tool_project_id = var.tool_project_id
++  source                  = "./modules/service_accounts"
++  tool_project_id         = var.tool_project_id
++  gas_trigger_owner_email = var.gas_trigger_owner_email
+ }
+ 
+ resource "google_bigquery_dataset_iam_member" "executor_bigquery_data_editor" {
+@@ -105,32 +107,7 @@ resource "google_organization_iam_member" "executor_managed_organization_roles"
+   member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
+ }
+ 
+-# Webhookシークレットの本体作成（初回デプロイ時のクラッシュ回避）
+-resource "google_secret_manager_secret" "webhook_secret" {
+-  project   = var.tool_project_id
+-  secret_id = var.webhook_secret_name
+-
+-  replication {
+-    auto {}
+-  }
+-
+-  depends_on = [google_project_service.services]
+-}
+-
+-resource "google_secret_manager_secret_version" "webhook_secret_initial" {
+-  secret      = google_secret_manager_secret.webhook_secret.id
+-  secret_data = "INITIAL_DUMMY_SECRET_CHANGE_ME" # 初期ダミー値
+-
+-  lifecycle {
+-    ignore_changes = [secret_data] # 後から手動で本物の値に変更されても上書きしない
+-  }
+-}
+-
+-resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
+-  project   = var.tool_project_id
+-  secret_id = google_secret_manager_secret.webhook_secret.secret_id
+-  role      = "roles/secretmanager.secretAccessor"
+-  member    = "serviceAccount:${module.service_accounts.executor_service_account_email}"
++"
+ }
+ 
+ module "cloud_run" {
+@@ -146,13 +123,13 @@ module "cloud_run" {
+   organization_id                         = var.organization_id
+   workspace_customer_id                   = var.workspace_customer_id
+   scheduler_invoker_service_account_email = module.service_accounts.scheduler_invoker_service_account_email
+-  webhook_secret_name                     = var.webhook_secret_name
++  gas_invoker_service_account_email       = module.service_accounts.gas_invoker_service_account_email
+ 
+   depends_on = [
+     google_project_service.services,
+     google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
+     google_project_iam_member.executor_bigquery_job_user,
+-    google_secret_manager_secret_iam_member.executor_secret_accessor,
++    
+     google_project_iam_member.executor_managed_project_roles,
+     google_organization_iam_member.executor_managed_organization_roles,
+   ]
+@@ -212,3 +189,11 @@ module "monitoring" {
+   alert_notification_webhook_url = var.alert_notification_webhook_url
+   cloud_run_service_name         = module.cloud_run.name
+ }
++
++resource "google_cloud_run_v2_service_iam_member" "gas_run_invoker" {
++  project  = var.tool_project_id
++  location = var.region
++  name     = module.cloud_run.name
++  role     = "roles/run.invoker"
++  member   = "serviceAccount:${module.service_accounts.gas_invoker_service_account_email}"
++}
+diff --git a/terraform/modules/cloud_run/main.tf b/terraform/modules/cloud_run/main.tf
+index 82f4050..889a9f1 100644
+--- a/terraform/modules/cloud_run/main.tf
++++ b/terraform/modules/cloud_run/main.tf
+@@ -39,13 +39,9 @@ resource "google_cloud_run_v2_service" "executor" {
+         value = var.scheduler_invoker_service_account_email
+       }
+       env {
+-        name = "WEBHOOK_SHARED_SECRET"
+-        value_source {
+-          secret_key_ref {
+-            secret  = var.webhook_secret_name
+-            version = "latest"
+-          }
+-        }
++        name  = "GAS_INVOKER_EMAIL"
++        value = var.gas_invoker_service_account_email
++      }
+       }
+     }
+   }
+diff --git a/terraform/modules/cloud_run/variables.tf b/terraform/modules/cloud_run/variables.tf
+index 4e5c70d..1cc0c93 100644
+--- a/terraform/modules/cloud_run/variables.tf
++++ b/terraform/modules/cloud_run/variables.tf
+@@ -53,7 +53,7 @@ variable "scheduler_invoker_service_account_email" {
+   description = "Email of the scheduler invoker service account"
+ }
+ 
+-variable "webhook_secret_name" {
++variable "gas_invoker_service_account_email" {
+   type        = string
+-  description = "Secret Manager secret name for webhook token"
++  description = "Email of the GAS invoker service account"
+ }
+diff --git a/terraform/modules/service_accounts/main.tf b/terraform/modules/service_accounts/main.tf
+index 904e3b4..b4aa417 100644
+--- a/terraform/modules/service_accounts/main.tf
++++ b/terraform/modules/service_accounts/main.tf
+@@ -9,3 +9,16 @@ resource "google_service_account" "scheduler_invoker" {
+   account_id   = "iam-scheduler-invoker"
+   display_name = "IAM Scheduler Invoker"
+ }
++
++resource "google_service_account" "gas_invoker" {
++  project      = var.tool_project_id
++  account_id   = "iam-gas-invoker"
++  display_name = "IAM GAS Invoker"
++}
++
++resource "google_service_account_iam_member" "gas_trigger_owner_token_creator" {
++  count              = trimspace(var.gas_trigger_owner_email) != "" ? 1 : 0
++  service_account_id = google_service_account.gas_invoker.name
++  role               = "roles/iam.serviceAccountTokenCreator"
++  member             = "user:${var.gas_trigger_owner_email}"
++}
+diff --git a/terraform/modules/service_accounts/outputs.tf b/terraform/modules/service_accounts/outputs.tf
+index 53b65c8..4310f94 100644
+--- a/terraform/modules/service_accounts/outputs.tf
++++ b/terraform/modules/service_accounts/outputs.tf
+@@ -5,3 +5,7 @@ output "executor_service_account_email" {
+ output "scheduler_invoker_service_account_email" {
+   value = google_service_account.scheduler_invoker.email
+ }
++
++output "gas_invoker_service_account_email" {
++  value = google_service_account.gas_invoker.email
++}
+diff --git a/terraform/modules/service_accounts/variables.tf b/terraform/modules/service_accounts/variables.tf
+index 84daada..2d3d8a5 100644
+--- a/terraform/modules/service_accounts/variables.tf
++++ b/terraform/modules/service_accounts/variables.tf
+@@ -2,3 +2,7 @@ variable "tool_project_id" {
+   type        = string
+   description = "GCP project ID for deploying this IAM management tool"
+ }
++
++variable "gas_trigger_owner_email" {
++  type = string
++}
+diff --git a/terraform/variables.tf b/terraform/variables.tf
+index e6b12a9..c86c063 100644
+--- a/terraform/variables.tf
++++ b/terraform/variables.tf
+@@ -43,10 +43,10 @@ variable "cloud_run_image" {
+   description = "Container image URL for Cloud Run service"
+ }
+ 
+-variable "webhook_secret_name" {
++variable "gas_trigger_owner_email" {
+   type        = string
+-  description = "Secret Manager secret name for webhook token (latest version is used)"
+-  default     = "iam-access-webhook-token"
++  description = "Email of the user who owns the GAS triggers (to grant Service Account Token Creator role)"
++  default     = ""
+ }
+ 
+ variable "workspace_customer_id" {

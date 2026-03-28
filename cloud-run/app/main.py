@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
 import traceback
 import uuid
 from dataclasses import replace
@@ -30,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 PROJECT_ID = os.environ["BQ_PROJECT_ID"]
 DATASET_ID = os.environ["BQ_DATASET_ID"]
 EXECUTOR_IDENTITY = os.environ.get("EXECUTOR_IDENTITY", "cloud-run")
-SHARED_SECRET = os.environ.get("WEBHOOK_SHARED_SECRET", "")
+GAS_INVOKER_EMAIL = os.environ.get("GAS_INVOKER_EMAIL", "").strip()
 TARGET_PROJECT_ID = os.environ.get("MGMT_TARGET_PROJECT_ID", "").strip()
 TARGET_ORG_ID = os.environ.get("MGMT_TARGET_ORGANIZATION_ID", "").strip()
 WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").strip()
@@ -583,27 +582,9 @@ def update_iam_bindings_history():
 def _authorize() -> bool:
     """
     リクエストを認証します。
-    Cloud SchedulerからのOIDCトークン、または共有シークレットトークンを検証します。
-
-    Returns:
-        bool: 認証が成功した場合はTrue、そうでない場合はFalse。
+    Cloud Scheduler または GAS からの OIDC トークンを検証します。
     """
-    if _authorize_scheduler_oidc():
-        return True
-    if not SHARED_SECRET:
-        return False
-    token = request.headers.get("X-Webhook-Token", "")
-    return secrets.compare_digest(token, SHARED_SECRET)
-
-
-def _authorize_scheduler_oidc() -> bool:
-    """
-    Cloud SchedulerからのOIDCトークンを検証します。
-
-    Returns:
-        bool: OIDCトークンが有効で、期待される発行者からのものである場合はTrue。
-    """
-    if not SCHEDULER_INVOKER_EMAIL:
+    if not SCHEDULER_INVOKER_EMAIL and not GAS_INVOKER_EMAIL:
         return False
 
     auth_header = request.headers.get("Authorization", "")
@@ -614,17 +595,20 @@ def _authorize_scheduler_oidc() -> bool:
     if not token:
         return False
 
-    # Cloud Scheduler OIDC token audience should match this service base URI.
     expected_audience = request.url_root.rstrip("/")
     try:
         claims = google_id_token.verify_oauth2_token(
             token, google_auth_requests.Request(), expected_audience
         )
-    except Exception:
+    except Exception as e:
+        logging.warning(f"OIDC verification failed: {e}")
         return False
 
     email = str(claims.get("email", "")).strip().lower()
-    return email == SCHEDULER_INVOKER_EMAIL.lower()
+    allowed_emails = [
+        e.lower() for e in (SCHEDULER_INVOKER_EMAIL, GAS_INVOKER_EMAIL) if e
+    ]
+    return email in allowed_emails
 
 
 def _build_collection_error_report(

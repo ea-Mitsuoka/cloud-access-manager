@@ -8,7 +8,7 @@
  *    - BQ_DATASET_ID
  *    - BQ_LOCATION
  *    - CLOUD_RUN_EXECUTE_URL
- *    - WEBHOOK_SHARED_SECRET (optional)
+ *    - GAS_INVOKER_SA_EMAIL
  *    - GEMINI_API_KEY (GeminiRoleAdvisor.gs を使う場合)
  * 3) Create installable triggers:
  *    - onFormSubmit (From spreadsheet, On form submit)
@@ -289,12 +289,38 @@ function insertRequestHistoryEvent_(props, event) {
   ]);
 }
 
-function callCloudRunExecute_(props, requestId) {
-  const payload = JSON.stringify({ request_id: requestId });
-  const headers = { 'Content-Type': 'application/json' };
-  if (props.webhookSecret) {
-    headers['X-Webhook-Token'] = props.webhookSecret;
+function getOidcToken_(props) {
+  if (!props.gasInvokerEmail) throw new Error("Missing GAS_INVOKER_SA_EMAIL property");
+  const url = `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${props.gasInvokerEmail}:generateIdToken`;
+  const payload = {
+    audience: props.cloudRunUrl,
+    includeEmail: true
+  };
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${ScriptApp.getOAuthToken()}`
+    },
+    muteHttpExceptions: true
+  };
+  const res = UrlFetchApp.fetch(url, options);
+  const code = res.getResponseCode();
+  const text = res.getContentText();
+  if (code >= 300) {
+    throw new Error(`Failed to get OIDC token from IAM Credentials API (${code}): ${text}`);
   }
+  return JSON.parse(text).token;
+}
+
+function callCloudRunExecute_(props, requestId) {
+  const token = getOidcToken_(props);
+  const payload = JSON.stringify({ request_id: requestId });
+  const headers = { 
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
 
   const options = {
     method: 'post',
@@ -303,7 +329,6 @@ function callCloudRunExecute_(props, requestId) {
     muteHttpExceptions: true,
     headers
   };
-
   const maxRetries = 3;
   for (let i = 0; i < maxRetries; i += 1) {
     try {
@@ -315,11 +340,12 @@ function callCloudRunExecute_(props, requestId) {
       return; // 成功した場合はループを抜ける
     } catch (err) {
       if (i === maxRetries - 1) {
-        throw err; // 最大リトライ回数に達した場合はエラーを投げる
+        throw err;
       }
-      Utilities.sleep(1000 * (i + 1)); // 失敗時は待機 (1秒, 2秒...)
+      Utilities.sleep(1000 * (i + 1));
     }
   }
+}
   }
 
 function appendReviewSheet_(request) {
@@ -366,7 +392,7 @@ function getProps_() {
     datasetId: p.getProperty('BQ_DATASET_ID'),
     location: p.getProperty('BQ_LOCATION'),
     cloudRunUrl: p.getProperty('CLOUD_RUN_EXECUTE_URL'),
-    webhookSecret: p.getProperty('WEBHOOK_SHARED_SECRET') || ''
+    gasInvokerEmail: p.getProperty('GAS_INVOKER_SA_EMAIL')
   };
   validateProps_(props);
   return props;

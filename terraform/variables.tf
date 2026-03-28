@@ -43,10 +43,10 @@ variable "cloud_run_image" {
   description = "Container image URL for Cloud Run service"
 }
 
-variable "webhook_secret_name" {
+variable "gas_trigger_owner_email" {
   type        = string
-  description = "Secret Manager secret name for webhook token (latest version is used)"
-  default     = "iam-access-webhook-token"
+  description = "Email of the user who owns the GAS triggers (to grant Service Account Token Creator role)"
+  default     = ""
 }
 
 variable "workspace_customer_id" {

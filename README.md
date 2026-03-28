@@ -392,10 +392,7 @@ graph TD
 
 ### 11.4. MVP制約
 
-- 認証は、以下の2つの方式をサポートします。
-  - **OIDCトークン認証:** Cloud Schedulerからの呼び出しなど、Googleサービスアカウントからのリクエストを安全に認証します。これは推奨される方式です。
-  - **共通鍵認証 (`X-Webhook-Token`):** OIDCトークンが利用できない他のシステム（例: Google Apps Script）からの呼び出しのために、共通鍵による認証もサポートします。
-    - **設定:** この認証方式を利用する場合、`WEBHOOK_SECRET_NAME` にSecret Managerのシークレット名を、`WEBHOOK_SHARED_SECRET` にそのシークレットの**初期値**を`saas.env` ファイルでそれぞれ設定します。シークレット自体はTerraformが自動的に作成し、初期値を設定します。初回デプロイ後にSecret Managerコンソールから値を変更することが可能です。
+- 認証は、OIDC（OpenID Connect）トークン認証をサポートします。Cloud Schedulerからのバッチ処理や、GASからのリクエスト（IAM Credentials APIによる権限借用）をセキュアに認証します。
 - `organization_id = ""` の場合、`managed_project_id` と一致する `projects/{id}` の申請のみ実行対象とする（対象外は `OUT_OF_SCOPE` で拒否）。
 - `organization_id != ""` の場合、Cloud Resource Manager の ancestry で `projects/{id}` が指定組織配下か検証し、対象外は `OUT_OF_SCOPE` で拒否する。
 
@@ -405,7 +402,6 @@ graph TD
    - `tool_project_id`: ツールをデプロイするプロジェクト
    - `managed_project_id`: 管理対象プロジェクト（空なら `tool_project_id` を利用）
    - `organization_id = ""` の場合は「プロジェクト単体管理」として扱う。
-   - **共通鍵認証を利用する場合:** `WEBHOOK_SECRET_NAME` にSecret Managerのシークレット名を、`WEBHOOK_SHARED_SECRET` にそのシークレットの**初期値**を設定します。シークレット自体はTerraformが自動でプロビジョニングします。
 1. `bash scripts/sync-config.sh` を実行して、`environment.auto.tfvars` / `cloud-run/.env` / `apps-script/script-properties.json` / `build/sql/*.sql` を生成する。
 1. `bash scripts/bootstrap-tfstate.sh` を実行して tfstate 用 GCS バケットを作成/更新する。
 1. `terraform/` ディレクトリで以下を実行する。

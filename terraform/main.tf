@@ -36,6 +36,7 @@ locals {
     "cloudresourcemanager.googleapis.com",
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
+    "iamcredentials.googleapis.com",
   ])
   conditional_enabled_services = toset(
     var.enable_vpc_sc ? ["accesscontextmanager.googleapis.com"] : []
@@ -72,8 +73,9 @@ module "bigquery" {
 }
 
 module "service_accounts" {
-  source          = "./modules/service_accounts"
-  tool_project_id = var.tool_project_id
+  source                  = "./modules/service_accounts"
+  tool_project_id         = var.tool_project_id
+  gas_trigger_owner_email = var.gas_trigger_owner_email
 }
 
 resource "google_bigquery_dataset_iam_member" "executor_bigquery_data_editor" {
@@ -105,32 +107,7 @@ resource "google_organization_iam_member" "executor_managed_organization_roles" 
   member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
 }
 
-# Webhookシークレットの本体作成（初回デプロイ時のクラッシュ回避）
-resource "google_secret_manager_secret" "webhook_secret" {
-  project   = var.tool_project_id
-  secret_id = var.webhook_secret_name
-
-  replication {
-    auto {}
-  }
-
-  depends_on = [google_project_service.services]
-}
-
-resource "google_secret_manager_secret_version" "webhook_secret_initial" {
-  secret      = google_secret_manager_secret.webhook_secret.id
-  secret_data = "INITIAL_DUMMY_SECRET_CHANGE_ME" # 初期ダミー値
-
-  lifecycle {
-    ignore_changes = [secret_data] # 後から手動で本物の値に変更されても上書きしない
-  }
-}
-
-resource "google_secret_manager_secret_iam_member" "executor_secret_accessor" {
-  project   = var.tool_project_id
-  secret_id = google_secret_manager_secret.webhook_secret.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${module.service_accounts.executor_service_account_email}"
+"
 }
 
 module "cloud_run" {
@@ -146,13 +123,13 @@ module "cloud_run" {
   organization_id                         = var.organization_id
   workspace_customer_id                   = var.workspace_customer_id
   scheduler_invoker_service_account_email = module.service_accounts.scheduler_invoker_service_account_email
-  webhook_secret_name                     = var.webhook_secret_name
+  gas_invoker_service_account_email       = module.service_accounts.gas_invoker_service_account_email
 
   depends_on = [
     google_project_service.services,
     google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
     google_project_iam_member.executor_bigquery_job_user,
-    google_secret_manager_secret_iam_member.executor_secret_accessor,
+    
     google_project_iam_member.executor_managed_project_roles,
     google_organization_iam_member.executor_managed_organization_roles,
   ]
@@ -211,4 +188,12 @@ module "monitoring" {
   alert_notification_email       = var.alert_notification_email
   alert_notification_webhook_url = var.alert_notification_webhook_url
   cloud_run_service_name         = module.cloud_run.name
+}
+
+resource "google_cloud_run_v2_service_iam_member" "gas_run_invoker" {
+  project  = var.tool_project_id
+  location = var.region
+  name     = module.cloud_run.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${module.service_accounts.gas_invoker_service_account_email}"
 }

@@ -3,6 +3,6 @@
   "BQ_DATASET_ID": "iam_access_mgmt",
   "BQ_LOCATION": "asia-northeast1",
   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
-  "WEBHOOK_SHARED_SECRET": "<set-from-secret-manager>",
+  "GAS_INVOKER_EMAIL": "<set-from-gas-invoker-email>",
   "GEMINI_API_KEY": ""
 }

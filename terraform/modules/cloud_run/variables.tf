@@ -53,7 +53,7 @@ variable "scheduler_invoker_service_account_email" {
   description = "Email of the scheduler invoker service account"
 }
 
-variable "webhook_secret_name" {
+variable "gas_invoker_service_account_email" {
   type        = string
-  description = "Secret Manager secret name for webhook token"
+  description = "Email of the GAS invoker service account"
 }

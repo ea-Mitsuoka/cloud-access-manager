@@ -33,7 +33,7 @@ ______________________________________________________________________
 - `roles/bigquery.dataEditor` on `tool_project:dataset`（dataset単位）
 - `roles/bigquery.jobUser` on `tool_project`
 - `roles/artifactregistry.reader` on `tool_project`（Artifact Registryのプライベートイメージを使う場合）
-- `roles/secretmanager.secretAccessor` on webhook secret
+- `roles/secretmanager.secretAccessor` on GAS用OIDC認証
 
 **管理対象への付与（要件に応じて）:**
 
@@ -59,7 +59,7 @@ ______________________________________________________________________
 - `roles/run.admin`
 - `roles/iam.serviceAccountAdmin`
 - `roles/resourcemanager.projectIamAdmin`
-- `roles/secretmanager.admin`（webhook secret の作成/更新を行う場合）
+- `roles/secretmanager.admin`（GAS用OIDC認証 の作成/更新を行う場合）
 - `roles/iam.serviceAccountUser` on executor SA
 
 **`tfstate` バケット作成・管理用（初回ブートストラップ）:**
@@ -78,7 +78,7 @@ TOOL_PROJECT_ID="<tool-project-id>"
 MANAGED_PROJECT_ID="<managed-project-id>"
 ORG_ID="<organization-id-or-empty>"
 EXECUTOR_SA="iam-access-executor@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
-WEBHOOK_SECRET_NAME="iam-access-webhook-token"
+GAS_TRIGGER_OWNER_EMAIL="iam-access-webhook-token"
 TF_PRINCIPAL="user:your.name@example.com" # or serviceAccount:ci-terraform@...
 
 # Terraform実行主体
@@ -95,7 +95,7 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPA
 # Cloud Run実行サービスアカウント
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/bigquery.jobUser
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/artifactregistry.reader
-gcloud secrets add-iam-policy-binding "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/secretmanager.secretAccessor
+gcloud secrets add-iam-policy-binding "$GAS_TRIGGER_OWNER_EMAIL" --project "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/secretmanager.secretAccessor
 
 # organization_idを使う場合のみ
 if [[ -n "$ORG_ID" ]]; then
@@ -206,7 +206,7 @@ gcloud artifacts repositories create iam-access-repo
 ### 4.1 機能概要
 
 - **検知対象:** Cloud Runサービスで`ERROR`レベル以上のログが出力された場合。これには、アプリケーションが明示的に補足した例外（権限不足、APIエラー等）が含まれます。
-- **通知方法:** GCPのCloud Monitoringがログを監視し、設定された通知チャネル（メール、Webhook等）にアラートを送信します。
+- **通知方法:** GCPのCloud Monitoringがログを監視し、設定された通知チャネル（メール、OIDC等）にアラートを送信します。
 - **冪等性:** 通知先の設定はTerraformで管理され、設定の有無に応じて通知チャネルとアラートポリシーが動的に作成・更新されます。
 
 ### 4.2 設定方法
@@ -236,7 +236,7 @@ gcloud artifacts repositories create iam-access-repo
 Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に移動します。
 
 - **ポリシー:** `IAM Access Manager: Error Detected` という名前のアラートポリシーが作成されていることを確認します。
-- **通知チャネル:** ポリシーの詳細画面から、設定したメールアドレスやWebhookに対応する通知チャネルが作成され、ポリシーに紐づいていることを確認できます。
+- **通知チャネル:** ポリシーの詳細画面から、設定したメールアドレスやOIDCに対応する通知チャネルが作成され、ポリシーに紐づいていることを確認できます。
 
 ### 4.4 特別アラート: 緊急アクセス（Break-glass）の検知と運用上の注意
 
@@ -278,8 +278,8 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
   - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
 
 **VPC-SCとGoogle Apps Script (GAS) の致命的な相性に関する重要事項:**
-もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのWebhook通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
-これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「Webhookによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
+もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのOIDC通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
+これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「OIDCによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
 そのため、今回は\*\*「いつでもVPC-SCを有効化できるコード（スイッチ）は用意しておくが、GASの連携方式を根本から見直すまではフラグを `false` のまま運用する」\*\*という方針にご注意ください。
 
 ## 6. tfstateバックエンドのブートストラップ手順
@@ -287,7 +287,7 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
 **前提:**
 
 - `saas.env` に `TFSTATE_BUCKET`, `TFSTATE_PREFIX`, `TFSTATE_LOCATION` を設定済み
-- `saas.env` に `WEBHOOK_SECRET_NAME` を設定済み
+- `saas.env` に `GAS_TRIGGER_OWNER_EMAIL` を設定済み
 
 **実行:**
 
@@ -296,16 +296,6 @@ bash scripts/bootstrap-tfstate.sh
 bash scripts/sync-config.sh
 cd terraform
 terraform init -backend-config=../backend.hcl
-```
-
-**Webhook secretの作成（初回のみ）:**
-
-```bash
-TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
-WEBHOOK_SECRET_NAME="$(grep '^WEBHOOK_SECRET_NAME=' saas.env | cut -d= -f2)"
-
-gcloud secrets create "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --replication-policy=automatic || true
-printf '%s' 'CHANGE_ME_STRONG_RANDOM_TOKEN' | gcloud secrets versions add "$WEBHOOK_SECRET_NAME" --project "$TOOL_PROJECT_ID" --data-file=-
 ```
 
 **確認:**

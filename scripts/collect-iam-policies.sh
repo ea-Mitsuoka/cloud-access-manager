@@ -27,8 +27,8 @@ fi
 echo "Fetching OIDC identity token by impersonating ${SCHEDULER_SA}..."
 TOKEN=$(gcloud auth print-identity-token --impersonate-service-account="${SCHEDULER_SA}" --audiences="${CLOUD_RUN_URL}" --include-email)
 
-echo "Triggering job at ${CLOUD_RUN_URL}/collect/resources ..."
-curl -s -X POST "${CLOUD_RUN_URL}/collect/resources" \
+echo "Triggering job at ${CLOUD_RUN_URL}/collect/iam-policies ..."
+curl -s -X POST "${CLOUD_RUN_URL}/collect/iam-policies" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"execution_id": "manual-run"}'

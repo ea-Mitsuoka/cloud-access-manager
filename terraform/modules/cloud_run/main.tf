@@ -39,13 +39,9 @@ resource "google_cloud_run_v2_service" "executor" {
         value = var.scheduler_invoker_service_account_email
       }
       env {
-        name = "WEBHOOK_SHARED_SECRET"
-        value_source {
-          secret_key_ref {
-            secret  = var.webhook_secret_name
-            version = "latest"
-          }
-        }
+        name  = "GAS_INVOKER_EMAIL"
+        value = var.gas_invoker_service_account_email
+      }
       }
     }
   }

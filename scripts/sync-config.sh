@@ -20,7 +20,6 @@ required=(
   BQ_DATASET_ID
   CLOUD_RUN_SERVICE_NAME
   CLOUD_RUN_IMAGE
-  WEBHOOK_SECRET_NAME
   WORKSPACE_CUSTOMER_ID
   RESOURCE_COLLECTION_SCHEDULE
   SCHEDULER_TIME_ZONE
@@ -51,7 +50,7 @@ region                = "$REGION"
 dataset_id            = "$BQ_DATASET_ID"
 cloud_run_service_name = "$CLOUD_RUN_SERVICE_NAME"
 cloud_run_image       = "$CLOUD_RUN_IMAGE"
-webhook_secret_name   = "$WEBHOOK_SECRET_NAME"
+gas_trigger_owner_email="${GAS_TRIGGER_OWNER_EMAIL}"
 workspace_customer_id = "$WORKSPACE_CUSTOMER_ID"
 resource_collection_schedule = "$RESOURCE_COLLECTION_SCHEDULE"
 group_collection_schedule = "${GROUP_COLLECTION_SCHEDULE:-$RESOURCE_COLLECTION_SCHEDULE}"
@@ -66,7 +65,7 @@ MGMT_TARGET_PROJECT_ID=$MANAGED_EFFECTIVE
 MGMT_TARGET_ORGANIZATION_ID=${ORGANIZATION_ID:-}
 WORKSPACE_CUSTOMER_ID=$WORKSPACE_CUSTOMER_ID
 EXECUTOR_IDENTITY=iam-access-executor@$TOOL_PROJECT_ID.iam.gserviceaccount.com
-WEBHOOK_SHARED_SECRET=${WEBHOOK_SHARED_SECRET:-}
+GAS_INVOKER_EMAIL=${GAS_INVOKER_EMAIL:-}
 ENV
 
 cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
@@ -75,7 +74,7 @@ cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
   "BQ_DATASET_ID": "$BQ_DATASET_ID",
   "BQ_LOCATION": "$BQ_LOCATION",
   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
-  "WEBHOOK_SHARED_SECRET": "<set-from-secret-manager>",
+  "GAS_INVOKER_EMAIL": "<set-from-gas-invoker-email>",
   "GEMINI_API_KEY": "${GEMINI_API_KEY:-}"
 }
 JSON

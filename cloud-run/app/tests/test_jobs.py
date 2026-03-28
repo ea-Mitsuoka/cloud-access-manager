@@ -30,7 +30,14 @@ def mock_repo():
         yield mock_repo
 
 
-def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
+@pytest.fixture
+def mock_auth():
+    with patch("app.main._authorize", return_value=True) as mock:
+        yield mock
+
+
+def test_reconcile_job_success(
+        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
     """リコンサイルジョブの成功ケースをテストします。
 
     Args:
@@ -42,7 +49,7 @@ def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
 
     # Act
     response = client.post(
-        "/reconcile", headers={"X-Webhook-Token": "test-secret"}
+        "/reconcile", headers={"Authorization": "Bearer test-token"}
     )
 
     # Assert
@@ -63,7 +70,8 @@ def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
     )
 
 
-def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
+def test_reconcile_job_failure(
+        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
     """リコンサイルジョブの失敗ケースをテストします。
 
     Args:
@@ -75,7 +83,7 @@ def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
 
     # Act
     response = client.post(
-        "/reconcile", headers={"X-Webhook-Token": "test-secret"}
+        "/reconcile", headers={"Authorization": "Bearer test-token"}
     )
 
     # Assert
@@ -94,7 +102,8 @@ def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
     assert call_args["error_message"] == "BigQuery is down"
 
 
-def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: MagicMock):
+def test_update_iam_bindings_history_success(
+        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
     """IAMバインディング履歴更新ジョブの成功ケースをテストします。
 
     Args:
@@ -109,7 +118,7 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
     # Act
     response = client.post(
         "/jobs/update-iam-bindings-history",
-        headers={"X-Webhook-Token": "test-secret"},
+        headers={"Authorization": "Bearer test-token"},
     )
 
     # Assert
@@ -138,7 +147,8 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
     )
 
 
-def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: MagicMock):
+def test_update_iam_bindings_history_failure(
+        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
     """IAMバインディング履歴更新ジョブの失敗ケースをテストします。
 
     Args:
@@ -151,7 +161,7 @@ def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: Mag
     # Act
     response = client.post(
         "/jobs/update-iam-bindings-history",
-        headers={"X-Webhook-Token": "test-secret"},
+        headers={"Authorization": "Bearer test-token"},
     )
 
     # Assert

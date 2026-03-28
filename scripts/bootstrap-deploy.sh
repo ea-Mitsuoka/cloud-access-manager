@@ -108,7 +108,6 @@ required=(
   BQ_DATASET_ID
   CLOUD_RUN_SERVICE_NAME
   CLOUD_RUN_IMAGE
-  WEBHOOK_SECRET_NAME
   WORKSPACE_CUSTOMER_ID
   RESOURCE_COLLECTION_SCHEDULE
   GROUP_COLLECTION_SCHEDULE
@@ -142,7 +141,6 @@ echo "Region                 : $REGION"
 echo "Dataset                : $BQ_DATASET_ID"
 echo "Cloud Run service      : $CLOUD_RUN_SERVICE_NAME"
 echo "Cloud Run image        : $CLOUD_RUN_IMAGE"
-echo "Webhook secret name    : $WEBHOOK_SECRET_NAME"
 echo "Workspace customer ID  : $WORKSPACE_CUSTOMER_ID"
 echo "Resource schedule      : $RESOURCE_COLLECTION_SCHEDULE"
 echo "Scheduler time zone    : $SCHEDULER_TIME_ZONE"

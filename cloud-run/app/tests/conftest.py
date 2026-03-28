@@ -10,7 +10,7 @@ os.environ.setdefault("MGMT_TARGET_PROJECT_ID", "test-target-project")
 os.environ.setdefault("MGMT_TARGET_ORGANIZATION_ID", "")
 os.environ.setdefault("WORKSPACE_CUSTOMER_ID", "my_customer")
 os.environ.setdefault("EXECUTOR_IDENTITY", "test-executor")
-os.environ.setdefault("WEBHOOK_SHARED_SECRET", "test-secret")
+os.environ.setdefault("GAS_INVOKER_EMAIL", "gas-invoker@example.com")
 os.environ.setdefault("SCHEDULER_INVOKER_EMAIL", "scheduler@example.com")
 
 
