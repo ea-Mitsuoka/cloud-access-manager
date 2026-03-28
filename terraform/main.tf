@@ -346,11 +346,11 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_run_invoker" {
 }
 
 resource "google_cloud_scheduler_job" "resource_inventory_daily" {
-  name      = "iam-resource-inventory-daily"
-  project   = var.tool_project_id
-  region    = var.region
-  schedule  = var.resource_collection_schedule
-  time_zone = var.scheduler_time_zone
+  name             = "iam-resource-inventory-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.resource_collection_schedule
+  time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
   # 一過性のエラーに備えて最大3回まで自動リトライ
@@ -379,11 +379,11 @@ resource "google_cloud_scheduler_job" "resource_inventory_daily" {
 }
 
 resource "google_cloud_scheduler_job" "group_collection_daily" {
-  name      = "iam-group-collection-daily"
-  project   = var.tool_project_id
-  region    = var.region
-  schedule  = var.group_collection_schedule
-  time_zone = var.scheduler_time_zone
+  name             = "iam-group-collection-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.group_collection_schedule
+  time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
   retry_config {
@@ -411,11 +411,11 @@ resource "google_cloud_scheduler_job" "group_collection_daily" {
 }
 
 resource "google_cloud_scheduler_job" "reconciliation_daily" {
-  name      = "iam-reconciliation-daily"
-  project   = var.tool_project_id
-  region    = var.region
-  schedule  = var.reconciliation_schedule
-  time_zone = var.scheduler_time_zone
+  name             = "iam-reconciliation-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.reconciliation_schedule
+  time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
   retry_config {
@@ -443,11 +443,11 @@ resource "google_cloud_scheduler_job" "reconciliation_daily" {
 }
 
 resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
-  name      = "iam-revoke-expired-permissions-daily"
-  project   = var.tool_project_id
-  region    = var.region
-  schedule  = var.revoke_expired_permissions_schedule
-  time_zone = var.scheduler_time_zone
+  name             = "iam-revoke-expired-permissions-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.revoke_expired_permissions_schedule
+  time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
   retry_config {
@@ -475,11 +475,11 @@ resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
 }
 
 resource "google_cloud_scheduler_job" "iam_bindings_history_update_daily" {
-  name      = "iam-bindings-history-update-daily"
-  project   = var.tool_project_id
-  region    = var.region
-  schedule  = var.iam_bindings_history_update_schedule
-  time_zone = var.scheduler_time_zone
+  name             = "iam-bindings-history-update-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.iam_bindings_history_update_schedule
+  time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
   retry_config {
