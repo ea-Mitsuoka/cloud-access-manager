@@ -49,6 +49,27 @@
    terraform apply -var-file=../environment.auto.tfvars
    ```
 
+## 環境の安全な削除 (Terraform Destroy)
+
+不要になったインフラを削除する場合、以下の手順と仕様を理解して安全に実行してください。
+
+1. **安全な部分削除（推奨）:**
+
+   ```bash
+   cd terraform
+   terraform destroy -var-file=../environment.auto.tfvars
+   ```
+
+   Cloud RunやSchedulerなどのコンピュートリソースのみが削除され、保護されたリソース（BigQuery、API有効化状態）でエラーとなり停止します。これが正常な挙動です。
+
+1. **完全削除:**
+   監査ログテーブル等も完全に削除したい場合は、対象モジュール (`modules/bigquery/main.tf` や `main.tf` のAPI設定等) の `prevent_destroy = true` を外してから再実行してください。
+
+**注意点:**
+
+- **APIは絶対に無効化されません**（`disable_on_destroy = false` が設定されているため、GCP上の既存システムには影響しません）。
+- 監査ログ（BigQueryテーブル）はデフォルトで保護されています。
+
 ## 注意事項
 
 - `tool_project_id` は、このツールスタックをデプロイするプロジェクトです。
