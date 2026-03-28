@@ -38,7 +38,9 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('棚卸し')
     .addItem('申請反映ステータス更新', 'menuRefreshRequestReviewStatus_')
-    .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
+        .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
+    .addSeparator()
+    .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
 }
 
@@ -627,6 +629,54 @@ function refreshRequestReviewStatusForRequestIds_(requestIds) {
   sheet.getRange(2, idx[COL_EXEC_RESULT], outExec.length, 1).setValues(outExec);
   sheet.getRange(2, idx[COL_FINAL_REFLECT], outReflect.length, 1).setValues(outReflect);
   sheet.getRange(2, idx[COL_LAST_CHECKED], outChecked.length, 1).setValues(outChecked);
+}
+function menuPullReconciliationIssues_() {
+  try {
+    const count = pullReconciliationIssuesFromBQ_();
+    if (count > 0) {
+      SpreadsheetApp.getActiveSpreadsheet().toast(`新たに ${count} 件の不整合アラートを検知しました。`, 'アラート', 5);
+    } else {
+      SpreadsheetApp.getActiveSpreadsheet().toast('現在OPENな不整合（インシデント）はありません。', 'アラート', 5);
+    }
+  } catch (err) {
+    SpreadsheetApp.getUi().alert(`アラートの取得に失敗しました: ${err.message}`);
+    throw err;
+  }
+}
+
+function pullReconciliationIssuesFromBQ_() {
+  const SHEET_NAME = '不整合アラート';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+  }
+  
+  // アラートの現状を洗い替えて表示する
+  sheet.clear();
+  sheet.appendRow(['検知日時', '深刻度', 'アラート種別', 'プリンシパル', 'リソース', 'ロール', '関連申請ID', 'ステータス']);
+  sheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#f4c7c3'); // ヘッダーを赤色強調
+  
+  const props = getProps_();
+  const sql = `
+    SELECT 
+      FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', detected_at, '${Session.getScriptTimeZone()}') as detected_at,
+      severity, issue_type, principal_email, resource_name, role, request_id, status
+    FROM \`${props.projectId}.${props.datasetId}.iam_reconciliation_issues\`
+    WHERE status = 'OPEN'
+    ORDER BY detected_at DESC
+    LIMIT 1000
+  `;
+  
+  const rows = runSelectQuery_(props, sql, []);
+  if (!rows.length) return 0;
+  
+  const out = rows.map(r => [
+    r.detected_at, r.severity, r.issue_type, r.principal_email, r.resource_name, r.role, r.request_id || '（システム管理外）', r.status
+  ]);
+  
+  sheet.getRange(2, 1, out.length, out[0].length).setValues(out);
+  return out.length;
 }
 
 function getRequestReviewSheet_() {

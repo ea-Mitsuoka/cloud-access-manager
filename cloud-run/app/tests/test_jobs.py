@@ -36,14 +36,14 @@ def mock_auth():
         yield mock
 
 
-def test_reconcile_job_success(
-        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
-    """リコンサイルジョブの成功ケースをテストします。
-
-    Args:
-        client (FlaskClient): テスト用のFlaskクライアント。
-        mock_repo (MagicMock): モック化されたリポジトリ。
-    """
+@patch("app.main.logging.warning")
+def test_reconcile_job_success_with_issues(
+    mock_warning: MagicMock,
+    client: FlaskClient,
+    mock_repo: MagicMock,
+    mock_auth: MagicMock,
+):
+    """リコンサイルジョブの成功ケース（不整合が検知された場合）をテストします。"""
     # Arrange
     mock_repo.run_reconciliation_job.return_value = 5
 
@@ -58,6 +58,11 @@ def test_reconcile_job_success(
     assert json_data["result"] == "SUCCESS"
 
     mock_repo.run_reconciliation_job.assert_called_once()
+
+    # 🚨 5件の不整合があったので、警告ログが出力されているはず
+    mock_warning.assert_called_once()
+    assert "[RECONCILIATION_ISSUE_DETECTED]" in mock_warning.call_args[0][0]
+
     mock_repo.insert_pipeline_job_report.assert_called_once_with(
         execution_id=json_data["execution_id"],
         job_type="IAM_RECONCILIATION",
@@ -66,6 +71,44 @@ def test_reconcile_job_success(
         error_message=None,
         hint=None,
         counts={"inserted_issues": 5},
+        details={"sql_file": "003_reconciliation.sql"},
+    )
+
+
+@patch("app.main.logging.warning")
+def test_reconcile_job_success_no_issues(
+    mock_warning: MagicMock,
+    client: FlaskClient,
+    mock_repo: MagicMock,
+    mock_auth: MagicMock,
+):
+    """リコンサイルジョブの成功ケース（不整合がない場合）をテストします。"""
+    # Arrange
+    mock_repo.run_reconciliation_job.return_value = 0
+
+    # Act
+    response = client.post(
+        "/reconcile", headers={"Authorization": "Bearer test-token"}
+    )
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.get_json()
+    assert json_data["result"] == "SUCCESS"
+
+    mock_repo.run_reconciliation_job.assert_called_once()
+
+    # 🟢 0件だったので、警告ログは絶対に出力されてはいけない
+    mock_warning.assert_not_called()
+
+    mock_repo.insert_pipeline_job_report.assert_called_once_with(
+        execution_id=json_data["execution_id"],
+        job_type="IAM_RECONCILIATION",
+        result="SUCCESS",
+        error_code=None,
+        error_message=None,
+        hint=None,
+        counts={"inserted_issues": 0},
         details={"sql_file": "003_reconciliation.sql"},
     )
 

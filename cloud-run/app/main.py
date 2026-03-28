@@ -374,6 +374,13 @@ def reconcile_iam_issues():
 
     try:
         inserted_rows = repo.run_reconciliation_job()
+
+        if inserted_rows > 0:
+            logging.warning(
+                f"[RECONCILIATION_ISSUE_DETECTED] Found {inserted_rows} IAM reconciliation issues. "
+                "System detected unmanaged IAM bindings or application failures."
+            )
+
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
             job_type=job_type,

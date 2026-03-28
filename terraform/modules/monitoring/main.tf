@@ -53,3 +53,20 @@ resource "google_monitoring_alert_policy" "break_glass_alert" {
     length(google_monitoring_notification_channel.alert_webhook) > 0 ? google_monitoring_notification_channel.alert_webhook[0].name : ""
   ])
 }
+
+resource "google_monitoring_alert_policy" "reconciliation_alert" {
+  count        = (trimspace(var.alert_notification_email) != "" || trimspace(var.alert_notification_webhook_url) != "") ? 1 : 0
+  project      = var.tool_project_id
+  display_name = "IAM Access Manager: Reconciliation Issue Detected"
+  combiner     = "OR"
+  conditions {
+    display_name = "Reconciliation Issue Logs"
+    condition_matched_log {
+      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${var.cloud_run_service_name}\" AND textPayload:\"[RECONCILIATION_ISSUE_DETECTED]\""
+    }
+  }
+  notification_channels = compact([
+    length(google_monitoring_notification_channel.alert_email) > 0 ? google_monitoring_notification_channel.alert_email[0].name : "",
+    length(google_monitoring_notification_channel.alert_webhook) > 0 ? google_monitoring_notification_channel.alert_webhook[0].name : ""
+  ])
+}

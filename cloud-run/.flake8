@@ -5,3 +5,6 @@ per-file-ignores =
     main.py:E501
     scope_validator.py:E501
     iam_executor.py:E501
+    repository.py:E501
+    tests/test_jobs.py:E501
+    tests/test_main_execute_flow.py:E501

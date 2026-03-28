@@ -443,55 +443,35 @@ class Repository:
     def run_reconciliation_job(self) -> int:
         """
         リコンシリエーションジョブを実行し、矛盾を検出して記録します。
-
-        Returns:
-            int: 検出された矛盾の数。
         """
         sql = f"""
         INSERT INTO
           `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` (
-          issue_id,
-          issue_type,
-          request_id,
-          principal_email,
-          resource_name,
-          role,
-          detected_at,
-          severity,
-          status,
-          details
+          issue_id, issue_type, request_id, principal_email, resource_name, role, detected_at, severity, status, details
         )
         WITH requests AS (
-          SELECT
-            request_id,
-            request_type,
-            principal_email,
-            resource_name,
-            role,
-            status,
-            expires_at
+          SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at
           FROM `{self.requests_table}`
+          WHERE status IN ('APPROVED', 'REJECTED', 'CANCELLED')
         ),
         actual AS (
-          SELECT
-            principal_email,
-            resource_name,
-            role,
-            TRUE AS exists_now
+          SELECT principal_email, resource_name, role, TRUE AS exists_now
           FROM `{self.iam_policy_permissions_table}`
         ),
         joined AS (
           SELECT
-            r.*,
+            r.request_id,
+            COALESCE(r.principal_email, a.principal_email) AS principal_email,
+            COALESCE(r.resource_name, a.resource_name) AS resource_name,
+            COALESCE(r.role, a.role) AS role,
+            r.status,
+            r.expires_at,
             IFNULL(a.exists_now, FALSE) AS exists_now
           FROM requests r
-          LEFT JOIN actual a USING (principal_email, resource_name, role)
+          FULL OUTER JOIN actual a USING (principal_email, resource_name, role)
         )
         SELECT
-          FORMAT(
-            '%s-%s-%s', request_id, issue_type, FORMAT_TIMESTAMP(
-                '%Y%m%d%H%M%S', CURRENT_TIMESTAMP())
-                ) AS issue_id,
+          FORMAT('%s-%s-%s', COALESCE(request_id, 'UNMANAGED'), issue_type, FORMAT_TIMESTAMP('%Y%m%d%H%M%S', CURRENT_TIMESTAMP())) AS issue_id,
           issue_type,
           request_id,
           principal_email,
@@ -503,40 +483,22 @@ class Repository:
           TO_JSON(STRUCT(status AS request_status, exists_now, expires_at)) AS details
         FROM (
           SELECT
-            request_id,
-            principal_email,
-            resource_name,
-            role,
+            request_id, principal_email, resource_name, role,
             CASE
-              WHEN status = 'APPROVED'
-                AND exists_now = FALSE
-                THEN 'APPROVED_NOT_APPLIED'
-              WHEN status IN ('REJECTED', 'CANCELLED')
-                AND exists_now = TRUE
-                THEN 'REJECTED_BUT_EXISTS'
-              WHEN status = 'APPROVED'
-                AND expires_at IS NOT NULL
-                AND expires_at < CURRENT_TIMESTAMP()
-                AND exists_now = TRUE
-                THEN 'EXPIRED_BUT_EXISTS'
+              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
+              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
+              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
+              WHEN status IS NULL AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
               ELSE NULL
             END AS issue_type,
             CASE
-              WHEN status = 'APPROVED'
-                AND exists_now = FALSE
-                THEN 'HIGH'
-              WHEN status IN ('REJECTED', 'CANCELLED')
-                AND exists_now = TRUE
-                THEN 'MEDIUM'
-              WHEN status = 'APPROVED'
-                AND expires_at IS NOT NULL
-                AND expires_at < CURRENT_TIMESTAMP()
-                AND exists_now = TRUE THEN 'HIGH'
+              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
+              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
+              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
+              WHEN status IS NULL AND exists_now = TRUE THEN 'HIGH'
               ELSE NULL
             END AS severity,
-            status,
-            exists_now,
-            expires_at
+            status, exists_now, expires_at
           FROM joined
         )
         WHERE issue_type IS NOT NULL
