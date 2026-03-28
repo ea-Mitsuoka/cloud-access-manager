@@ -122,7 +122,7 @@ resource "google_secret_manager_secret_version" "webhook_secret_initial" {
   secret_data = "INITIAL_DUMMY_SECRET_CHANGE_ME" # 初期ダミー値
 
   lifecycle {
-    ignore_changes = [secret_data]  # 後から手動で本物の値に変更されても上書きしない
+    ignore_changes = [secret_data] # 後から手動で本物の値に変更されても上書きしない
   }
 }
 
