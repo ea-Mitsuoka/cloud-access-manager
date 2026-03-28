@@ -1,0 +1,35 @@
+site_name: IAM Access Manager
+site_description: SaaS基盤向けのIAM権限管理システム
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+  language: ja
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [cloud-run] # Pythonコードのルートディレクトリを指定
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+
+nav:
+  - ホーム: index.md
+  - 運用マニュアル: operations-runbook.md
+  - BigQuery仕様: bigquery_tables.md
+  - 未検証項目引継ぎ: untested-items-handover.md
+  - APIリファレンス (Python):
+    - メインAPI (main): api/main.md
+    - 実行エンジン (iam_executor): api/iam_executor.md
+    - リポジトリ (repository): api/repository.md
+    - モデル (models): api/models.md
+    - スコープ検証 (scope_validator): api/scope_validator.md
+    - コレクター: api/collectors.md
