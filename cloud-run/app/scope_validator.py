@@ -8,17 +8,43 @@ from googleapiclient.errors import HttpError
 
 @dataclass(frozen=True)
 class ScopeConfig:
+    """
+    管理スコープの設定を保持するデータクラス。
+
+    Attributes:
+        target_project_id (str): プロジェクトモードの場合の対象プロジェクトID。
+        target_org_id (str): 組織モードの場合の対象組織ID。
+    """
+
     target_project_id: str
     target_org_id: str
 
 
 class ScopeValidator:
+    """リソースが管理スコープ内にあるかを検証するクラス。"""
+
     def __init__(self, config: ScopeConfig) -> None:
+        """
+        ScopeValidatorを初期化します。
+
+        Args:
+            config (ScopeConfig): 管理スコープの設定。
+        """
         self._config = config
         self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
         self._org_cache: dict[str, str | None] = {}
 
     def validate_resource_name(self, resource_name: str) -> str | None:
+        """
+        指定されたリソース名が管理スコープ内にあるかを検証します。
+
+        Args:
+            resource_name (str): 検証するリソースの完全な名前。
+
+        Returns:
+            str | None: リソースがスコープ外の場合、エラーメッセージを返します。
+                        スコープ内の場合はNoneを返します。
+        """
         if self._config.target_org_id == "":
             # Project-only mode: only allow the target project
             if resource_name != f"projects/{self._config.target_project_id}":
@@ -58,6 +84,17 @@ class ScopeValidator:
         return None
 
     def _get_folder_org_id(self, folder_name: str) -> str | None:
+        """
+        指定されたフォルダが属する組織IDを取得します。
+
+        結果はキャッシュされます。
+
+        Args:
+            folder_name (str): フォルダの完全な名前 (例: "folders/12345")。
+
+        Returns:
+            str | None: 組織ID。見つからない場合はNone。
+        """
         if folder_name in self._org_cache:
             return self._org_cache[folder_name]
 
@@ -84,6 +121,17 @@ class ScopeValidator:
             return None
 
     def _get_project_org_id(self, project_id: str) -> str | None:
+        """
+        指定されたプロジェクトが属する組織IDを取得します。
+
+        結果はキャッシュされます。
+
+        Args:
+            project_id (str): プロジェクトID (例: "my-project-id")。
+
+        Returns:
+            str | None: 組織ID。見つからない場合はNone。
+        """
         if project_id in self._org_cache:
             return self._org_cache[project_id]
 

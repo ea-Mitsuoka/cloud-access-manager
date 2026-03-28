@@ -10,7 +10,16 @@ from google.protobuf.json_format import MessageToDict
 
 
 class ResourceInventoryCollector:
+    """GCPリソースの棚卸しデータを収集するクラス。"""
+
     def __init__(self, target_project_id: str, target_org_id: str) -> None:
+        """
+        ResourceInventoryCollectorを初期化します。
+
+        Args:
+            target_project_id (str): 収集対象のプロジェクトID。
+            target_org_id (str): 収集対象の組織ID。
+        """
         self._target_project_id = target_project_id
         self._target_org_id = target_org_id
         self._client = asset_v1.AssetServiceClient()
@@ -18,6 +27,18 @@ class ResourceInventoryCollector:
     def collect_rows(
         self, execution_id: str
     ) -> tuple[list[dict[str, Any]], dict[str, int], str]:
+        """
+        Cloud Asset Inventoryからリソースを収集し、BigQueryに挿入するための行データを生成します。
+
+        Args:
+            execution_id (str): この収集ジョブのユニークID。
+
+        Returns:
+            tuple[list[dict[str, Any]], dict[str, int], str]:
+                - BigQueryに挿入する行データのリスト。
+                - 収集されたリソースタイプのカウント。
+                - 収集に使用されたスコープ。
+        """
         scope = self._resolve_scope()
         assessed_at = datetime.now(timezone.utc).isoformat()
         note = f"source=cloudasset scope={scope}"
@@ -59,6 +80,15 @@ class ResourceInventoryCollector:
         return rows, dict(counts), scope
 
     def _resolve_scope(self) -> str:
+        """
+        設定に基づいてCloud Asset Inventoryの検索スコープを決定します。
+
+        Returns:
+            str: 検索スコープ文字列 (例: "organizations/12345")。
+
+        Raises:
+            ValueError: 組織IDもプロジェクトIDも設定されていない場合。
+        """
         if self._target_org_id:
             return f"organizations/{self._target_org_id}"
         if self._target_project_id:
@@ -67,6 +97,15 @@ class ResourceInventoryCollector:
 
     @staticmethod
     def _to_resource_type(asset_type: str) -> str:
+        """
+        Cloud Asset Inventoryのアセットタイプを単純なリソースタイプ名に変換します。
+
+        Args:
+            asset_type (str): 完全なアセットタイプ文字列。
+
+        Returns:
+            str: 単純なリソースタイプ名 (例: "Folder", "Project")。
+        """
         if asset_type.endswith("/Folder"):
             return "Folder"
         if asset_type.endswith("/Project"):
@@ -75,6 +114,15 @@ class ResourceInventoryCollector:
 
     @staticmethod
     def _normalize_full_resource_name(raw: str) -> str:
+        """
+        Cloud Asset APIから返されるリソース名を正規化します。
+
+        Args:
+            raw (str): APIから返された生の完全なリソース名。
+
+        Returns:
+            str: 正規化されたリソース名。
+        """
         if not raw:
             return ""
         value = raw.strip()
@@ -94,6 +142,17 @@ class ResourceInventoryCollector:
         resource: asset_v1.ResourceSearchResult,
         normalized_name: str,
     ) -> str:
+        """
+        リソースオブジェクトから一意のリソースIDを抽出します。
+
+        Args:
+            resource_type (str): 単純なリソースタイプ。
+            resource (asset_v1.ResourceSearchResult): Cloud Asset APIからのリソースオブジェクト。
+            normalized_name (str): 正規化された完全なリソース名。
+
+        Returns:
+            str: 抽出されたリソースID。
+        """
         if resource_type == "Folder":
             return normalized_name or "unknown-folder"
 

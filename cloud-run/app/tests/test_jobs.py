@@ -11,16 +11,32 @@ from app.main import app
 
 @pytest.fixture
 def client() -> FlaskClient:
+    """テスト用のFlaskクライアントを返します。
+
+    Returns:
+        FlaskClient: Flaskアプリケーションのテストクライアント。
+    """
     return app.test_client()
 
 
 @pytest.fixture
 def mock_repo():
+    """リポジトリ（DBアクセサ）のモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたリポジトリオブジェクト。
+    """
     with patch("app.main.repo", autospec=True) as mock_repo:
         yield mock_repo
 
 
 def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
+    """リコンサイルジョブの成功ケースをテストします。
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (MagicMock): モック化されたリポジトリ。
+    """
     # Arrange
     mock_repo.run_reconciliation_job.return_value = 5
 
@@ -48,6 +64,12 @@ def test_reconcile_job_success(client: FlaskClient, mock_repo: MagicMock):
 
 
 def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
+    """リコンサイルジョブの失敗ケースをテストします。
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (MagicMock): モック化されたリポジトリ。
+    """
     # Arrange
     mock_repo.run_reconciliation_job.side_effect = Exception("BigQuery is down")
 
@@ -73,6 +95,12 @@ def test_reconcile_job_failure(client: FlaskClient, mock_repo: MagicMock):
 
 
 def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: MagicMock):
+    """IAMバインディング履歴更新ジョブの成功ケースをテストします。
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (MagicMock): モック化されたリポジトリ。
+    """
     # Arrange
     mock_repo.run_update_bindings_history_job.return_value = 10
 
@@ -104,6 +132,12 @@ def test_update_iam_bindings_history_success(client: FlaskClient, mock_repo: Mag
 
 
 def test_update_iam_bindings_history_failure(client: FlaskClient, mock_repo: MagicMock):
+    """IAMバインディング履歴更新ジョブの失敗ケースをテストします。
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (MagicMock): モック化されたリポジトリ。
+    """
     # Arrange
     mock_repo.run_update_bindings_history_job.side_effect = Exception("Something broke")
 

@@ -7,9 +7,18 @@ from googleapiclient import discovery
 
 
 class GoogleGroupCollector:
+    """Googleグループとそのメンバーシップ情報を収集するクラス。"""
+
     def __init__(
         self, workspace_customer_id: str, source: str = "cloudidentity"
     ) -> None:
+        """
+        GoogleGroupCollectorを初期化します。
+
+        Args:
+            workspace_customer_id (str): Google Workspaceの顧客ID。
+            source (str, optional): データソースを示す文字列。デフォルトは "cloudidentity"。
+        """
         self._customer_id = workspace_customer_id or "my_customer"
         self._source = source
         self._api = discovery.build(
@@ -20,11 +29,24 @@ class GoogleGroupCollector:
 
     @property
     def source(self) -> str:
+        """データソースの識別子。"""
         return self._source
 
     def collect(
         self, execution_id: str
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+        """
+        Googleグループとメンバーシップの情報を収集します。
+
+        Args:
+            execution_id (str): この収集ジョブのユニークID。
+
+        Returns:
+            tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, int]]:
+                - グループ情報の辞書のリスト。
+                - メンバーシップ情報の辞書のリスト。
+                - 収集されたグループとメンバーシップの数を含む辞書。
+        """
         assessed_at = datetime.now(timezone.utc).isoformat()
 
         groups = self._fetch_groups()
@@ -76,6 +98,12 @@ class GoogleGroupCollector:
         return group_rows, membership_rows, counts
 
     def _fetch_groups(self) -> list[dict[str, Any]]:
+        """
+        Cloud Identity APIを使用して、顧客アカウント内のすべてのGoogleグループを取得します。
+
+        Returns:
+            list[dict[str, Any]]: 取得したグループのリスト。
+        """
         # Cloud Identity query for Google Groups in the customer.
         query = (
             f"parent=='customers/{self._customer_id}'"
@@ -102,6 +130,15 @@ class GoogleGroupCollector:
         return groups
 
     def _fetch_memberships(self, group_name: str) -> list[dict[str, Any]]:
+        """
+        指定されたグループのすべてのメンバーシップを取得します。
+
+        Args:
+            group_name (str): メンバーシップを取得するグループの名前 (例: "groups/12345")。
+
+        Returns:
+            list[dict[str, Any]]: 取得したメンバーシップのリスト。
+        """
         memberships: list[dict[str, Any]] = []
         page_token = ""
         while True:

@@ -11,23 +11,43 @@ from app.main import app
 
 @pytest.fixture
 def client() -> FlaskClient:
+    """テスト用のFlaskクライアントを返します。
+
+    Returns:
+        FlaskClient: Flaskアプリケーションのテストクライアント。
+    """
     return app.test_client()
 
 
 @pytest.fixture
 def mock_repo():
+    """リポジトリ（DBアクセサ）のモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたリポジトリオブジェクト。
+    """
     with patch("app.main.repo", autospec=True) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_resource_collector():
+    """リソースコレクターのモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたリソースコレクターオブジェクト。
+    """
     with patch("app.main.resource_collector", autospec=True) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_group_collector():
+    """グループコレクターのモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたグループコレクターオブジェクト。
+    """
     with patch("app.main.group_collector", autospec=True) as mock:
         mock.source = "cloudidentity"
         yield mock
@@ -35,6 +55,11 @@ def mock_group_collector():
 
 @pytest.fixture
 def mock_auth():
+    """認証チェックを常に成功させるモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化された認証関数。
+    """
     with patch("app.main._authorize", return_value=True) as mock:
         yield mock
 
@@ -47,8 +72,13 @@ def mock_auth():
 def test_collect_resources_success(
     client: FlaskClient, mock_repo, mock_resource_collector, mock_auth
 ):
-    """
-    【要件1: 正常系】リソース情報が正常に収集され、DBへの追記と成功レポートが記録されること
+    """【要件1: 正常系】リソース情報が正常に収集され、DBへの追記と成功レポートが記録されること
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_resource_collector (unittest.mock.MagicMock): モック化されたリソースコレクター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     # 収集処理のモック（1件のダミーデータを返す）
     mock_resource_collector.collect_rows.return_value = (
@@ -77,9 +107,13 @@ def test_collect_resources_success(
 def test_collect_resources_permission_denied(
     client: FlaskClient, mock_repo, mock_resource_collector, mock_auth
 ):
-    """
-    【要件2: フェイルセーフ (権限不足)】API権限エラーが起きた場合、処理は中断されるが、
-    監視アラートを過剰に鳴らさないようHTTP 200を返しつつ、DBには FAILED_PERMISSION を残すこと
+    """【要件2: フェイルセーフ (権限不足)】API権限エラーが起きた場合、HTTP 200を返し、DBには FAILED_PERMISSION を残すこと
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_resource_collector (unittest.mock.MagicMock): モック化されたリソースコレクター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_resource_collector.collect_rows.side_effect = PermissionDenied("No access")
 
@@ -100,8 +134,13 @@ def test_collect_resources_permission_denied(
 def test_collect_groups_success(
     client: FlaskClient, mock_repo, mock_group_collector, mock_auth
 ):
-    """
-    【要件3: 正常系】グループとメンバーシップ情報が収集され、DBの洗替・追記が行われること
+    """【要件3: 正常系】グループとメンバーシップ情報が収集され、DBの洗替・追記が行われること
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_group_collector (unittest.mock.MagicMock): モック化されたグループコレクター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_group_collector.collect.return_value = (
         [{"group_email": "g@example.com"}],
@@ -129,9 +168,13 @@ def test_collect_groups_success(
 def test_collect_groups_failure(
     client: FlaskClient, mock_repo, mock_group_collector, mock_auth
 ):
-    """
-    【要件4: フェイルセーフ (汎用エラー)】グループ収集APIがダウン等の例外を起こした場合、
-    500エラーとなり、DBに FAILED のレポートが記録されること
+    """【要件4: フェイルセーフ (汎用エラー)】グループ収集APIが例外を起こした場合、500エラーを返し、DBに FAILED レポートを記録すること
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_group_collector (unittest.mock.MagicMock): モック化されたグループコレクター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_group_collector.collect.side_effect = Exception("Identity API is down")
 
@@ -149,8 +192,10 @@ def test_collect_groups_failure(
 
 
 def test_collectors_reject_unauthorized(client: FlaskClient):
-    """
-    【要件5: セキュリティ】認証トークンがない場合、収集エンドポイントは 401 を返すこと
+    """【要件5: セキュリティ】認証トークンがない場合、収集エンドポイントは 401 を返すこと
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
     """
     # mock_auth フィクスチャを渡していないため、_authorize は本来の挙動（False）になる
     resp_resources = client.post("/collect/resources")

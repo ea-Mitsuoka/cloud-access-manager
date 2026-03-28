@@ -55,11 +55,22 @@ group_collector = GoogleGroupCollector(
 
 @app.get("/healthz")
 def healthz():
+    """ヘルスチェックエンドポイント。
+
+    Returns:
+        Response: 常に {"ok": True} を含むJSONレスポンス。
+    """
     return jsonify({"ok": True})
 
 
 @app.post("/execute")
 def execute_request():
+    """
+    承認済みのアクセスリクエストに基づいてIAMポリシー変更を実行します。
+
+    Returns:
+        Response: 実行結果を含むJSONレスポンス。
+    """
     execution_id = str(uuid.uuid4())
 
     if not _authorize():
@@ -175,6 +186,12 @@ def execute_request():
 
 @app.post("/collect/resources")
 def collect_resources():
+    """
+    管理対象スコープ内のGCPリソースを収集し、棚卸しデータをDBに保存します。
+
+    Returns:
+        Response: 収集結果を含むJSONレスポンス。
+    """
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -227,6 +244,12 @@ def collect_resources():
 
 @app.post("/collect/groups")
 def collect_groups():
+    """
+    Google Workspace (Cloud Identity) からグループとメンバーシップ情報を収集し、DBを更新します。
+
+    Returns:
+        Response: 収集結果を含むJSONレスポンス。
+    """
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -287,6 +310,12 @@ def collect_groups():
 
 @app.post("/reconcile")
 def reconcile_iam_issues():
+    """
+    IAMの矛盾を検出し、issuesテーブルに記録するリコンシリエーションジョブを実行します。
+
+    Returns:
+        Response: 実行結果を含むJSONレスポンス。
+    """
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -328,6 +357,12 @@ def reconcile_iam_issues():
 
 @app.post("/revoke_expired_permissions")
 def revoke_expired_permissions():
+    """
+    期限切れの承認済みアクセス権限を自動的に取り消します。
+
+    Returns:
+        Response: 実行結果（取り消し、スキップ、失敗の件数）を含むJSONレスポンス。
+    """
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -435,6 +470,12 @@ def revoke_expired_permissions():
 
 @app.post("/jobs/update-iam-bindings-history")
 def update_iam_bindings_history():
+    """
+    現在のIAMバインディングのスナップショットを履歴テーブルに保存するジョブを実行します。
+
+    Returns:
+        Response: 実行結果（挿入された行数）を含むJSONレスポンス。
+    """
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -482,6 +523,14 @@ def update_iam_bindings_history():
 
 
 def _authorize() -> bool:
+    """
+    リクエストを認証します。
+
+    Cloud SchedulerからのOIDCトークン、または共有シークレットトークンを検証します。
+
+    Returns:
+        bool: 認証が成功した場合はTrue、そうでない場合はFalse。
+    """
     if _authorize_scheduler_oidc():
         return True
     if not SHARED_SECRET:
@@ -491,6 +540,12 @@ def _authorize() -> bool:
 
 
 def _authorize_scheduler_oidc() -> bool:
+    """
+    Cloud SchedulerからのOIDCトークンを検証します。
+
+    Returns:
+        bool: OIDCトークンが有効で、期待される発行者からのものである場合はTrue。
+    """
     if not SCHEDULER_INVOKER_EMAIL:
         return False
 
@@ -518,6 +573,17 @@ def _authorize_scheduler_oidc() -> bool:
 def _build_collection_error_report(
     *, job_type: str, execution_id: str, exc: Exception
 ) -> dict[str, Any]:
+    """
+    データ収集ジョブの失敗時に、詳細なエラーレポートを生成します。
+
+    Args:
+        job_type (str): 失敗したジョブの種類。
+        execution_id (str): 実行ID。
+        exc (Exception): 発生した例外。
+
+    Returns:
+        dict[str, Any]: エラーレポートの詳細を含む辞書。
+    """
     logging.error(f"Pipeline job {job_type} failed (Execution ID: {execution_id}): {exc}")
     error_code = type(exc).__name__
     error_message = str(exc)
@@ -552,6 +618,15 @@ def _build_collection_error_report(
 
 
 def _permission_hint(job_type: str) -> str:
+    """
+    権限エラーが発生した場合の解決策に関するヒントを返します。
+
+    Args:
+        job_type (str): ジョブの種類。
+
+    Returns:
+        str: 解決策のヒント文字列。
+    """
     if job_type == "RESOURCE_COLLECTION":
         return (
             "Grant roles/cloudasset.viewer to executor SA on managed scope "

@@ -11,23 +11,43 @@ from app.models import AccessRequest, ExecutionResult
 
 @pytest.fixture
 def client() -> FlaskClient:
+    """テスト用のFlaskクライアントを返します。
+
+    Returns:
+        FlaskClient: Flaskアプリケーションのテストクライアント。
+    """
     return app.test_client()
 
 
 @pytest.fixture
 def mock_repo():
+    """リポジトリ（DBアクセサ）のモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたリポジトリオブジェクト。
+    """
     with patch("app.main.repo", autospec=True) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_iam_executor():
+    """IAM Executorのモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたIAM Executorオブジェクト。
+    """
     with patch("app.main.iam_executor", autospec=True) as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_scope_validator():
+    """スコープバリデーターのモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化されたスコープバリデーターオブジェクト。
+    """
     with patch("app.main.scope_validator", autospec=True) as mock:
         # デフォルトはスコープ内（エラーなし）とする
         mock.validate_resource_name.return_value = None
@@ -36,11 +56,24 @@ def mock_scope_validator():
 
 @pytest.fixture
 def mock_auth():
+    """認証チェックを常に成功させるモックを作成します。
+
+    Yields:
+        unittest.mock.MagicMock: モック化された認証関数。
+    """
     with patch("app.main._authorize", return_value=True) as mock:
         yield mock
 
 
 def _create_dummy_request(status: str = "APPROVED") -> AccessRequest:
+    """テスト用のダミーアクセスリクエストを作成します。
+
+    Args:
+        status (str, optional): リクエストのステータス。デフォルトは "APPROVED"。
+
+    Returns:
+        AccessRequest: ダミーのアクセスリクエストオブジェクト。
+    """
     return AccessRequest(
         request_id="req-core-123",
         request_type="GRANT",
@@ -61,8 +94,14 @@ def _create_dummy_request(status: str = "APPROVED") -> AccessRequest:
 def test_execute_golden_path_success(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
 ):
-    """
-    【要件1: 正常系】承認済みのリクエストが正しくIAM適用され、成功ログが記録されること
+    """【要件1: 正常系】承認済みのリクエストが正しくIAM適用され、成功ログが記録されること
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_iam_executor (unittest.mock.MagicMock): モック化されたIAM Executor。
+        mock_scope_validator (unittest.mock.MagicMock): モック化されたスコープバリデーター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     mock_repo.has_success_execution.return_value = False
@@ -91,8 +130,14 @@ def test_execute_golden_path_success(
 def test_execute_idempotency_skip(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
 ):
-    """
-    【要件2: 冪等性】すでに成功済みのリクエストは、IAM APIを叩かずにスキップすること
+    """【要件2: 冪等性】すでに成功済みのリクエストは、IAM APIを叩かずにスキップすること
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_iam_executor (unittest.mock.MagicMock): モック化されたIAM Executor。
+        mock_scope_validator (unittest.mock.MagicMock): モック化されたスコープバリデーター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     # すでに成功した実行履歴が存在する
@@ -111,8 +156,14 @@ def test_execute_idempotency_skip(
 def test_execute_rejects_unapproved_status(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
 ):
-    """
-    【要件3: 状態遷移】ステータスが APPROVED 以外（PENDING等）の場合は絶対に実行しないこと
+    """【要件3: 状態遷移】ステータスが APPROVED 以外（PENDING等）の場合は絶対に実行しないこと
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_iam_executor (unittest.mock.MagicMock): モック化されたIAM Executor。
+        mock_scope_validator (unittest.mock.MagicMock): モック化されたスコープバリデーター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("PENDING")
 
@@ -129,8 +180,14 @@ def test_execute_rejects_unapproved_status(
 def test_execute_rejects_out_of_scope_resource(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
 ):
-    """
-    【要件4: 管理スコープ保護】管理対象外のリソースに対する実行要求は 400 エラーで弾くこと
+    """【要件4: 管理スコープ保護】管理対象外のリソースに対する実行要求は 400 エラーで弾くこと
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_iam_executor (unittest.mock.MagicMock): モック化されたIAM Executor。
+        mock_scope_validator (unittest.mock.MagicMock): モック化されたスコープバリデーター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     # スコープバリデーターがエラー文字列を返す
@@ -154,8 +211,14 @@ def test_execute_rejects_out_of_scope_resource(
 def test_execute_logs_failure_on_exception(
     client: FlaskClient, mock_repo, mock_iam_executor, mock_scope_validator, mock_auth
 ):
-    """
-    【要件5: フェイルセーフ監査】IAM APIの呼び出しで例外（権限不足など）が起きても、失敗ログをDBに残すこと
+    """【要件5: フェイルセーフ監査】IAM APIの呼び出しで例外が起きても、失敗ログをDBに残すこと
+
+    Args:
+        client (FlaskClient): テスト用のFlaskクライアント。
+        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
+        mock_iam_executor (unittest.mock.MagicMock): モック化されたIAM Executor。
+        mock_scope_validator (unittest.mock.MagicMock): モック化されたスコープバリデーター。
+        mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
     mock_repo.get_approved_request.return_value = _create_dummy_request("APPROVED")
     mock_repo.has_success_execution.return_value = False

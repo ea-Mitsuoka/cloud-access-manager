@@ -4,6 +4,7 @@ from app.iam_executor import IamExecutor
 
 
 def test_normalize_action():
+    """_normalize_actionメソッドのテスト。"""
     assert IamExecutor._normalize_action("GRANT") == "GRANT"
     assert IamExecutor._normalize_action("grant") == "GRANT"
     assert IamExecutor._normalize_action("REVOKE") == "REVOKE"
@@ -12,6 +13,7 @@ def test_normalize_action():
 
 
 def test_to_member():
+    """_to_memberメソッドのテスト。"""
     assert IamExecutor._to_member("user@example.com") == "user:user@example.com"
     assert IamExecutor._to_member("sa@project.iam" ".gserviceaccount.com") == (
         "serviceAccount:sa@project.iam" ".gserviceaccount.com"
@@ -25,6 +27,7 @@ def test_to_member():
 
 
 def test_parse_resource():
+    """_parse_resourceメソッドのテスト。"""
     assert IamExecutor._parse_resource("projects/my-project") == (
         "projects",
         "my-project",
@@ -40,6 +43,11 @@ def test_parse_resource():
 
 @patch("app.iam_executor.discovery")
 def test_get_policy_project(mock_discovery):
+    """_get_policyがプロジェクトに対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -51,6 +59,11 @@ def test_get_policy_project(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_get_policy_folder(mock_discovery):
+    """_get_policyがフォルダに対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -60,6 +73,11 @@ def test_get_policy_folder(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_get_policy_organization(mock_discovery):
+    """_get_policyが組織に対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -71,6 +89,11 @@ def test_get_policy_organization(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_get_policy_unsupported(mock_discovery):
+    """サポートされていないリソースタイプの場合に_get_policyがValueErrorを送出するかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -80,6 +103,11 @@ def test_get_policy_unsupported(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_set_policy_project(mock_discovery):
+    """_set_policyがプロジェクトに対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -92,6 +120,11 @@ def test_set_policy_project(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_set_policy_folder(mock_discovery):
+    """_set_policyがフォルダに対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -104,6 +137,11 @@ def test_set_policy_folder(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_set_policy_organization(mock_discovery):
+    """_set_policyが組織に対して正しく呼び出されるかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()
@@ -116,6 +154,11 @@ def test_set_policy_organization(mock_discovery):
 
 @patch("app.iam_executor.discovery")
 def test_set_policy_unsupported(mock_discovery):
+    """サポートされていないリソースタイプの場合に_set_policyがValueErrorを送出するかのテスト。
+
+    Args:
+        mock_discovery: discovery.buildのモック。
+    """
     mock_service = MagicMock()
     mock_discovery.build.return_value = mock_service
     executor = IamExecutor()

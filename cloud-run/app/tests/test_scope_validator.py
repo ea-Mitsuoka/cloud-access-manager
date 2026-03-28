@@ -7,7 +7,7 @@ from app.scope_validator import ScopeConfig, ScopeValidator
 
 @pytest.fixture
 def project_validator(monkeypatch):
-    """Provides a ScopeValidator in project mode with mocked discovery.build."""
+    """プロジェクトモードのScopeValidator（モック化されたdiscovery.build付き）を提供します。"""
     mock_crm_service = MagicMock()
     monkeypatch.setattr(
         "app.scope_validator.discovery.build",
@@ -19,20 +19,24 @@ def project_validator(monkeypatch):
 
 
 def test_project_mode_valid_project(project_validator):
+    """プロジェクトモード：有効なプロジェクトのテスト。"""
     assert project_validator.validate_resource_name("projects/my-project") is None
 
 
 def test_project_mode_invalid_project(project_validator):
+    """プロジェクトモード：無効なプロジェクトのテスト。"""
     assert (
         project_validator.validate_resource_name("projects/another-project") is not None
     )
 
 
 def test_project_mode_rejects_folder(project_validator):
+    """プロジェクトモード：フォルダが拒否されるかのテスト。"""
     assert project_validator.validate_resource_name("folders/12345") is not None
 
 
 def test_project_mode_rejects_organization(project_validator):
+    """プロジェクトモード：組織が拒否されるかのテスト。"""
     assert project_validator.validate_resource_name("organizations/67890") is not None
 
 
@@ -41,7 +45,7 @@ def test_project_mode_rejects_organization(project_validator):
 
 @pytest.fixture
 def org_validator(monkeypatch):
-    """Provides a ScopeValidator in org mode with mocked helpers."""
+    """組織モードのScopeValidator（モック化されたヘルパー付き）を提供します。"""
     # Mock discovery.build to prevent actual API calls during ScopeValidator init
     mock_crm_service = MagicMock()
     monkeypatch.setattr(
@@ -73,36 +77,45 @@ def org_validator(monkeypatch):
 
 
 def test_org_mode_valid_project(org_validator):
+    """組織モード：有効なプロジェクトのテスト。"""
     assert org_validator.validate_resource_name("projects/proj-in-org") is None
 
 
 def test_org_mode_invalid_project(org_validator):
+    """組織モード：無効なプロジェクトのテスト。"""
     assert org_validator.validate_resource_name("projects/proj-out-of-org") is not None
 
 
 def test_org_mode_unresolved_project(org_validator):
+    """組織モード：解決できないプロジェクトのテスト。"""
     assert org_validator.validate_resource_name("projects/proj-unresolved") is not None
 
 
 def test_org_mode_valid_folder(org_validator):
+    """組織モード：有効なフォルダのテスト。"""
     assert org_validator.validate_resource_name("folders/folder-in-org") is None
 
 
 def test_org_mode_invalid_folder(org_validator):
+    """組織モード：無効なフォルダのテスト。"""
     assert org_validator.validate_resource_name("folders/folder-out-of-org") is not None
 
 
 def test_org_mode_unresolved_folder(org_validator):
+    """組織モード：解決できないフォルダのテスト。"""
     assert org_validator.validate_resource_name("folders/folder-unresolved") is not None
 
 
 def test_org_mode_valid_organization(org_validator):
+    """組織モード：有効な組織のテスト。"""
     assert org_validator.validate_resource_name("organizations/11111") is None
 
 
 def test_org_mode_invalid_organization(org_validator):
+    """組織モード：無効な組織のテスト。"""
     assert org_validator.validate_resource_name("organizations/22222") is not None
 
 
 def test_org_mode_unsupported_resource_type(org_validator):
+    """組織モード：サポートされていないリソースタイプのテスト。"""
     assert org_validator.validate_resource_name("buckets/my-bucket") is not None

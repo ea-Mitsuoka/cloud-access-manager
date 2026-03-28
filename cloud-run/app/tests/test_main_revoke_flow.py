@@ -11,6 +11,11 @@ from app.models import ExpiredAccessRequest
 
 @pytest.fixture
 def client() -> FlaskClient:
+    """テスト用のFlaskクライアントを返します。
+
+    Returns:
+        FlaskClient: Flaskアプリケーションのテストクライアント。
+    """
     return app.test_client()
 
 
@@ -23,6 +28,14 @@ def test_revoke_expired_permissions_when_permission_exists(
     mock_iam_executor: MagicMock,
     client: FlaskClient,
 ):
+    """期限切れ権限の取り消し（権限が存在する場合）のテスト。
+
+    Args:
+        mock_authorize (MagicMock): 認証のモック。
+        mock_repo (MagicMock): リポジトリのモック。
+        mock_iam_executor (MagicMock): IAM Executorのモック。
+        client (FlaskClient): テスト用のFlaskクライアント。
+    """
     # Arrange
     expired_req = ExpiredAccessRequest(
         request_id="req-1",
@@ -72,6 +85,14 @@ def test_revoke_expired_permissions_when_permission_is_gone(
     mock_iam_executor: MagicMock,
     client: FlaskClient,
 ):
+    """期限切れ権限の取り消し（権限が既にない場合）のテスト。
+
+    Args:
+        mock_authorize (MagicMock): 認証のモック。
+        mock_repo (MagicMock): リポジトリのモック。
+        mock_iam_executor (MagicMock): IAM Executorのモック。
+        client (FlaskClient): テスト用のFlaskクライアント。
+    """
     # Arrange
     expired_req = ExpiredAccessRequest(
         request_id="req-2",
