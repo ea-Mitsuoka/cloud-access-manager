@@ -40,7 +40,7 @@ graph TD
         CR -- "Cloud Identity API" --> G3["Google Cloud Identity"];
 
         CR --> H["BigQuery: iam_access_change_log"];
-        CR -. "未実装" .-> I["BigQuery: iam_policy_bindings_raw_history"];
+        CR --> I["BigQuery: iam_policy_bindings_raw_history"];
         CR --> J["BigQuery: google_groups"];
         CR --> K["BigQuery: google_group_membership_history"];
         CR --> R["BigQuery: gcp_resource_inventory_history"];
@@ -192,7 +192,6 @@ graph TD
 - `iam_policy_bindings_raw_history`
 
   - 用途: **生のIAM設定履歴**。棚卸しジョブによって収集された、特定の時点での加工されていないIAMバインディングのスナップショット。監査証跡の元データとして機能する。
-  - **※注意 (現状の仕様):** 現在のMVP実装では、このテーブルへデータを収集・追記するバッチプログラム（コレクター）は未実装です。
   - 主要列: `execution_id, assessment_timestamp, scope, resource_type, resource_name, principal_type, principal_email, role`
   - 更新: `WRITE_APPEND`
 
@@ -272,7 +271,7 @@ graph TD
 - `principal_catalog` (マスタ)
 
   - 用途: プリンシパル（ユーザー、SA等）の情報を管理する帳票用マスタ。
-  - **※注意 (現状の仕様):** 初回構築時のデータ流し込み（シード）のみ実装されており、定期更新の自動化は未実装です。
+  - 更新: 日次バッチによる最新IAM状態からの `MERGE` (同期)
 
 - `iam_status_master` (マスタ)
 
