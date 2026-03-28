@@ -42,245 +42,246 @@
 
 ______________________________________________________________________
 
-## テーブル詳細
+## テーブル詳細とスキーマ
 
 ### `iam_policy_bindings_raw_history`
 
-- **利用目的:** 特定の時点におけるIAMポリシーバインディングの生データスナップショットを記録する。リソース棚卸しジョブによって収集される、加工されていないIAM設定の履歴データ。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  assessment_timestamp TIMESTAMP NOT NULL,
-  scope STRING,
-  resource_type STRING,
-  resource_name STRING,
-  principal_type STRING,
-  principal_email STRING,
-  role STRING
-  ```
+- **利用目的:** 特定の時点におけるIAMポリシーバインディングの生データスナップショットを記録する監査用テーブル。
 - **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | 収集ジョブのユニークな実行ID |
+| `assessment_timestamp` | TIMESTAMP | NOT NULL | IAM設定が収集・評価された日時 |
+| `scope` | STRING | NULLABLE | 収集対象のスコープ（例: 組織IDやプロジェクトID） |
+| `resource_type` | STRING | NULLABLE | リソースの種別（Project, Folder, Organization 等） |
+| `resource_name` | STRING | NULLABLE | 権限が付与されている対象リソース名 |
+| `principal_type` | STRING | NULLABLE | 権限を持つアカウントの種別（User, ServiceAccount, Group 等） |
+| `principal_email` | STRING | NULLABLE | 権限を持つアカウントのメールアドレス |
+| `role` | STRING | NULLABLE | 付与されているIAMロール（roles/xxx） |
 
 ### `iam_access_requests`
 
-- **利用目的:** IAMアクセスの申請および承認リクエストを記録し、その現在のステータスを管理する。
-- **スキーマ:**
-  ```
-  request_id STRING NOT NULL,
-  request_type STRING NOT NULL, -- GRANT / REVOKE / CHANGE
-  principal_email STRING NOT NULL,
-  resource_name STRING NOT NULL,
-  role STRING NOT NULL,
-  reason STRING,
-  expires_at TIMESTAMP,
-  requester_email STRING NOT NULL,
-  approver_email STRING,
-  status STRING NOT NULL, -- PENDING / APPROVED / REJECTED / CANCELLED
-  requested_at TIMESTAMP NOT NULL,
-  approved_at TIMESTAMP,
-  ticket_ref STRING,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP(),
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
-  ```
+- **利用目的:** IAMアクセスの申請および承認リクエストの正本データを記録し、ステータスを管理する。
 - **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`, `cloud-run/app/repository.py`, `apps-script/Code.gs`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `request_id` | STRING | NOT NULL | 申請の一意なID (UUID等) |
+| `request_type` | STRING | NOT NULL | 申請の種類 (GRANT / REVOKE / CHANGE) |
+| `principal_email` | STRING | NOT NULL | 権限付与・剥奪の対象となるアカウントのメールアドレス |
+| `resource_name` | STRING | NOT NULL | 対象となるGCPリソース名 |
+| `role` | STRING | NOT NULL | 付与・剥奪するIAMロール |
+| `reason` | STRING | NULLABLE | 申請理由・利用目的 |
+| `expires_at` | TIMESTAMP | NULLABLE | 権限の有効期限（恒久の場合はNULL） |
+| `requester_email` | STRING | NOT NULL | 申請を行ったユーザーのメールアドレス |
+| `approver_email` | STRING | NULLABLE | 承認者のメールアドレス |
+| `status` | STRING | NOT NULL | 現在のステータス (PENDING / APPROVED / REJECTED / CANCELLED 等) |
+| `requested_at` | TIMESTAMP | NOT NULL | 申請日時 |
+| `approved_at` | TIMESTAMP | NULLABLE | 承認日時 |
+| `ticket_ref` | STRING | NULLABLE | 関連する社内チケット等の参照番号 |
+| `created_at` | TIMESTAMP | NOT NULL | レコード作成日時 |
+| `updated_at` | TIMESTAMP | NOT NULL | レコード最終更新日時 |
 
 ### `iam_access_change_log`
 
-- **利用目的:** IAMアクセス変更の実行履歴をログとして記録する。各変更アクション（付与/剥奪）の前後ハッシュ、結果（成功/失敗/スキップ）、エラー情報などを含む。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  request_id STRING NOT NULL,
-  action STRING NOT NULL, -- GRANT / REVOKE
-  target STRING NOT NULL,
-  before_hash STRING,
-  after_hash STRING,
-  result STRING NOT NULL, -- SUCCESS / FAILED / SKIPPED
-  error_code STRING,
-  error_message STRING,
-  executed_by STRING,
-  executed_at TIMESTAMP NOT NULL,
-  details JSON
-  ```
+- **利用目的:** Cloud Run が IAM API を呼び出して権限を変更した結果（API実行ログ）を記録する。
 - **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`, `cloud-run/app/repository.py`, `apps-script/Code.gs`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | API実行処理ごとのユニークID |
+| `request_id` | STRING | NOT NULL | 紐づく申請のID |
+| `action` | STRING | NOT NULL | 実行されたアクション (GRANT / REVOKE) |
+| `target` | STRING | NOT NULL | アクションの対象リソース |
+| `before_hash` | STRING | NULLABLE | 変更前のIAMポリシーのハッシュ値 |
+| `after_hash` | STRING | NULLABLE | 変更後のIAMポリシーのハッシュ値 |
+| `result` | STRING | NOT NULL | 実行結果 (SUCCESS / FAILED / SKIPPED) |
+| `error_code` | STRING | NULLABLE | 失敗時のエラーコードまたは例外名 |
+| `error_message` | STRING | NULLABLE | 失敗時の詳細なエラーメッセージ |
+| `executed_by` | STRING | NULLABLE | APIを実行したサービスアカウント等の識別子 |
+| `executed_at` | TIMESTAMP | NOT NULL | APIが実行された日時 |
+| `details` | JSON | NULLABLE | スタックトレースなどの詳細情報 |
 
 ### `iam_access_request_history`
 
-- **利用目的:** IAMアクセスリクエストのイベント履歴（申請、ステータス変更など）を監査証跡として記録する。利用目的のスナップショットなども含む。
-- **スキーマ:**
-  ```
-  history_id STRING NOT NULL,
-  request_id STRING NOT NULL,
-  event_type STRING NOT NULL, -- REQUESTED / STATUS_CHANGED
-  old_status STRING,
-  new_status STRING NOT NULL,
-  reason_snapshot STRING,
-  request_type STRING,
-  principal_email STRING,
-  resource_name STRING,
-  role STRING,
-  requester_email STRING,
-  approver_email STRING,
-  acted_by STRING,
-  actor_source STRING, -- FORM_SUBMIT / SHEET_EDIT / API
-  event_at TIMESTAMP NOT NULL,
-  details JSON
-  ```
+- **利用目的:** 申請のステータス変更履歴を監査証跡（イベントログ）として記録する。
 - **主要なソース:** `sql/001_tables.sql`, `apps-script/Code.gs`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `history_id` | STRING | NOT NULL | 履歴レコードの一意なID |
+| `request_id` | STRING | NOT NULL | 対象となる申請のID |
+| `event_type` | STRING | NOT NULL | イベントの種別 (REQUESTED / STATUS_CHANGED) |
+| `old_status` | STRING | NULLABLE | 変更前のステータス |
+| `new_status` | STRING | NOT NULL | 変更後のステータス |
+| `reason_snapshot` | STRING | NULLABLE | イベント発生時点での申請理由（後から改ざんできないように記録） |
+| `request_type` | STRING | NULLABLE | スナップショット: 申請の種類 |
+| `principal_email` | STRING | NULLABLE | スナップショット: 対象アカウント |
+| `resource_name` | STRING | NULLABLE | スナップショット: 対象リソース |
+| `role` | STRING | NULLABLE | スナップショット: 対象ロール |
+| `requester_email` | STRING | NULLABLE | スナップショット: 申請者 |
+| `approver_email` | STRING | NULLABLE | スナップショット: 承認者 |
+| `acted_by` | STRING | NULLABLE | イベントを引き起こしたユーザーまたはシステム |
+| `actor_source` | STRING | NULLABLE | イベントの発生元 (FORM_SUBMIT / SHEET_EDIT / API 等) |
+| `event_at` | TIMESTAMP | NOT NULL | イベント発生日時 |
+| `details` | JSON | NULLABLE | その他の付加情報 |
 
 ### `iam_reconciliation_issues`
 
-- **利用目的:** 申請されたIAM権限と実際のIAM権限の間の不一致（承認済みだが未適用、却下済みだが存在するなど）を検出し、記録する。
-- **スキーマ:**
-  ```
-  issue_id STRING NOT NULL,
-  issue_type STRING NOT NULL,
-  request_id STRING,
-  principal_email STRING,
-  resource_name STRING,
-  role STRING,
-  detected_at TIMESTAMP NOT NULL,
-  severity STRING NOT NULL,
-  status STRING NOT NULL,
-  details JSON
-  ```
+- **利用目的:** 意図（申請状態）と実態（IAM状態）の間の矛盾（不整合）を検出し、アラートとして記録する。
 - **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `issue_id` | STRING | NOT NULL | 不整合の検知一意識別子 |
+| `issue_type` | STRING | NOT NULL | 不整合の種別 (APPROVED_NOT_APPLIED / REJECTED_BUT_EXISTS 等) |
+| `request_id` | STRING | NULLABLE | 関連する申請ID（存在する場合） |
+| `principal_email` | STRING | NULLABLE | 問題が起きているアカウント |
+| `resource_name` | STRING | NULLABLE | 問題が起きているリソース |
+| `role` | STRING | NULLABLE | 問題が起きているロール |
+| `detected_at` | TIMESTAMP | NOT NULL | 不整合が検知された日時 |
+| `severity` | STRING | NOT NULL | 深刻度 (HIGH / MEDIUM 等) |
+| `status` | STRING | NOT NULL | 問題の対応ステータス (OPEN 等) |
+| `details` | JSON | NULLABLE | デバッグや調査に必要な詳細情報 |
 
 ### `iam_pipeline_job_reports`
 
-- **利用目的:** リソース収集やグループ収集などのパイプラインジョブの実行レポートを記録する。成功/失敗、エラーコード、メッセージ、ヒント、処理件数などの情報を含む。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  job_type STRING NOT NULL, -- RESOURCE_COLLECTION / GROUP_COLLECTION / ...
-  result STRING NOT NULL, -- SUCCESS / FAILED_PERMISSION / FAILED
-  error_code STRING,
-  error_message STRING,
-  hint STRING,
-  counts JSON,
-  details JSON,
-  occurred_at TIMESTAMP NOT NULL
-  ```
+- **利用目的:** システムのバックグラウンドで実行される非同期バッチジョブ（収集や棚卸し）の実行結果を記録する。
 - **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | バッチ処理の実行ID |
+| `job_type` | STRING | NOT NULL | ジョブの種類 (RESOURCE_COLLECTION / GROUP_COLLECTION 等) |
+| `result` | STRING | NOT NULL | 実行結果 (SUCCESS / FAILED_PERMISSION / FAILED) |
+| `error_code` | STRING | NULLABLE | 失敗時のエラーコードや例外名 |
+| `error_message` | STRING | NULLABLE | エラーの詳細メッセージ |
+| `hint` | STRING | NULLABLE | エラー解決のための運用ヒント |
+| `counts` | JSON | NULLABLE | 処理された件数（挿入行数など）のメトリクス |
+| `details` | JSON | NULLABLE | その他の詳細情報 |
+| `occurred_at` | TIMESTAMP | NOT NULL | ジョブが終了・記録された日時 |
 
 ### `principal_catalog`
 
-- **利用目的:** システム内で参照されるプリンシパル（ユーザー、グループ、サービスアカウントなど）のカタログを管理する。
-- **スキーマ:**
-  ```
-  principal_email STRING NOT NULL,
-  principal_name STRING,
-  principal_type STRING,
-  note STRING,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
-  ```
+- **利用目的:** システム内で参照されるプリンシパル（アカウント）のマスターデータを管理する。
 - **主要なソース:** `sql/004_workbook_tables.sql`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `principal_email` | STRING | NOT NULL | プリンシパルのメールアドレス（主キー） |
+| `principal_name` | STRING | NULLABLE | プリンシパルの表示名 |
+| `principal_type` | STRING | NULLABLE | アカウント種別（User, ServiceAccount, Group 等） |
+| `note` | STRING | NULLABLE | 管理用の備考 |
+| `updated_at` | TIMESTAMP | NOT NULL | レコードの最終更新日時 |
 
 ### `google_groups`
 
-- **利用目的:** Google Workspace/Cloud Identityから収集されたGoogleグループの情報を管理する。
-- **スキーマ:**
-  ```
-  group_email STRING NOT NULL,
-  group_name STRING,
-  description STRING,
-  source STRING,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
-  ```
+- **利用目的:** Cloud Identityから収集されたGoogleグループの一覧を保持する（洗い替えマスタ）。
 - **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `group_email` | STRING | NOT NULL | グループのメールアドレス（主キー） |
+| `group_name` | STRING | NULLABLE | グループの表示名 |
+| `description` | STRING | NULLABLE | グループの説明文 |
+| `source` | STRING | NULLABLE | データの収集元 (cloudidentity 等) |
+| `updated_at` | TIMESTAMP | NOT NULL | 収集・更新された日時 |
 
 ### `google_group_membership_history`
 
-- **利用目的:** Googleグループのメンバーシップ履歴を記録する。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  assessed_at TIMESTAMP NOT NULL,
-  group_email STRING NOT NULL,
-  member_email STRING NOT NULL,
-  member_display_name STRING,
-  membership_type STRING,
-  source STRING
-  ```
+- **利用目的:** Googleグループのメンバー所属状況（誰がどのグループにいるか）の変遷を記録する。
 - **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | 収集ジョブの実行ID |
+| `assessed_at` | TIMESTAMP | NOT NULL | 情報が収集された日時 |
+| `group_email` | STRING | NOT NULL | 親となるグループのメールアドレス |
+| `member_email` | STRING | NOT NULL | 所属しているメンバーのメールアドレス |
+| `member_display_name` | STRING | NULLABLE | メンバーの表示名 |
+| `membership_type` | STRING | NULLABLE | メンバーシップの種別やロール（MEMBER, OWNER 等） |
+| `source` | STRING | NULLABLE | データの収集元 |
 
 ### `gcp_resource_inventory_history`
 
-- **利用目的:** GCPリソース（プロジェクト、フォルダなど）のインベントリ履歴を記録する。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  assessed_at TIMESTAMP NOT NULL,
-  resource_type STRING NOT NULL,
-  resource_name STRING,
-  resource_id STRING NOT NULL,
-  parent_resource_id STRING,
-  full_resource_path STRING,
-  note STRING
-  ```
+- **利用目的:** Cloud Asset APIから収集したGCPリソース（プロジェクト、フォルダ等）の階層構造の履歴を記録する。
 - **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | 収集ジョブの実行ID |
+| `assessed_at` | TIMESTAMP | NOT NULL | 情報が収集された日時 |
+| `resource_type` | STRING | NOT NULL | リソースの種別 (Project, Folder 等) |
+| `resource_name` | STRING | NULLABLE | リソースの表示名 |
+| `resource_id` | STRING | NOT NULL | リソースの一意なID |
+| `parent_resource_id` | STRING | NULLABLE | 親リソースのID（階層構造の表現） |
+| `full_resource_path` | STRING | NULLABLE | リソースの完全なパス |
+| `note` | STRING | NULLABLE | 収集時の備考やスコープ情報 |
 
 ### `iam_status_master`
 
-- **利用目的:** IAM申請のステータスのマスタデータを管理する。
-- **スキーマ:**
-  ```
-  status_ja STRING NOT NULL,
-  status_code STRING,
-  description STRING,
-  sort_order INT64,
-  is_active BOOL NOT NULL DEFAULT TRUE,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
-  ```
+- **利用目的:** スプレッドシート等の帳票でステータスを日本語化・ソート順制御するためのマスタデータ。
 - **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `status_ja` | STRING | NOT NULL | 日本語でのステータス表示名 |
+| `status_code` | STRING | NULLABLE | システムで扱うステータスコード |
+| `description` | STRING | NULLABLE | ステータスの意味や説明 |
+| `sort_order` | INT64 | NULLABLE | 帳票で表示する際のソート順 |
+| `is_active` | BOOL | NOT NULL | このステータスが現在利用可能かどうか |
+| `updated_at` | TIMESTAMP | NOT NULL | レコードの最終更新日時 |
 
 ### `iam_permission_bindings_history`
 
-- **利用目的:** IAM権限バインディングの詳細な履歴を記録する。帳票用の整形済み履歴として利用される。
-- **スキーマ:**
-  ```
-  execution_id STRING NOT NULL,
-  recorded_at TIMESTAMP NOT NULL,
-  resource_name STRING,
-  resource_id STRING,
-  resource_full_path STRING,
-  principal_email STRING NOT NULL,
-  principal_type STRING,
-  iam_role STRING NOT NULL,
-  iam_condition STRING,
-  ticket_ref STRING,
-  request_reason STRING,
-  status_ja STRING,
-  approved_at TIMESTAMP,
-  next_review_at DATE,
-  approver STRING,
-  request_id STRING,
-  note STRING
-  ```
+- **利用目的:** 人間が棚卸しレビューを行うために、IAM権限の履歴に申請理由や承認者などの文脈を結合した整形済みテーブル。
 - **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | データ作成ジョブの実行ID |
+| `recorded_at` | TIMESTAMP | NOT NULL | データが記録された日時 |
+| `resource_name` | STRING | NULLABLE | 権限が付与されているリソース名 |
+| `resource_id` | STRING | NULLABLE | リソースの一意識別子 |
+| `resource_full_path` | STRING | NULLABLE | リソースの完全なパス |
+| `principal_email` | STRING | NOT NULL | 権限を持つアカウントのメールアドレス |
+| `principal_type` | STRING | NULLABLE | アカウント種別 |
+| `iam_role` | STRING | NOT NULL | 付与されているIAMロール |
+| `iam_condition` | STRING | NULLABLE | IAM Condition（条件付きロールの場合） |
+| `ticket_ref` | STRING | NULLABLE | 申請時のチケット参照番号 |
+| `request_reason` | STRING | NULLABLE | 申請理由（申請履歴から結合） |
+| `status_ja` | STRING | NULLABLE | 帳票表示用の日本語ステータス |
+| `approved_at` | TIMESTAMP | NULLABLE | 承認日時（申請履歴から結合） |
+| `next_review_at` | DATE | NULLABLE | 権限の有効期限・次回レビュー期日 |
+| `approver` | STRING | NULLABLE | 承認者（申請履歴から結合） |
+| `request_id` | STRING | NULLABLE | 関連する申請のID |
+| `note` | STRING | NULLABLE | 記録時の備考 |
 
 ### `iam_permission_matrix`
 
-- **利用目的:** IAM権限設定の履歴からピボットテーブルとして生成され、各リソースとプリンシパルに対するIAMロールの最新ステータスを一覧表示する。
-- **スキーマ:**
-  ```
-  リソース名 (STRING),
-  リソースID (STRING),
-  プリンシパル (STRING),
-  種別 (STRING),
-  [DYNAMIC_ROLE_COLUMNS] (STRING - 各ロールのステータスを表す動的カラム)
-  ```
+- **利用目的:** 各リソースとプリンシパルに対するIAMロールの付与状況をクロス集計（ピボット）した一覧テーブル。
 - **主要なソース:** `sql/006_matrix_pivot.sql`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `リソース名` | STRING | NULLABLE | 対象リソースの表示名 |
+| `リソースID` | STRING | NULLABLE | 対象リソースの一意なID |
+| `プリンシパル` | STRING | NULLABLE | 権限を持つアカウントのメールアドレス |
+| `種別` | STRING | NULLABLE | アカウントの種別 |
+| `[DYNAMIC_ROLE_COLUMNS]` | STRING | NULLABLE | （動的カラム）存在する各ロール名がカラムとなり、マトリクス形式でステータスを表示 |
 
 ### `iam_policy_permissions`
 
-- **利用目的:** 現在のIAMポリシーの実際の状態を保持する。**このテーブルは外部システムによって定期的に更新されることを想定しており、このプロジェクトのコードで`CREATE TABLE`は定義されていません。**
-- **スキーマ:** プロジェクトのコード内で`CREATE TABLE`定義がないため、明示的なスキーマは提示できませんが、その使用法から以下のカラムが暗示されます。
-  ```
-  principal_email STRING,
-  resource_name STRING,
-  role STRING,
-  principal_type STRING,
-  resource_id STRING,
-  full_resource_path STRING
-  ```
-- **主要なソース:** `cloud-run/app/repository.py` (参照), 複数のSQLクエリ (参照)
+- **利用目的:** 外部システムによって定期的に上書きされる、現在のIAMポリシーの「正」となる状態。このシステムからは**読み取り専用**として扱われる。
+- **主要なソース:** `cloud-run/app/repository.py` (参照のみ), `sql/*.sql` (参照のみ)
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `principal_email` | STRING | NULLABLE | 権限を持つアカウントのメールアドレス |
+| `resource_name` | STRING | NULLABLE | 権限が付与されているリソース名 |
+| `role` | STRING | NULLABLE | 付与されているIAMロール |
+| `principal_type` | STRING | NULLABLE | アカウントの種別 |
+| `resource_id` | STRING | NULLABLE | リソースの一意識別子 |
+| `full_resource_path` | STRING | NULLABLE | リソースの完全なパス |
+| `iam_condition` | STRING | NULLABLE | IAM Condition（条件付きロールの場合） |
