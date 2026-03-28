@@ -349,8 +349,6 @@ graph TD
   - 管理表向けの結合ビュー
 - `sql/005_workbook_views.sql`
   - 帳票の各シートと1対1対応するビュー
-- `sql/003_reconciliation.sql`
-  - 意図（申請）と実態（現状IAM）の不一致検知バッチ
 - `cloud-run/`
   - `POST /execute` で `request_id` を処理する実行API
 - `apps-script/Code.gs`
@@ -375,7 +373,6 @@ graph TD
    - `sql/002_views.sql` / `sql/004_workbook_tables.sql` / `sql/005_workbook_views.sql` 実行
    - 管理表タブでビュー参照設定
 1. 2:40-3:00
-   - `sql/003_reconciliation.sql` を手動実行
    - 1件の承認テスト（`APPROVED` -> Cloud Run -> ログ確認）
 
 ### 11.3. 実行時の前提
@@ -388,7 +385,7 @@ graph TD
     - 組織管理: `organization_id` に `roles/resourcemanager.projectIamAdmin` + `roles/browser`
 - `iam_policy_permissions` は既存の洗い替えジョブを継続利用する。
 - `iam_policy_bindings_raw_history` は棚卸しジョブ側で `WRITE_APPEND` する（生の履歴）。
-- `iam_permission_bindings_history` は `008_update_bindings_history.sql` によって生成される（帳票用整形履歴）。
+- `iam_permission_bindings_history` は Pythonバッチジョブによって生成される（帳票用整形履歴）。
 
 ### 11.4. MVP制約
 
@@ -442,8 +439,6 @@ Terraformによるインフラ構築後、BigQuery上でいくつかのSQLスク
      - `sql/005_workbook_views.sql`: 帳票の各シートに対応するビューを作成します。
 
 1. **その他のSQL**
-
-   - `sql/003_reconciliation.sql` や `sql/008_update_bindings_history.sql` などは、定期的な棚卸しやデータ更新のためのバッチSQLです。これらは通常、Cloud RunやCloud Schedulerから実行されるか、運用者が手動で実行します。
 
 ### 11.6. 出力情報の確認
 

@@ -8,7 +8,7 @@
 - `BQ_DATASET_ID`
 - `BQ_LOCATION`
 - `CLOUD_RUN_EXECUTE_URL` (例: `https://<service-url>/execute`)
-- `WEBHOOK_SHARED_SECRET` (任意ですが推奨)
+- `WEBHOOK_SHARED_SECRET` (必須)
 - `GEMINI_API_KEY` (Gemini提案アシスタントを使う場合に必須)
 
 ルートの設定ファイルから以下のコマンドでJSONとして生成できます:

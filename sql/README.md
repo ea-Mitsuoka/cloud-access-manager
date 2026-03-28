@@ -7,7 +7,6 @@
 1. `002_views.sql` (コアオペレーショナルビュー)
 1. `005_workbook_views.sql` (シート互換ビュー)
 1. `007_seed_workbook_from_existing.sql` (既存のオペレーショナルテーブルからのオプショナルなシード)
-1. `003_reconciliation.sql` (突合バッチ)
 
 注意：
 
