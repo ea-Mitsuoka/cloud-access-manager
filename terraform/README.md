@@ -28,6 +28,7 @@ terraform apply -var-file=../environment.auto.tfvars
 - `revoke_expired_permissions_schedule` は、`/revoke_expired_permissions` を実行する期限切れ権限の自動剥奪ジョブのスケジュールを制御します。
 - `iam_bindings_history_update_schedule` は、`/jobs/update-iam-bindings-history` を実行する履歴スナップショット更新ジョブのスケジュールを制御します。
 - `scheduler_time_zone` は、すべてのCloud Schedulerジョブのタイムゾーンを制御します。
+- `job_timeout_seconds` は、Cloud Runサービスと、それを呼び出す全てのCloud Schedulerジョブのタイムアウト値を秒単位で統一的に設定します。これにより、Scheduler側のタイムアウトが先に発生してしまい、Cloud Runでの長時間処理が中断される事態を防ぎます。
 - `terraform output management_scope` で選択されている管理スコープを確認できます。
 - `terraform output effective_managed_project_id` で現在の管理対象プロジェクトを確認できます。
 - `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `group_collection_scheduler_job` など)。
