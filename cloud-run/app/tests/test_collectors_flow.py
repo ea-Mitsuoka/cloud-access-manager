@@ -71,6 +71,7 @@ def mock_iam_policy_collector():
     with patch("app.main.iam_policy_collector", autospec=True) as mock:
         yield mock
 
+
 # -------------------------------------------------------------------
 
 

@@ -159,7 +159,9 @@ def execute_request():
     try:
         result = iam_executor.execute(req)
     except Exception as exc:  # pragma: no cover
-        logging.error(f"Execution failed for request {request_id}: {exc}", exc_info=True)
+        logging.error(
+            f"Execution failed for request {request_id}: {exc}", exc_info=True
+        )
         result = ExecutionResult(
             result="FAILED",
             action="GRANT" if req.request_type != "REVOKE" else "REVOKE",
@@ -322,7 +324,9 @@ def collect_iam_policies():
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
-        rows, counts, scope = iam_policy_collector.collect_rows(execution_id=execution_id)
+        rows, counts, scope = iam_policy_collector.collect_rows(
+            execution_id=execution_id
+        )
         inserted = repo.replace_iam_policy_permissions(rows)
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
@@ -340,21 +344,28 @@ def collect_iam_policies():
         )
         report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
-        return jsonify({
-            "execution_id": execution_id,
-            "result": report["result"],
-            "error_code": report["error_code"],
-            "error_message": report["error_message"],
-            "hint": report["hint"],
-        }), report["http_status"]
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
 
-    return jsonify({
-        "execution_id": execution_id,
-        "result": "SUCCESS",
-        "scope": scope,
-        "inserted_rows": inserted,
-        "counts": counts,
-    })
+    return jsonify(
+        {
+            "execution_id": execution_id,
+            "result": "SUCCESS",
+            "scope": scope,
+            "inserted_rows": inserted,
+            "counts": counts,
+        }
+    )
 
 
 @app.post("/reconcile")
@@ -586,6 +597,51 @@ def update_iam_bindings_history():
         return jsonify(json_response), report["http_status"]
 
 
+@app.post("/api/requests")
+def api_create_request():
+    """新規アクセスリクエストを登録します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    try:
+        repo.insert_access_request_raw(payload)
+        return jsonify({"result": "SUCCESS"})
+    except Exception as exc:
+        logging.error(f"Failed to create request: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.put("/api/requests/<request_id>/status")
+def api_update_request_status(request_id):
+    """アクセスリクエストのステータスを更新します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    status = payload.get("status")
+    if not status:
+        return jsonify({"error": "status is required"}), 400
+    try:
+        repo.update_request_status(request_id, status)
+        return jsonify({"result": "SUCCESS"})
+    except Exception as exc:
+        logging.error(f"Failed to update request status: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/history")
+def api_create_history():
+    """リクエスト履歴イベントを登録します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    try:
+        repo.insert_request_history_event(payload)
+        return jsonify({"result": "SUCCESS"})
+    except Exception as exc:
+        logging.error(f"Failed to create history: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
 def _authorize() -> bool:
     """
     リクエストを認証します。
@@ -632,7 +688,9 @@ def _build_collection_error_report(
     Returns:
         dict[str, Any]: エラーレポートの詳細を含む辞書。
     """
-    logging.error(f"Pipeline job {job_type} failed (Execution ID: {execution_id}): {exc}")
+    logging.error(
+        f"Pipeline job {job_type} failed (Execution ID: {execution_id}): {exc}"
+    )
     error_code = type(exc).__name__
     error_message = str(exc)
     hint = "Check Cloud Run logs for details."

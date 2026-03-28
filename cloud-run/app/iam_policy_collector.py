@@ -49,16 +49,18 @@ class IamPolicyCollector:
                         p_email = member
 
                     # 重い expand_member は行わず、生のバインディング情報をそのままDBへ流す
-                    rows.append({
-                        "execution_id": execution_id,
-                        "assessment_timestamp": assessment_timestamp,
-                        "scope": scope,
-                        "resource_type": asset_type,
-                        "resource_name": resource_name,
-                        "principal_type": p_type,
-                        "principal_email": p_email,
-                        "role": role,
-                    })
+                    rows.append(
+                        {
+                            "execution_id": execution_id,
+                            "assessment_timestamp": assessment_timestamp,
+                            "scope": scope,
+                            "resource_type": asset_type,
+                            "resource_name": resource_name,
+                            "principal_type": p_type,
+                            "principal_email": p_email,
+                            "role": role,
+                        }
+                    )
 
         return rows, counts, scope
 

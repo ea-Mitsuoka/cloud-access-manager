@@ -166,50 +166,54 @@ function onEdit(e) {
   refreshRequestReviewStatusForRequestIds_([String(requestId)]);
 }
 
-function insertRequestToBigQuery_(props, request) {
-  const sql = `
-    INSERT INTO `${props.projectId}.${props.datasetId}.iam_access_requests`
-    (
-      request_id, request_type, principal_email, resource_name, role,
-      reason, requester_email, approver_email, status, requested_at, ticket_ref,
-      created_at, updated_at
-    )
-    VALUES (
-      @request_id, @request_type, @principal_email, @resource_name, @role,
-      @reason, @requester_email, @approver_email, @status, TIMESTAMP(@requested_at), @ticket_ref,
-      CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
-    )
-  `;
+function callCloudRunApi_(props, path, method, payloadObj) {
+  const token = getOidcToken_(props);
+  const url = props.cloudRunUrl.replace(/\/execute\/?$/, '') + path;
+  const options = {
+    method: method,
+    contentType: 'application/json',
+    payload: JSON.stringify(payloadObj),
+    headers: { Authorization: `Bearer ${token}` },
+    muteHttpExceptions: true
+  };
+  const maxRetries = 3;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const resp = UrlFetchApp.fetch(url, options);
+      const code = resp.getResponseCode();
+      if (code >= 300) {
+        throw new Error(`Cloud Run API failed (${code}): ${resp.getContentText()}`);
+      }
+      return;
+    } catch (err) {
+      if (i === maxRetries - 1) throw err;
+      Utilities.sleep(1000 * (i + 1));
+    }
+  }
+}
 
-  runQuery_(props, sql, [
-    param_('request_id', 'STRING', request.request_id),
-    param_('request_type', 'STRING', request.request_type),
-    param_('principal_email', 'STRING', request.principal_email),
-    param_('resource_name', 'STRING', request.resource_name),
-    param_('role', 'STRING', request.role),
-    param_('reason', 'STRING', request.reason),
-    param_('requester_email', 'STRING', request.requester_email),
-    param_('approver_email', 'STRING', request.approver_email),
-    param_('status', 'STRING', request.status),
-    param_('requested_at', 'STRING', request.requested_at),
-    param_('ticket_ref', 'STRING', request.ticket_ref)
-  ]);
+function insertRequestToBigQuery_(props, request) {
+  const payload = {
+    request_id: request.request_id,
+    request_type: request.request_type,
+    principal_email: request.principal_email,
+    resource_name: request.resource_name,
+    role: request.role,
+    reason: request.reason,
+    requester_email: request.requester_email,
+    approver_email: request.approver_email,
+    status: request.status,
+    requested_at: request.requested_at,
+    ticket_ref: request.ticket_ref,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  callCloudRunApi_(props, '/api/requests', 'post', payload);
 }
 
 function updateStatusInBigQuery_(props, requestId, normalizedStatus) {
-  const statusExpr = normalizedStatus === STATUS_APPROVED
-    ? "status = @status, approved_at = CURRENT_TIMESTAMP(), updated_at = CURRENT_TIMESTAMP()"
-    : "status = @status, updated_at = CURRENT_TIMESTAMP()";
-
-  const sql = `
-    UPDATE `${props.projectId}.${props.datasetId}.iam_access_requests`
-    SET ${statusExpr}
-    WHERE request_id = @request_id
-  `;
-  runQuery_(props, sql, [
-    param_('request_id', 'STRING', requestId),
-    param_('status', 'STRING', normalizedStatus)
-  ]);
+  const payload = { status: normalizedStatus };
+  callCloudRunApi_(props, `/api/requests/${requestId}/status`, 'put', payload);
 }
 
 function getRequestSnapshot_(props, requestId) {
@@ -233,62 +237,25 @@ function getRequestSnapshot_(props, requestId) {
 }
 
 function insertRequestHistoryEvent_(props, event) {
-  const sql = `
-    INSERT INTO `${props.projectId}.${props.datasetId}.iam_access_request_history`
-    (
-      history_id,
-      request_id,
-      event_type,
-      old_status,
-      new_status,
-      reason_snapshot,
-      request_type,
-      principal_email,
-      resource_name,
-      role,
-      requester_email,
-      approver_email,
-      acted_by,
-      actor_source,
-      event_at,
-      details
-    )
-    VALUES (
-      @history_id,
-      @request_id,
-      @event_type,
-      @old_status,
-      @new_status,
-      @reason_snapshot,
-      @request_type,
-      @principal_email,
-      @resource_name,
-      @role,
-      @requester_email,
-      @approver_email,
-      @acted_by,
-      @actor_source,
-      CURRENT_TIMESTAMP(),
-      PARSE_JSON(@details_json)
-    )
-  `;
-  runQuery_(props, sql, [
-    param_('history_id', 'STRING', Utilities.getUuid()),
-    param_('request_id', 'STRING', String(event.request_id || '')),
-    param_('event_type', 'STRING', String(event.event_type || '')),
-    param_('old_status', 'STRING', String(event.old_status || '')),
-    param_('new_status', 'STRING', String(event.new_status || '')),
-    param_('reason_snapshot', 'STRING', String(event.reason_snapshot || '')),
-    param_('request_type', 'STRING', String(event.request_type || '')),
-    param_('principal_email', 'STRING', String(event.principal_email || '')),
-    param_('resource_name', 'STRING', String(event.resource_name || '')),
-    param_('role', 'STRING', String(event.role || '')),
-    param_('requester_email', 'STRING', String(event.requester_email || '')),
-    param_('approver_email', 'STRING', String(event.approver_email || '')),
-    param_('acted_by', 'STRING', String(event.acted_by || 'unknown')),
-    param_('actor_source', 'STRING', String(event.actor_source || 'UNKNOWN')),
-    param_('details_json', 'STRING', String(event.details_json || '{}'))
-  ]);
+  const payload = {
+    history_id: Utilities.getUuid(),
+    request_id: String(event.request_id || ''),
+    event_type: String(event.event_type || ''),
+    old_status: String(event.old_status || ''),
+    new_status: String(event.new_status || ''),
+    reason_snapshot: String(event.reason_snapshot || ''),
+    request_type: String(event.request_type || ''),
+    principal_email: String(event.principal_email || ''),
+    resource_name: String(event.resource_name || ''),
+    role: String(event.role || ''),
+    requester_email: String(event.requester_email || ''),
+    approver_email: String(event.approver_email || ''),
+    acted_by: String(event.acted_by || 'unknown'),
+    actor_source: String(event.actor_source || 'UNKNOWN'),
+    event_at: new Date().toISOString(),
+    details: event.details_json ? JSON.parse(event.details_json) : {}
+  };
+  callCloudRunApi_(props, '/api/history', 'post', payload);
 }
 
 function getOidcToken_(props) {

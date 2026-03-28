@@ -48,9 +48,7 @@ def test_reconcile_job_success_with_issues(
     mock_repo.run_reconciliation_job.return_value = 5
 
     # Act
-    response = client.post(
-        "/reconcile", headers={"Authorization": "Bearer test-token"}
-    )
+    response = client.post("/reconcile", headers={"Authorization": "Bearer test-token"})
 
     # Assert
     assert response.status_code == 200
@@ -87,9 +85,7 @@ def test_reconcile_job_success_no_issues(
     mock_repo.run_reconciliation_job.return_value = 0
 
     # Act
-    response = client.post(
-        "/reconcile", headers={"Authorization": "Bearer test-token"}
-    )
+    response = client.post("/reconcile", headers={"Authorization": "Bearer test-token"})
 
     # Assert
     assert response.status_code == 200
@@ -114,7 +110,8 @@ def test_reconcile_job_success_no_issues(
 
 
 def test_reconcile_job_failure(
-        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
     """リコンサイルジョブの失敗ケースをテストします。
 
     Args:
@@ -125,9 +122,7 @@ def test_reconcile_job_failure(
     mock_repo.run_reconciliation_job.side_effect = Exception("BigQuery is down")
 
     # Act
-    response = client.post(
-        "/reconcile", headers={"Authorization": "Bearer test-token"}
-    )
+    response = client.post("/reconcile", headers={"Authorization": "Bearer test-token"})
 
     # Assert
     assert response.status_code == 500
@@ -146,7 +141,8 @@ def test_reconcile_job_failure(
 
 
 def test_update_iam_bindings_history_success(
-        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
     """IAMバインディング履歴更新ジョブの成功ケースをテストします。
 
     Args:
@@ -191,7 +187,8 @@ def test_update_iam_bindings_history_success(
 
 
 def test_update_iam_bindings_history_failure(
-        client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock):
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
     """IAMバインディング履歴更新ジョブの失敗ケースをテストします。
 
     Args:

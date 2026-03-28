@@ -125,6 +125,4 @@ def test_revoke_expired_permissions_when_permission_is_gone(
     mock_iam_executor.execute.assert_not_called()
 
     # Verify status was updated to REVOKED_ALREADY_GONE
-    mock_repo.update_request_status.assert_called_with(
-        "req-2", "REVOKED_ALREADY_GONE"
-    )
+    mock_repo.update_request_status.assert_called_with("req-2", "REVOKED_ALREADY_GONE")

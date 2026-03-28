@@ -326,20 +326,33 @@ class Repository:
             return None
         return rows[0]
 
+    def insert_access_request_raw(self, row: dict[str, Any]) -> None:
+        """新規アクセスリクエストをStreaming Insertで記録します。"""
+        errors = self._client.insert_rows_json(self.requests_table, [row])
+        if errors:
+            raise RuntimeError(f"failed to insert access request: {errors}")
+
+    def insert_request_history_event(self, row: dict[str, Any]) -> None:
+        """アクセスリクエストの履歴イベントをStreaming Insertで記録します。"""
+        table = f"{self._project_id}.{self._dataset_id}.iam_access_request_history"
+        errors = self._client.insert_rows_json(table, [row])
+        if errors:
+            raise RuntimeError(f"failed to insert request history: {errors}")
+
     def update_request_status(self, request_id: str, status: str) -> None:
         """
         アクセスリクエストのステータスを更新します。
-
-        Args:
-            request_id (str): 更新するリクエストのID。
-            status (str): 新しいステータス。
         """
+        set_clause = "status = @status, updated_at = CURRENT_TIMESTAMP()"
+        if status == "APPROVED":
+            set_clause += ", approved_at = CURRENT_TIMESTAMP()"
+
         sql = f"""
         UPDATE `{self.requests_table}`
-        SET status = @status,
-            updated_at = CURRENT_TIMESTAMP()
+        SET {set_clause}
         WHERE request_id = @request_id
         """
+
         params = [
             bigquery.ScalarQueryParameter("status", "STRING", status),
             bigquery.ScalarQueryParameter("request_id", "STRING", request_id),
@@ -622,9 +635,7 @@ class Repository:
           resource_name, principal_type, principal_email, role
         FROM `{self.iam_policy_permissions_table}`
         """
-        params = [
-            bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)
-        ]
+        params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
         job = self._client.query(
             sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
         )

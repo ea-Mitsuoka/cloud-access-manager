@@ -26,12 +26,12 @@ graph TD
 
     subgraph "Data Processing & Automation"
         C --> D["Google Apps Script"];
-        D --> E["BigQuery: iam_access_requests"];
-        D --> E2["BigQuery: iam_access_request_history"];
+        D -- "HTTP API" --> CR["Cloud Run (iam-access-executor)"];
+        CR --> E["BigQuery: iam_access_requests"];
+        CR --> E2["BigQuery: iam_access_request_history"];
 
         subgraph "Cloud Run Service"
-            CR["Cloud Run (iam-access-executor)"];
-            E --> CR;
+            CR;
             F("Cloud Scheduler") --> CR;
         end
 
