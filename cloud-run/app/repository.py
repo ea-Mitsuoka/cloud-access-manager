@@ -275,7 +275,6 @@ class Repository:
         """IAMポリシー権限テーブルの完全なテーブルID。"""
         return f"{self._project_id}.{self._dataset_id}.iam_policy_permissions"
 
-
     def replace_iam_policy_permissions(self, rows: list[dict[str, Any]]) -> int:
         """IAMポリシーテーブルを洗い替えます (WRITE_TRUNCATE)。"""
         if not rows:

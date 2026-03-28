@@ -584,7 +584,6 @@ def update_iam_bindings_history():
 def _authorize() -> bool:
     """
     リクエストを認証します。
-
     Cloud SchedulerからのOIDCトークン、または共有シークレットトークンを検証します。
 
     Returns:

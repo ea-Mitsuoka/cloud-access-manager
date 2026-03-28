@@ -229,4 +229,7 @@ def test_collect_iam_policies_success(
 
     mock_repo.replace_iam_policy_permissions.assert_called_once()
     mock_repo.insert_pipeline_job_report.assert_called_once()
-    assert mock_repo.insert_pipeline_job_report.call_args[1]["job_type"] == "IAM_POLICY_COLLECTION"
+    assert (
+        mock_repo.insert_pipeline_job_report.call_args[1]["job_type"]
+        == "IAM_POLICY_COLLECTION"
+    )

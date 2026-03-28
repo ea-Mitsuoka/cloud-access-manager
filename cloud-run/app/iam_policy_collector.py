@@ -5,6 +5,7 @@ from typing import Any
 
 from google.cloud import asset_v1
 
+
 class IamPolicyCollector:
     """Cloud Asset InventoryからIAMポリシーを収集するクラス。"""
 
@@ -13,7 +14,9 @@ class IamPolicyCollector:
         self._target_org_id = target_org_id
         self._client = asset_v1.AssetServiceClient()
 
-    def collect_rows(self, execution_id: str) -> tuple[list[dict[str, Any]], dict[str, int], str]:
+    def collect_rows(
+        self, execution_id: str
+    ) -> tuple[list[dict[str, Any]], dict[str, int], str]:
         scope = self._resolve_scope()
         assessment_timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -21,9 +24,7 @@ class IamPolicyCollector:
         counts = {"policies": 0, "bindings": 0}
 
         # 外部システムと同様に単一スコープでIAMポリシーを検索
-        response = self._client.search_all_iam_policies(
-            request={"scope": scope}
-        )
+        response = self._client.search_all_iam_policies(request={"scope": scope})
 
         for result in response:
             counts["policies"] += 1
@@ -38,7 +39,11 @@ class IamPolicyCollector:
                     if ":" in member:
                         p_type_raw, p_email = member.split(":", 1)
                         # スキーマに合わせて型を正規化
-                        p_type = "SERVICE_ACCOUNT" if p_type_raw.lower() == "serviceaccount" else p_type_raw.upper()
+                        p_type = (
+                            "SERVICE_ACCOUNT"
+                            if p_type_raw.lower() == "serviceaccount"
+                            else p_type_raw.upper()
+                        )
                     else:
                         p_type = "UNKNOWN"
                         p_email = member
