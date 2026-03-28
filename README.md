@@ -21,12 +21,13 @@
 graph TD
     subgraph "User Interaction"
         A[User] --> B("Google Form");
-        B --> C("Google Sheet: requests_raw");
+        B --> C("Google Sheet: requests_review");
     end
 
     subgraph "Data Processing & Automation"
         C --> D["Google Apps Script"];
         D --> E["BigQuery: iam_access_requests"];
+        D --> E2["BigQuery: iam_access_request_history"];
 
         subgraph "Cloud Run Service"
             CR["Cloud Run (iam-access-executor)"];
@@ -34,29 +35,29 @@ graph TD
             F("Cloud Scheduler") --> CR;
         end
 
-        CR -- "IAM API" --> G["Google Cloud IAM"];
-        G --> CR;
-        
+        CR -- "IAM API" --> G1["Google Cloud IAM"];
+        CR -- "Cloud Asset API" --> G2["Google Cloud Asset Inventory"];
+        CR -- "Cloud Identity API" --> G3["Google Cloud Identity"];
+
         CR --> H["BigQuery: iam_access_change_log"];
-        CR --> I["BigQuery: iam_policy_bindings_raw_history"];
+        CR -. "未実装" .-> I["BigQuery: iam_policy_bindings_raw_history"];
         CR --> J["BigQuery: google_groups"];
         CR --> K["BigQuery: google_group_membership_history"];
+        CR --> R["BigQuery: gcp_resource_inventory_history"];
         CR --> L["BigQuery: iam_reconciliation_issues"];
         CR --> M["BigQuery: iam_pipeline_job_reports"];
         CR --> N["BigQuery: iam_permission_bindings_history"];
-        CR --> O["BigQuery: iam_permission_bindings_history"];
     end
 
     subgraph "Data Visualization"
         P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report");
         E -- "used by" --> P;
         H -- "used by" --> P;
-        I -- "used by" --> P;
         J -- "used by" --> P;
         K -- "used by" --> P;
+        R -- "used by" --> P;
         L -- "used by" --> P;
         N -- "used by" --> P;
-        O -- "used by" --> P;
     end
 
     style CR fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#FFFFFF
@@ -191,6 +192,7 @@ graph TD
 - `iam_policy_bindings_raw_history`
 
   - 用途: **生のIAM設定履歴**。棚卸しジョブによって収集された、特定の時点での加工されていないIAMバインディングのスナップショット。監査証跡の元データとして機能する。
+  - **※注意 (現状の仕様):** 現在のMVP実装では、このテーブルへデータを収集・追記するバッチプログラム（コレクター）は未実装です。
   - 主要列: `execution_id, assessment_timestamp, scope, resource_type, resource_name, principal_type, principal_email, role`
   - 更新: `WRITE_APPEND`
 
@@ -251,6 +253,30 @@ graph TD
 
   - 用途: 意図（申請）と実態（現状IAM）の不一致管理
   - 主要列: `issue_id, issue_type, request_id, principal_email, resource_name, role, detected_at, severity, status`
+
+- `gcp_resource_inventory_history`
+
+  - 用途: Cloud Asset API から収集した GCP リソース（プロジェクト、フォルダ等）の棚卸し履歴。
+  - 主要列: `execution_id, assessed_at, resource_type, resource_id, parent_resource_id, full_resource_path`
+
+- `google_groups` / `google_group_membership_history`
+
+  - 用途: Cloud Identity API から収集した Google グループの定義およびメンバーシップ履歴。
+  - 主要列: `group_email`, `member_email`, `membership_type`
+
+- `iam_pipeline_job_reports`
+
+  - 用途: リソース収集や不整合検知など、Cloud Run で実行される非同期バッチジョブの実行結果レポート。
+  - 主要列: `execution_id, job_type, result, error_message, counts`
+
+- `principal_catalog` (マスタ)
+
+  - 用途: プリンシパル（ユーザー、SA等）の情報を管理する帳票用マスタ。
+  - **※注意 (現状の仕様):** 初回構築時のデータ流し込み（シード）のみ実装されており、定期更新の自動化は未実装です。
+
+- `iam_status_master` (マスタ)
+
+  - 用途: システム内で使用される申請ステータス（日本語名、コード、説明、表示順）を定義するマスタ。
 
 ## 6. 機能要件
 
