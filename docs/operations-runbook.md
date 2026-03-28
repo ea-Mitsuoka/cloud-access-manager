@@ -440,7 +440,7 @@ bq query --use_legacy_sql=false
 万が一、これらのテーブルを意図的に削除する必要が生じた場合（例: プロジェクト全体の廃止時）、以下の手順を踏む必要があります。
 
 1. **Terraformコードの変更:**
-   `terraform/main.tf` を開き、対象となる `google_bigquery_table` リソースから `lifecycle { prevent_destroy = true }` ブロックをコメントアウトまたは削除します。
+   `terraform/modules/bigquery/main.tf` を開き、対象となる `google_bigquery_table` リソースから `lifecycle { prevent_destroy = true }` ブロックをコメントアウトまたは削除します。
 1. **Terraformの適用:**
    変更を適用します (`terraform apply`)。
 1. **Terraformによる削除:**
