@@ -326,6 +326,14 @@ class Repository:
             return None
         return rows[0]
 
+    def get_status_master(self) -> dict[str, str]:
+        """DBからステータスマスタを取得し、日本語名とコードの対応辞書を返します。"""
+        sql = f"SELECT status_ja, status_code FROM `{self._project_id}.{self._dataset_id}.iam_status_master` WHERE is_active"
+        rows = self._client.query(sql).result()
+        return {
+            row["status_ja"]: row["status_code"] for row in rows if row["status_code"]
+        }
+
     def insert_access_request_raw(self, row: dict[str, Any]) -> None:
         """新規アクセスリクエストをStreaming Insertで記録します。"""
         errors = self._client.insert_rows_json(self.requests_table, [row])

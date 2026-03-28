@@ -597,6 +597,23 @@ def update_iam_bindings_history():
         return jsonify(json_response), report["http_status"]
 
 
+@app.get("/api/statuses")
+def api_get_statuses():
+    """GAS等のクライアント向けにステータスマスタの対応表を提供します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        mapping = repo.get_status_master()
+        # 英語のステータスコード自身もマッピングに含める（例: "APPROVED": "APPROVED"）
+        for code in list(mapping.values()):
+            if code:
+                mapping[code] = code
+        return jsonify({"mapping": mapping})
+    except Exception as exc:
+        logging.error(f"Failed to get statuses: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.post("/api/requests")
 def api_create_request():
     """新規アクセスリクエストを登録します。"""

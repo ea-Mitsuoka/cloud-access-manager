@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+
+class RequestStatus:
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+    REVOKED = "REVOKED"
+    REVOKED_ALREADY_GONE = "REVOKED_ALREADY_GONE"
+    REVOKE_FAILED = "REVOKE_FAILED"
+
+
+class ExecutionState:
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+    FAILED_PERMISSION = "FAILED_PERMISSION"

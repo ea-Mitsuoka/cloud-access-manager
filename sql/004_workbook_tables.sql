@@ -78,25 +78,15 @@ CLUSTER BY resource_id, principal_email, iam_role;
 -- Initial status master rows (idempotent via MERGE).
 MERGE `your_project.your_dataset.iam_status_master` T
 USING (
-  SELECT '申請中' AS status_ja, 'Requested' AS status_code, '利用者がアクセスを申請した状態' AS description, 10 AS sort_order UNION ALL
-  SELECT '承認待ち', 'Pending Approval', '承認者のアクション待ち', 20 UNION ALL
-  SELECT '審査中', 'Under Review', 'セキュリティ/業務オーナー等が審査中', 30 UNION ALL
-  SELECT '差戻し', 'More Info Required', '申請者へ差し戻し・補足要求あり', 40 UNION ALL
-  SELECT '却下', 'Rejected', '明確に拒否された状態', 50 UNION ALL
-  SELECT '承認済', 'Approved', '承認は出たがまだプロビジョニング前', 60 UNION ALL
-  SELECT 'プロビジョニング中', 'Provisioning', '付与処理中', 70 UNION ALL
-  SELECT '有効', 'Active / Provisioned', '実際にアクセス可能な状態', 80 UNION ALL
-  SELECT '期限付き', 'Temporary / Time-limited', 'TTL付きアクセス', 90 UNION ALL
-  SELECT '緊急アクセス', 'Emergency / Break-glass', '監査ログ付きの一時特権', 100 UNION ALL
-  SELECT '一時凍結', 'Suspended', '違反や保留により一時停止', 110 UNION ALL
-  SELECT '無効化／削除済', 'Deprovisioned / Revoked', 'アクセス取り消し完了', 120 UNION ALL
-  SELECT '期限切れ', 'Expired', 'TTL到達で自動無効化', 130 UNION ALL
-  SELECT '更新要求中', 'Renewal Requested', '定期レビューで更新申請中', 140 UNION ALL
-  SELECT '更新審査中', 'Renewal Under Review', '更新可否を審査中', 150 UNION ALL
-  SELECT '更新保留', 'Renewal Rejected / Not Renewed', '更新不可', 160 UNION ALL
-  SELECT 'スケジュール済', 'Scheduled for Deprovision', '将来的に削除予定', 170 UNION ALL
-  SELECT '監査待ち', 'Audit Pending', '監査チームによる確認待ち', 180 UNION ALL
-  SELECT '監査完了', 'Audit Completed', '監査完了', 190
+  SELECT '申請中' AS status_ja, 'PENDING' AS status_code, '利用者がアクセスを申請した状態' AS description, 10 AS sort_order UNION ALL
+  SELECT '承認済', 'APPROVED', '承認は出たがまだプロビジョニング前', 60 UNION ALL
+  SELECT '却下', 'REJECTED', '明確に拒否された状態', 50 UNION ALL
+  SELECT '取消', 'CANCELLED', '申請者によってキャンセル', 55 UNION ALL
+  SELECT 'プロビジョニング中', 'PROVISIONING', '付与処理中', 70 UNION ALL
+  SELECT '有効', 'ACTIVE', '実際にアクセス可能な状態', 80 UNION ALL
+  SELECT '無効化／削除済', 'REVOKED', 'アクセス取り消し完了', 120 UNION ALL
+  SELECT '期限切れ', 'EXPIRED', 'TTL到達で自動無効化', 130 UNION ALL
+  SELECT '実行失敗', 'REVOKE_FAILED', '剥奪失敗', 140
 ) S
 ON T.status_ja = S.status_ja
 WHEN MATCHED THEN

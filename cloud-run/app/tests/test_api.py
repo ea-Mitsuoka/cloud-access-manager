@@ -52,3 +52,18 @@ def test_api_create_history(
     assert response.status_code == 200
     assert response.get_json()["result"] == "SUCCESS"
     mock_repo.insert_request_history_event.assert_called_once()
+
+
+def test_api_get_statuses(
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
+    mock_repo.get_status_master.return_value = {
+        "承認済": "APPROVED",
+        "申請中": "PENDING",
+    }
+    response = client.get("/api/statuses")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["mapping"]["承認済"] == "APPROVED"
+    assert data["mapping"]["APPROVED"] == "APPROVED"
+    mock_repo.get_status_master.assert_called_once()

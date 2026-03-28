@@ -441,22 +441,42 @@ function normalizeRequestType_(raw) {
   return 'GRANT';
 }
 
+function getStatusMapping_(props) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('status_mapping');
+  if (cached) return JSON.parse(cached);
+
+  let mapping = { '承認済': 'APPROVED', '申請中': 'PENDING', '却下': 'REJECTED', '取消': 'CANCELLED' }; // Fallback
+  try {
+    const token = getOidcToken_(props);
+    const url = props.cloudRunUrl.replace(/\/execute\/?$/, '') + '/api/statuses';
+    const options = {
+      method: 'get',
+      headers: { Authorization: `Bearer ${token}` },
+      muteHttpExceptions: true
+    };
+    const resp = UrlFetchApp.fetch(url, options);
+    if (resp.getResponseCode() === 200) {
+       const data = JSON.parse(resp.getContentText());
+       mapping = data.mapping;
+       cache.put('status_mapping', JSON.stringify(mapping), 3600); // 1時間キャッシュ
+    }
+  } catch(e) {
+    console.warn('Failed to fetch status mapping from API: ' + e);
+  }
+  return mapping;
+}
+
 function normalizeStatus_(raw) {
   const v = String(raw || '').trim();
   if (!v) return STATUS_PENDING;
-  const map = {
-    '承認済': 'APPROVED',
-    '承認済み': 'APPROVED',
-    'APPROVED': 'APPROVED',
-    '申請中': 'PENDING',
-    'PENDING': 'PENDING',
-    '却下': 'REJECTED',
-    'REJECTED': 'REJECTED',
-    '取消': 'CANCELLED',
-    'キャンセル': 'CANCELLED',
-    'CANCELLED': 'CANCELLED'
-  };
-  return map[v] || v;
+  try {
+    const props = getProps_();
+    const map = getStatusMapping_(props);
+    return map[v] || v;
+  } catch(e) {
+    return v;
+  }
 }
 
 function getActorEmail_() {
