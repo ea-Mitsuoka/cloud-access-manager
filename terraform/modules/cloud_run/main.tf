@@ -42,7 +42,6 @@ resource "google_cloud_run_v2_service" "executor" {
         name  = "GAS_INVOKER_EMAIL"
         value = var.gas_invoker_service_account_email
       }
-      }
     }
   }
 }

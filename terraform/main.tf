@@ -107,8 +107,6 @@ resource "google_organization_iam_member" "executor_managed_organization_roles" 
   member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
 }
 
-"
-}
 
 module "cloud_run" {
   source                                  = "./modules/cloud_run"
@@ -129,7 +127,7 @@ module "cloud_run" {
     google_project_service.services,
     google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
     google_project_iam_member.executor_bigquery_job_user,
-    
+
     google_project_iam_member.executor_managed_project_roles,
     google_organization_iam_member.executor_managed_organization_roles,
   ]
