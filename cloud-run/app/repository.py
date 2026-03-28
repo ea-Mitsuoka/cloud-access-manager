@@ -322,7 +322,8 @@ class Repository:
         """
         sql = f"""
         UPDATE `{self.requests_table}`
-        SET status = @status
+        SET status = @status,
+            updated_at = CURRENT_TIMESTAMP()
         WHERE request_id = @request_id
         """
         params = [
@@ -592,5 +593,46 @@ class Repository:
         params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         job = self._client.query(sql, job_config=job_config)
+        job.result()
+        return job.num_dml_affected_rows or 0
+
+    def sync_principal_catalog(self) -> int:
+        """
+        現在のIAM権限状態からプリンシパルマスタを同期（MERGE）します。
+        """
+        sql = f"""
+        MERGE `{self._project_id}.{self._dataset_id}.principal_catalog` T
+        USING (
+          SELECT DISTINCT
+            principal_email,
+            principal_type
+          FROM `{self.iam_policy_permissions_table}`
+          WHERE principal_email IS NOT NULL AND principal_email != ''
+        ) S
+        ON T.principal_email = S.principal_email
+        WHEN MATCHED THEN
+          UPDATE SET principal_type = COALESCE(S.principal_type, T.principal_type), updated_at = CURRENT_TIMESTAMP()
+        WHEN NOT MATCHED THEN
+          INSERT (principal_email, principal_type)
+          VALUES (S.principal_email, S.principal_type)
+        """
+        job = self._client.query(sql)
+        job.result()
+        return job.num_dml_affected_rows or 0
+
+    def run_update_raw_bindings_history_job(self, execution_id: str) -> int:
+        """生のIAMバインディング履歴を記録します。"""
+        sql = f"""
+        INSERT INTO `{self._project_id}.{self._dataset_id}.iam_policy_bindings_raw_history` (
+          execution_id, assessment_timestamp, scope, resource_type,
+          resource_name, principal_type, principal_email, role
+        )
+        SELECT
+          @execution_id, CURRENT_TIMESTAMP(), NULL, NULL,
+          resource_name, principal_type, principal_email, role
+        FROM `{self.iam_policy_permissions_table}`
+        """
+        params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
+        job = self._client.query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params))
         job.result()
         return job.num_dml_affected_rows or 0
