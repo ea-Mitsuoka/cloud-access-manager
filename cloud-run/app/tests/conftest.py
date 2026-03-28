@@ -1,3 +1,5 @@
+"""pytestの共通モック設定およびフィクスチャを提供するモジュール。"""
+
 import os
 from unittest.mock import patch, MagicMock
 

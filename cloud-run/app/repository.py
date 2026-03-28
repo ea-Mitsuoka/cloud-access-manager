@@ -599,6 +599,9 @@ class Repository:
     def sync_principal_catalog(self) -> int:
         """
         現在のIAM権限状態からプリンシパルマスタを同期（MERGE）します。
+
+        Returns:
+            int: 挿入または更新された行数。
         """
         sql = f"""
         MERGE `{self._project_id}.{self._dataset_id}.principal_catalog` T
@@ -623,7 +626,15 @@ class Repository:
         return job.num_dml_affected_rows or 0
 
     def run_update_raw_bindings_history_job(self, execution_id: str) -> int:
-        """生のIAMバインディング履歴を記録します。"""
+        """
+        生のIAMバインディング履歴を記録します。
+
+        Args:
+            execution_id (str): このジョブ実行のユニークID。
+
+        Returns:
+            int: 挿入された行数。
+        """
         sql = f"""
         INSERT INTO
           `{self._project_id}.{self._dataset_id}.iam_policy_bindings_raw_history` (
