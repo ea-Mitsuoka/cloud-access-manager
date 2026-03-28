@@ -313,7 +313,6 @@ def collect_groups():
     )
 
 
-
 @app.post("/collect/iam-policies")
 def collect_iam_policies():
     """管理対象スコープ内のIAMポリシーを収集し、DBを洗い替えます。"""
