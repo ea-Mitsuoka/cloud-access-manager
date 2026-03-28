@@ -28,6 +28,7 @@ const FIELD_REASON = '申請理由・利用目的';
 const FIELD_REASON_ALT = '利用目的';
 const FIELD_REQUESTER = '申請者メール';
 const FIELD_APPROVER = '承認者メール（または承認グループ）';
+const COL_AI_SUGGEST = 'AI推奨（最小権限）';
 const COL_EXEC_RESULT = '実行結果';
 const COL_FINAL_REFLECT = '最終反映確認';
 const COL_LAST_CHECKED = '最終確認時刻';
@@ -82,7 +83,20 @@ function onFormSubmit(e) {
     actor_source: 'FORM_SUBMIT',
     details_json: JSON.stringify({ source: 'google_form' })
   });
-  appendReviewSheet_(request);
+  let aiSuggestion = '';
+  try {
+    const suggestion = suggestIamRoles({ goal: reason, resource: request.resource_name, principal: request.principal_email });
+    const roles = (suggestion.recommended_roles || []).map(r => r.role).join(', ');
+    aiSuggestion = `【推奨ロール】
+${roles}
+
+【レビューア向けメモ】
+${suggestion.reviewer_note || suggestion.summary || ''}`;
+  } catch(e) {
+    aiSuggestion = `AI判定スキップ: ${e.message}`;
+  }
+
+  appendReviewSheet_(request, aiSuggestion);
 
   // 緊急アクセスの場合は即時承認フローへ回す
   if (isEmergency) {
@@ -317,32 +331,37 @@ function callCloudRunExecute_(props, requestId) {
 }
   }
 
-function appendReviewSheet_(request) {
+function appendReviewSheet_(request, aiSuggestion) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(REQUEST_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(REQUEST_SHEET_NAME);
     sheet.appendRow([
       'request_id', 'request_type', 'principal_email', 'resource_name', 'role',
-      'reason', 'requester_email', 'approver_email', 'status', 'requested_at', 'ticket_ref'
+      'reason', 'requester_email', 'approver_email', 'status', 'requested_at', 'ticket_ref', COL_AI_SUGGEST
     ]);
   }
 
   ensureRequestReviewColumns_(sheet);
 
-  sheet.appendRow([
-    request.request_id,
-    request.request_type,
-    request.principal_email,
-    request.resource_name,
-    request.role,
-    request.reason,
-    request.requester_email,
-    request.approver_email,
-    request.status,
-    request.requested_at,
-    request.ticket_ref
-  ]);
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const idx = indexMap_(header);
+  let rowData = new Array(header.length).fill('');
+  
+  if (idx.request_id) rowData[idx.request_id - 1] = request.request_id;
+  if (idx.request_type) rowData[idx.request_type - 1] = request.request_type;
+  if (idx.principal_email) rowData[idx.principal_email - 1] = request.principal_email;
+  if (idx.resource_name) rowData[idx.resource_name - 1] = request.resource_name;
+  if (idx.role) rowData[idx.role - 1] = request.role;
+  if (idx.reason) rowData[idx.reason - 1] = request.reason;
+  if (idx.requester_email) rowData[idx.requester_email - 1] = request.requester_email;
+  if (idx.approver_email) rowData[idx.approver_email - 1] = request.approver_email;
+  if (idx.status) rowData[idx.status - 1] = request.status;
+  if (idx.requested_at) rowData[idx.requested_at - 1] = request.requested_at;
+  if (idx.ticket_ref) rowData[idx.ticket_ref - 1] = request.ticket_ref;
+  if (idx[COL_AI_SUGGEST]) rowData[idx[COL_AI_SUGGEST] - 1] = aiSuggestion || '';
+
+  sheet.appendRow(rowData);
 }
 
 function validateRequest_(request) {
@@ -677,7 +696,7 @@ function getRequestReviewSheet_() {
 
 function ensureRequestReviewColumns_(sheet) {
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const missing = [COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
+  const missing = [COL_AI_SUGGEST, COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
   missing.forEach((name) => {
     sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
   });
