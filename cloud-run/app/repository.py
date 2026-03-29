@@ -442,6 +442,7 @@ class Repository:
           AND req.role = perm.role
           AND req.resource_name = perm.resource_name
         WHERE req.status = 'APPROVED'
+          AND req.request_type != 'REVOKE'
           AND req.expires_at IS NOT NULL
           AND req.expires_at < CURRENT_TIMESTAMP()
         """
@@ -535,6 +536,7 @@ class Repository:
             COALESCE(r.principal_email, a.principal_email) AS principal_email,
             COALESCE(r.resource_name, a.resource_name) AS resource_name,
             COALESCE(r.role, a.role) AS role,
+            r.request_type,
             r.status,
             r.expires_at,
             IFNULL(a.exists_now, FALSE) AS exists_now
@@ -554,19 +556,37 @@ class Repository:
           TO_JSON(STRUCT(status AS request_status, exists_now, expires_at)) AS details
         FROM (
           SELECT
-            request_id, principal_email, resource_name, role,
+            request_id, request_type, principal_email, resource_name, role,
             CASE
-              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
-              WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
-              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
-              WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
+              WHEN COALESCE(request_type, 'GRANT') != 'REVOKE' THEN
+                CASE
+                  WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
+                  WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
+                  WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
+                  WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
+                  ELSE NULL
+                END
+              WHEN request_type = 'REVOKE' THEN
+                CASE
+                  WHEN status = 'APPROVED' AND exists_now = TRUE THEN 'REVOKE_NOT_APPLIED'
+                  ELSE NULL
+                END
               ELSE NULL
             END AS issue_type,
             CASE
-              WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
-              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
-              WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
-              WHEN status IS NULL AND exists_now = TRUE THEN 'HIGH'
+              WHEN COALESCE(request_type, 'GRANT') != 'REVOKE' THEN
+                CASE
+                  WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
+                  WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
+                  WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
+                  WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'HIGH'
+                  ELSE NULL
+                END
+              WHEN request_type = 'REVOKE' THEN
+                CASE
+                  WHEN status = 'APPROVED' AND exists_now = TRUE THEN 'HIGH'
+                  ELSE NULL
+                END
               ELSE NULL
             END AS severity,
             status, exists_now, expires_at
