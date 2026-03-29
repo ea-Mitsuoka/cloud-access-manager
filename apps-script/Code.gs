@@ -118,6 +118,7 @@ ${suggestion.reviewer_note || suggestion.summary || ''}`;
       details_json: JSON.stringify({ note: 'Break-glass auto approval' })
     });
     callCloudRunExecute_(props, request.request_id);
+    updateSheetStatus_(request.request_id, '承認済');
     refreshRequestReviewStatusForRequestIds_([request.request_id]);
   }
 }
@@ -329,7 +330,6 @@ function callCloudRunExecute_(props, requestId) {
     }
   }
 }
-  }
 
 function appendReviewSheet_(request, aiSuggestion) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -362,6 +362,25 @@ function appendReviewSheet_(request, aiSuggestion) {
   if (idx[COL_AI_SUGGEST]) rowData[idx[COL_AI_SUGGEST] - 1] = aiSuggestion || '';
 
   sheet.appendRow(rowData);
+}
+
+function updateSheetStatus_(requestId, newStatusJa) {
+  const sheet = getRequestReviewSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+  
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const idCol = header.indexOf('request_id') + 1;
+  const statusCol = header.indexOf('status') + 1;
+  if (!idCol || !statusCol) return;
+  
+  const ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(requestId).trim()) {
+      sheet.getRange(i + 2, statusCol).setValue(newStatusJa);
+      break;
+    }
+  }
 }
 
 function validateRequest_(request) {
