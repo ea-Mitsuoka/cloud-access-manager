@@ -174,7 +174,9 @@ resource "google_access_context_manager_service_perimeter" "tool_perimeter" {
       "secretmanager.googleapis.com",
       "cloudresourcemanager.googleapis.com",
       "cloudasset.googleapis.com",
-      "cloudidentity.googleapis.com"
+      "cloudidentity.googleapis.com",
+      "iamcredentials.googleapis.com",
+      "artifactregistry.googleapis.com"
     ]
     resources = ["projects/${data.google_project.tool_project.number}"]
   }

@@ -184,7 +184,10 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 
 ### 3.2 Artifact Registryリポジトリ
 
-CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は作成してください。
+CIパイプラインは、`iam-access-repo` という名前のArtifact RegistryリポジトリにDockerイメージをプッシュします。このリポジトリが存在しない場合は事前に作成してください。
+
+> **💡 なぜTerraformで作成しないのか？**
+> TerraformによるCloud Runのデプロイには、事前にビルドされたDockerイメージのURLが必要です。もしArtifact Registryの作成をTerraformに含めると、「イメージをプッシュする先がない」と「Cloud Runをデプロイするイメージがない」という鶏と卵のデッドロックに陥るため、意図的にTerraformの管理外としています。
 
 ```bash
 gcloud artifacts repositories create iam-access-repo
