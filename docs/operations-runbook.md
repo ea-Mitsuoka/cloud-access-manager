@@ -368,9 +368,6 @@ terraform output cloud_run_url
 # 3. build/sql/002_views.sql (コアビュー)
 # 4. build/sql/005_workbook_views.sql (シート互換ビュー)
 # 5. build/sql/007_seed_workbook_from_existing.sql (初期データシード)
-# 5. build/sql/003_reconciliation.sql (初期データシード)
-# 5. build/sql/006_matrix_pivot.sql (初期データシード)
-# 5. build/sql/008_update_bindings_history.sql (初期データシード)
 ```
 
 ### 8.4 変更リリース（通常運用）
@@ -382,7 +379,7 @@ terraform plan -var-file=../environment.auto.tfvars
 terraform apply -var-file=../environment.auto.tfvars
 ```
 
-### 8.5 収集ジョブ手動実行（フォルダ/プロジェクト・Googleグループ）
+### 8.5 収集ジョブ手動実行（リソース・グループ・IAMポリシー）
 
 ```bash
 cd terraform
@@ -390,6 +387,7 @@ CLOUD_RUN_URL="$(terraform output -raw cloud_run_url)"
 
 bash ../scripts/collect-resource-inventory.sh --cloud-run-url "$CLOUD_RUN_URL"
 bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
+bash ../scripts/collect-iam-policies.sh --cloud-run-url "$CLOUD_RUN_URL"
 ```
 
 ### 8.6 Cloud Scheduler（日次自動実行）確認
@@ -400,6 +398,7 @@ terraform output resource_inventory_scheduler_job
 terraform output group_collection_scheduler_job
 gcloud scheduler jobs describe iam-resource-inventory-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
+gcloud scheduler jobs describe iam-policy-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-reconciliation-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-revoke-expired-permissions-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-bindings-history-update-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
