@@ -139,59 +139,61 @@ ${suggestion.reviewer_note || suggestion.summary || ''}`;
 function onEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
-  if (sheet.getName() !== REQUEST_SHEET_NAME || range.getRow() === 1) {
-    return;
-  }
+  if (sheet.getName() !== REQUEST_SHEET_NAME || range.getRow() === 1) return;
 
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const statusCol = header.indexOf('status') + 1;
-  if (statusCol <= 0 || range.getColumn() !== statusCol) {
-    return;
-  }
+  const reqIdCol = header.indexOf('request_id');
+
+  // ステータス列が編集範囲に含まれていない場合は無視
+  if (statusCol <= 0 || range.getColumn() > statusCol || range.getColumn() + range.getNumColumns() - 1 < statusCol) return;
 
   const props = getProps_();
-  const newStatusRaw = String(range.getValue() || '').trim();
-  const normalized = normalizeStatus_(newStatusRaw);
+  const startRow = range.getRow();
+  const numRows = range.getNumRows();
+  const rowData = sheet.getRange(startRow, 1, numRows, sheet.getLastColumn()).getValues();
+  const editedIds = [];
 
-  const row = sheet.getRange(range.getRow(), 1, 1, sheet.getLastColumn()).getValues()[0];
-  const requestId = row[header.indexOf('request_id')];
-  if (!requestId) {
-    throw new Error('request_id not found in edited row');
+  for (let i = 0; i < numRows; i++) {
+    const row = rowData[i];
+    const requestId = row[reqIdCol];
+    const newStatusRaw = String(row[statusCol - 1] || '').trim();
+    if (!requestId || !newStatusRaw) continue;
+
+    const normalized = normalizeStatus_(newStatusRaw);
+    const snapshot = getRequestSnapshot_(props, requestId);
+    if (!snapshot) continue; // 削除された不正な行はスキップ
+    
+    const prevStatus = String(snapshot.status || '');
+    if (!prevStatus || prevStatus === normalized) continue;
+
+    updateStatusInBigQuery_(props, requestId, normalized);
+    insertRequestHistoryEvent_(props, {
+      request_id: String(requestId),
+      event_type: EVENT_STATUS_CHANGED,
+      old_status: prevStatus,
+      new_status: normalized,
+      reason_snapshot: snapshot.reason || '',
+      request_type: snapshot.request_type || '',
+      principal_email: snapshot.principal_email || '',
+      resource_name: snapshot.resource_name || '',
+      role: snapshot.role || '',
+      requester_email: snapshot.requester_email || '',
+      approver_email: snapshot.approver_email || '',
+      acted_by: getActorEmail_(),
+      actor_source: 'SHEET_EDIT',
+      details_json: JSON.stringify({ sheet: REQUEST_SHEET_NAME, edited_status_raw: newStatusRaw })
+    });
+
+    if (normalized === STATUS_APPROVED) {
+      callCloudRunExecute_(props, requestId);
+    }
+    editedIds.push(String(requestId));
   }
 
-  const snapshot = getRequestSnapshot_(props, requestId);
-  const prevStatus = snapshot && snapshot.status ? String(snapshot.status) : '';
-  if (!prevStatus) {
-    throw new Error(`request not found in BigQuery: ${requestId}`);
+  if (editedIds.length > 0) {
+    refreshRequestReviewStatusForRequestIds_(editedIds);
   }
-  if (prevStatus === normalized) {
-    return;
-  }
-
-  updateStatusInBigQuery_(props, requestId, normalized);
-  insertRequestHistoryEvent_(props, {
-    request_id: String(requestId),
-    event_type: EVENT_STATUS_CHANGED,
-    old_status: prevStatus,
-    new_status: normalized,
-    reason_snapshot: snapshot.reason || '',
-    request_type: snapshot.request_type || '',
-    principal_email: snapshot.principal_email || '',
-    resource_name: snapshot.resource_name || '',
-    role: snapshot.role || '',
-    requester_email: snapshot.requester_email || '',
-    approver_email: snapshot.approver_email || '',
-    acted_by: getActorEmail_(),
-    actor_source: 'SHEET_EDIT',
-    details_json: JSON.stringify({
-      sheet: REQUEST_SHEET_NAME,
-      edited_status_raw: newStatusRaw
-    })
-  });
-  if (normalized === STATUS_APPROVED) {
-    callCloudRunExecute_(props, requestId);
-  }
-  refreshRequestReviewStatusForRequestIds_([String(requestId)]);
 }
 
 function callCloudRunApi_(props, path, method, payloadObj) {

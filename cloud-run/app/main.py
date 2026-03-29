@@ -680,7 +680,8 @@ def _authorize() -> bool:
     if not token:
         return False
 
-    expected_audience = request.url_root.rstrip("/")
+    # Cloud Runコンテナ内部ではhttpとして扱われるため、Audience検証用にhttpsへ強制する
+    expected_audience = request.url_root.rstrip("/").replace("http://", "https://")
     try:
         claims = google_id_token.verify_oauth2_token(
             token, google_auth_requests.Request(), expected_audience

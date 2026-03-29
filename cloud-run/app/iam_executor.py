@@ -255,30 +255,43 @@ class IamExecutor:
             bool: ポリシーが実際に変更された場合はTrue、変更がなかった場合はFalse。
         """
         bindings = policy.setdefault("bindings", [])
-        role_binding = None
-        for binding in bindings:
-            if binding.get("role") == role:
-                role_binding = binding
-                break
+        changed = False
 
         if action == "GRANT":
+            role_binding = None
+            for binding in bindings:
+                # 既存の条件付きバインディング（IAM Condition）への誤爆付与を防ぐため、条件なしのものを探す
+                if binding.get("role") == role and "condition" not in binding:
+                    role_binding = binding
+                    break
+
             if role_binding is None:
                 bindings.append({"role": role, "members": [member]})
                 return True
-            members = set(role_binding.setdefault("members", []))
-            if member in members:
-                return False
-            role_binding["members"].append(member)
-            return True
 
-        if role_binding is None:
+            members = role_binding.setdefault("members", [])
+            if member not in members:
+                role_binding["members"].append(member)
+                return True
             return False
 
-        members = role_binding.setdefault("members", [])
-        if member not in members:
-            return False
+        if action == "REVOKE":
+            new_bindings = []
+            for binding in bindings:
+                # 条件付き/条件なしに関わらず、すべての該当ロールからメンバーを確実に剥奪する
+                if binding.get("role") == role:
+                    members = binding.get("members", [])
+                    if member in members:
+                        members.remove(member)
+                        changed = True
+                    if members:  # メンバーが空でなければバインディングを残す
+                        binding["members"] = members
+                        new_bindings.append(binding)
+                else:
+                    new_bindings.append(binding)
 
-        role_binding["members"] = [m for m in members if m != member]
-        if not role_binding["members"]:
-            policy["bindings"] = [b for b in bindings if b.get("role") != role]
-        return True
+            if changed:
+                policy["bindings"] = new_bindings
+            return changed
+
+        return False
