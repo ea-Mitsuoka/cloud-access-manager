@@ -452,6 +452,7 @@ class Repository:
         # 2. 履歴データの構築と更新クエリの実行（CASE文と動的パラメータによる一括安全更新）
         cases = []
         query_params = []
+        actual_update_req_ids = []
 
         for idx, u in enumerate(updates):
             req_id = u.get("request_id")
@@ -499,6 +500,7 @@ class Repository:
                 ]
             )
             processed_ids.append(history_id)
+            actual_update_req_ids.append(req_id)
 
         # 構築したパラメータを用いて、1回のDML(UPDATE)で安全にバルク更新
         if cases:
@@ -690,6 +692,8 @@ class Repository:
     def run_reconciliation_job(self) -> int:
         """
         リコンシリエーションジョブを実行し、矛盾を検出して記録します。
+        Cloud Asset APIの遅延（Eventual Consistency）による誤検知を防ぐため、
+        状態変更から12時間は猶予期間（Grace Period）としてアラート発報を保留します。
         """
         sql = f"""
         INSERT INTO
@@ -697,9 +701,9 @@ class Repository:
           issue_id, issue_type, request_id, principal_email, resource_name, role, detected_at, severity, status, details
         )
         WITH requests AS (
-          SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at
+          SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at, approved_at, updated_at
           FROM (
-            SELECT *, ROW_NUMBER() OVER(PARTITION BY principal_email, resource_name, role ORDER BY requested_at DESC) AS rn
+             SELECT *, ROW_NUMBER() OVER(PARTITION BY principal_email, resource_name, role ORDER BY requested_at DESC) AS rn
             FROM `{self.requests_table}`
           )
           WHERE rn = 1
@@ -717,10 +721,12 @@ class Repository:
             r.request_type,
             r.status,
             r.expires_at,
+            r.approved_at,
+            r.updated_at,
             IFNULL(a.exists_now, FALSE) AS exists_now
           FROM requests r
           FULL OUTER JOIN actual a USING (principal_email, resource_name, role)
-        )
+        ),
         new_issues AS (
           SELECT
           FORMAT('%s-%s-%s', COALESCE(request_id, 'UNMANAGED'), issue_type, FORMAT_TIMESTAMP('%Y%m%d%H%M%S', CURRENT_TIMESTAMP())) AS issue_id,
@@ -739,15 +745,15 @@ class Repository:
             CASE
               WHEN COALESCE(request_type, 'GRANT') != 'REVOKE' THEN
                 CASE
-                  WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
-                  WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
+                  WHEN status = 'APPROVED' AND exists_now = FALSE AND approved_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'APPROVED_NOT_APPLIED'
+                  WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE AND updated_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'REJECTED_BUT_EXISTS'
                   WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
                   WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
                   ELSE NULL
                 END
               WHEN request_type = 'REVOKE' THEN
                 CASE
-                  WHEN status = 'APPROVED' AND exists_now = TRUE THEN 'REVOKE_NOT_APPLIED'
+                  WHEN status = 'APPROVED' AND exists_now = TRUE AND approved_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'REVOKE_NOT_APPLIED'
                   ELSE NULL
                 END
               ELSE NULL
@@ -755,15 +761,15 @@ class Repository:
             CASE
               WHEN COALESCE(request_type, 'GRANT') != 'REVOKE' THEN
                 CASE
-                  WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'HIGH'
-                  WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'MEDIUM'
+                  WHEN status = 'APPROVED' AND exists_now = FALSE AND approved_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'HIGH'
+                  WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE AND updated_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'MEDIUM'
                   WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'HIGH'
                   WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'HIGH'
                   ELSE NULL
                 END
               WHEN request_type = 'REVOKE' THEN
                 CASE
-                  WHEN status = 'APPROVED' AND exists_now = TRUE THEN 'HIGH'
+                  WHEN status = 'APPROVED' AND exists_now = TRUE AND approved_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'HIGH'
                   ELSE NULL
                 END
               ELSE NULL
