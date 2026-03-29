@@ -144,6 +144,7 @@ function onEdit(e) {
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const statusCol = header.indexOf('status') + 1;
   const reqIdCol = header.indexOf('request_id');
+  if (reqIdCol < 0) return;
 
   // ステータス列が編集範囲に含まれていない場合は無視
   if (statusCol <= 0 || range.getColumn() > statusCol || range.getColumn() + range.getNumColumns() - 1 < statusCol) return;
@@ -293,7 +294,7 @@ function getOidcToken_(props) {
   if (!props.gasInvokerEmail) throw new Error("Missing GAS_INVOKER_SA_EMAIL property");
   const url = `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${props.gasInvokerEmail}:generateIdToken`;
   const payload = {
-    audience: props.cloudRunUrl,
+    audience: props.cloudRunUrl.replace(/\/execute\/?$/, ''),
     includeEmail: true
   };
   const options = {
