@@ -1,4 +1,4 @@
-# IAM Access Manager 運用手順書
+# Cloud Access Manager 運用手順書
 
 ## 1. 運用モードについて
 
@@ -234,7 +234,7 @@ gcloud artifacts repositories create iam-access-repo
 
 Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に移動します。
 
-- **ポリシー:** `IAM Access Manager: Error Detected` という名前のアラートポリシーが作成されていることを確認します。
+- **ポリシー:** `Cloud Access Manager: Error Detected` という名前のアラートポリシーが作成されていることを確認します。
 - **通知チャネル:** ポリシーの詳細画面から、設定したメールアドレスやOIDCに対応する通知チャネルが作成され、ポリシーに紐づいていることを確認できます。
 
 ### 4.4 特別アラート: 緊急アクセス（Break-glass）の検知と運用上の注意
@@ -243,7 +243,7 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
 
 - **検知対象とトリガー:** Googleフォームで「**申請種別**」に\*\*「緊急」**または**「緊急付与」\*\*のキーワードが含まれる選択肢が選ばれた場合、または入力された場合。システムはこれを検知し、Cloud Runのログに `[BREAK-GLASS]` というマーカーを出力します。
   - **重要:** フォームの選択肢に「緊急」や「緊急付与」を追加する作業は、このシステムのデプロイとは別に、**Googleフォーム側で手動で実施する必要**があります。
-- **通知:** このログを検知すると、`IAM Access Manager: Break-glass (Emergency) Access Detected` という件名で、`ALERT_NOTIFICATION_EMAIL` や `ALERT_NOTIFICATION_WEBHOOK_URL` に設定されたすべてのチャネルに即時通知が送信されます。
+- **通知:** このログを検知すると、`Cloud Access Manager: Break-glass (Emergency) Access Detected` という件名で、`ALERT_NOTIFICATION_EMAIL` や `ALERT_NOTIFICATION_WEBHOOK_URL` に設定されたすべてのチャネルに即時通知が送信されます。
 - **目的:** 緊急アクセスは人間の承認プロセスをスキップし、強力な権限を即時付与する機能です。その実行をすべての管理者が即座に認知し、意図された正当な操作であるか、あるいは不適切な利用でないかを、監査目的で確認できるようにすることが目的です。
 - **運用上の注意:**
   - 緊急アクセスは、通常の承認フローでは対応できない**インシデント対応時など、真に緊急な状況でのみ利用**すべきです。
