@@ -27,11 +27,14 @@ if ! gcloud storage buckets describe "gs://$TFSTATE_BUCKET" --project "$TOOL_PRO
   gcloud storage buckets create "gs://$TFSTATE_BUCKET" \
     --project "$TOOL_PROJECT_ID" \
     --location "$TFSTATE_LOCATION" \
-    --uniform-bucket-level-access
+    --uniform-bucket-level-access \
+    --public-access-prevention
 fi
 
+# バージョニングの有効化と、誤った公開設定の絶対防止（Public Access Prevention）を強制
 gcloud storage buckets update "gs://$TFSTATE_BUCKET" \
   --project "$TOOL_PROJECT_ID" \
-  --versioning
+  --versioning \
+  --public-access-prevention
 
 echo "tfstate bucket ready: gs://$TFSTATE_BUCKET (versioning enabled)"

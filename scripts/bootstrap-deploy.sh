@@ -64,7 +64,8 @@ update_config() {
   local value="$2"
   local file="$3"
 
-  escaped_value=$(printf '%s\n' "$value" | sed 's/[&/\]/\\&/g')
+  escaped_value=$(printf '%s
+' "$value" | sed 's/[&/\]/\&/g')
 
   if grep -q -E "^${key}=" "$file"; then
     tmp_file=$(mktemp)
@@ -177,29 +178,8 @@ else
         done
 
         echo
-        echo "Terraform executor needs org-level roles to manage VPC-SC."
-        current_user=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n 1)
-        read -r -p "Enter the principal (user or SA) for terraform apply [default: $current_user]: " tf_principal
-        tf_principal="${tf_principal:-$current_user}"
-
-        echo
-        echo "The following roles will be granted at the organization level ($ORGANIZATION_ID) to '$tf_principal':"
-        echo "  - Organization Admin (roles/resourcemanager.organizationAdmin)"
-        echo "  - Access Context Manager Admin (roles/accesscontextmanager.policyAdmin)"
-        echo
-        if ask_yes_no "Proceed with granting these roles?" "n"; then
-            gcloud organizations add-iam-policy-binding "$ORGANIZATION_ID" \
-                --member="user:$tf_principal" \
-                --role="roles/resourcemanager.organizationAdmin" \
-                --condition=None >/dev/null
-            gcloud organizations add-iam-policy-binding "$ORGANIZATION_ID" \
-                --member="user:$tf_principal" \
-                --role="roles/accesscontextmanager.policyAdmin" \
-                --condition=None >/dev/null
-            echo "Successfully granted organization-level roles."
-        else
-            echo "Skipped granting roles. Terraform apply may fail if the principal lacks permissions."
-        fi
+        echo "⚠️ IMPORTANT: To apply VPC-SC, you MUST already have 'Organization Admin' and 'Access Context Manager Admin' roles."
+        echo "This script will NOT automatically grant these highly privileged roles."
     else
         update_config "enable_vpc_sc" "false" "$CONFIG_FILE"
         echo "VPC-SC disabled."
@@ -243,6 +223,8 @@ else
   terraform apply -var-file="$ROOT_DIR/environment.auto.tfvars"
 fi
 
+cd "$ROOT_DIR"
+
 echo
 echo "[6/7] Applying BigQuery SQL definitions..."
 require_cmd bq
@@ -252,17 +234,12 @@ if [[ ! -d "$sql_dir" ]] || [[ -z "$(find "$sql_dir" -name '*.sql')" ]]; then
   echo "Warning: No SQL files found in $sql_dir. Skipping BigQuery setup." >&2
   echo "Ensure you have run 'bash scripts/sync-config.sh' first." >&2
 else
-  # NOTE: The execution order is important.
-  # Views depend on tables, so we can't just run them in alphabetical order.
-  # This order is based on sql/README.md.
+  # 削除済みのSQLファイルをリストからパージし、正しい依存順序で実行
   sql_execution_order=(
     "001_tables.sql"
     "004_workbook_tables.sql"
     "002_views.sql"
     "005_workbook_views.sql"
-    "003_reconciliation.sql"
-    "006_matrix_pivot.sql"
-    "008_update_bindings_history.sql"
   )
 
   for sql_filename in "${sql_execution_order[@]}"; do
@@ -283,8 +260,10 @@ fi
 echo
 echo "[7/7] Initial Data Collection & Seeding"
 if ask_yes_no "Run initial data collection jobs and seed existing permissions? This may take a few minutes." y; then
+  cd "$ROOT_DIR/terraform"
   if terraform output cloud_run_url >/dev/null 2>&1; then
     cloud_run_url="$(terraform output -raw cloud_run_url)"
+    cd "$ROOT_DIR"
     
     echo "Collecting resource inventory..."
     bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" --cloud-run-url "$cloud_run_url" || true
@@ -293,11 +272,11 @@ if ask_yes_no "Run initial data collection jobs and seed existing permissions? T
     bash "$ROOT_DIR/scripts/collect-google-groups.sh" --cloud-run-url "$cloud_run_url" || true
     
     echo "Collecting IAM Policies..."
-    # 欠落していたIAMポリシー収集のトリガーを追加
     if [[ -f "$ROOT_DIR/scripts/collect-iam-policies.sh" ]]; then
       bash "$ROOT_DIR/scripts/collect-iam-policies.sh" --cloud-run-url "$cloud_run_url" || true
     else
-      curl -s -X POST "$cloud_run_url/jobs/collect-iam-policies" -H "Authorization: Bearer $(gcloud auth print-identity-token)" || true
+      # エンドポイントのパスを修正 (/jobs/ を削除)
+      curl -s -X POST "$cloud_run_url/collect/iam-policies" -H "Authorization: Bearer $(gcloud auth print-identity-token)" || true
     fi
     
     echo "Seeding initial workbook from existing IAM policies..."
@@ -315,6 +294,7 @@ if ask_yes_no "Run initial data collection jobs and seed existing permissions? T
     
     echo "Initial data collection and seeding finished."
   else
+    cd "$ROOT_DIR"
     echo "Warning: Could not get Cloud Run URL from terraform output. Skipping data collection." >&2
   fi
 else
@@ -323,8 +303,10 @@ fi
 
 echo
 echo "=== Bootstrap & Deploy Complete ==="
+cd "$ROOT_DIR/terraform"
 if terraform output cloud_run_url >/dev/null 2>&1; then
   cloud_run_url="$(terraform output -raw cloud_run_url)"
   echo "Cloud Run URL: $cloud_run_url"
   echo "Please ensure this URL is set in your Google Apps Script properties (key: CLOUD_RUN_EXECUTE_URL)."
 fi
+cd "$ROOT_DIR"

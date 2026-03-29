@@ -1,35 +1,27 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-CLOUD_RUN_URL=""
+# 引数が渡されても無視する（後方互換性のため）
 while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --cloud-run-url) CLOUD_RUN_URL="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
-    esac
     shift
 done
 
-if [[ -z "$CLOUD_RUN_URL" ]]; then
-    echo "Error: --cloud-run-url is required."
-    echo "Usage: $0 --cloud-run-url <URL>"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG_FILE="$ROOT_DIR/saas.env"
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "❌ Error: $CONFIG_FILE not found. Please setup saas.env first." >&2
     exit 1
 fi
 
-echo "Fetching Scheduler SA email from Terraform outputs..."
-SCHEDULER_SA=$(cd terraform && terraform output -raw scheduler_invoker_service_account 2>/dev/null || true)
+source "$CONFIG_FILE"
 
-if [[ -z "$SCHEDULER_SA" ]]; then
-    echo "Error: Could not retrieve scheduler_invoker_service_account from Terraform."
-    exit 1
-fi
+JOB_NAME="iam-group-collection-daily"
 
-echo "Fetching OIDC identity token by impersonating ${SCHEDULER_SA}..."
-TOKEN=$(gcloud auth print-identity-token --impersonate-service-account="${SCHEDULER_SA}" --audiences="${CLOUD_RUN_URL}" --include-email)
+echo "🚀 Triggering Cloud Scheduler job: ${JOB_NAME} ..."
+gcloud scheduler jobs run "${JOB_NAME}" \
+    --project "${TOOL_PROJECT_ID}" \
+    --location "${REGION}"
 
-echo "Triggering job at ${CLOUD_RUN_URL}/collect/groups ..."
-curl -s -X POST "${CLOUD_RUN_URL}/collect/groups" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"execution_id": "manual-run"}'
-echo ""
+echo "✅ Job triggered successfully. It runs asynchronously in the background."
+echo "   Check Cloud Run logs or 'iam_pipeline_job_reports' in BigQuery for the result."
