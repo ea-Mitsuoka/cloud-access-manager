@@ -443,40 +443,39 @@ def revoke_expired_permissions():
         skipped_count = 0
         failed_count = 0
 
+        updates_for_db = []
         for req in expired_requests:
             if not req.is_permission_active:
-                # Permission already gone, skip revocation
                 result = ExecutionResult(
                     result="SKIPPED",
                     action="REVOKE",
                     target=req.resource_name,
                     before_hash=None,
                     after_hash=None,
-                    details={"reason": "Permission already removed or never existed"},
+                    details={"reason": "Already gone"},
                 )
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
-                # Update status in iam_access_requests to prevent re-processing
-                repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
+                updates_for_db.append((req, "REVOKED_ALREADY_GONE"))
                 skipped_count += 1
                 continue
 
             try:
-                # This request was originally a GRANT, but we need to revoke it.
                 req_to_revoke = replace(req, request_type="REVOKE")
                 result = iam_executor.execute(req_to_revoke)
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
+
                 if result.result == "SUCCESS":
-                    repo.update_request_status(req.request_id, "REVOKED")
+                    updates_for_db.append((req, "REVOKED"))
                     revoked_count += 1
                 elif result.result == "SKIPPED":
-                    repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
+                    updates_for_db.append((req, "REVOKED_ALREADY_GONE"))
                     skipped_count += 1
                 else:
-                    repo.update_request_status(req.request_id, "REVOKE_FAILED")
+                    updates_for_db.append((req, "REVOKE_FAILED"))
                     failed_count += 1
             except Exception as inner_exc:
                 result = ExecutionResult(
@@ -492,8 +491,11 @@ def revoke_expired_permissions():
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
-                repo.update_request_status(req.request_id, "REVOKE_FAILED")
+                updates_for_db.append((req, "REVOKE_FAILED"))
                 failed_count += 1
+
+        if updates_for_db:
+            repo.bulk_update_request_status_and_history(updates_for_db)
 
         report_result = "SUCCESS" if failed_count == 0 else "FAILED"
         repo.insert_pipeline_job_report(

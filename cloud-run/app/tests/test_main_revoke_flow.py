@@ -72,8 +72,12 @@ def test_revoke_expired_permissions_when_permission_exists(
     assert executed_req.request_type == "REVOKE"
     assert executed_req.request_id == "req-1"
 
-    # Verify status was updated to REVOKED
-    mock_repo.update_request_status.assert_called_with("req-1", "REVOKED")
+    # Verify status was updated via bulk
+    mock_repo.bulk_update_request_status_and_history.assert_called_once()
+    assert (
+        mock_repo.bulk_update_request_status_and_history.call_args[0][0][0][1]
+        == "REVOKED"
+    )
 
 
 @patch("app.main.iam_executor")
@@ -124,5 +128,9 @@ def test_revoke_expired_permissions_when_permission_is_gone(
     # Verify that iam_executor.execute was NOT called
     mock_iam_executor.execute.assert_not_called()
 
-    # Verify status was updated to REVOKED_ALREADY_GONE
-    mock_repo.update_request_status.assert_called_with("req-2", "REVOKED_ALREADY_GONE")
+    # Verify status was updated via bulk
+    mock_repo.bulk_update_request_status_and_history.assert_called_once()
+    assert (
+        mock_repo.bulk_update_request_status_and_history.call_args[0][0][0][1]
+        == "REVOKED_ALREADY_GONE"
+    )
