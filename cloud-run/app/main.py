@@ -638,25 +638,24 @@ def api_bulk_update_request_status():
     """複数のアクセスリクエストのステータスを一括更新し、履歴を記録します。"""
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
-        
+
     payload = request.get_json(silent=True) or {}
     updates = payload.get("updates", [])
     actor_email = payload.get("actor_email", "system")
-    
+
     if not updates:
         return jsonify({"result": "SUCCESS", "updated_count": 0})
-        
+
     try:
         # バックエンド主導のセキュアな更新メソッドを呼び出す
         processed_ids = repo.bulk_update_request_status_and_history_secure(
-            updates=updates,
-            actor_email=actor_email,
-            actor_source="SHEET_EDIT_BULK"
+            updates=updates, actor_email=actor_email, actor_source="SHEET_EDIT_BULK"
         )
         return jsonify({"result": "SUCCESS", "updated_count": len(processed_ids)})
     except Exception as exc:
         logging.error(f"Failed to bulk update status: {exc}", exc_info=True)
         return jsonify({"error": str(exc)}), 500
+
 
 @app.put("/api/requests/<request_id>/status")
 def api_update_request_status(request_id):
