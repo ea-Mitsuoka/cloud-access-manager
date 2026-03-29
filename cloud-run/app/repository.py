@@ -531,71 +531,6 @@ class Repository:
 
         return processed_ids
 
-    def bulk_update_request_status_and_history(
-        self,
-        updates: list[tuple[ExpiredAccessRequest, str]],
-        actor: str = "SYSTEM_AUTO_REVOKE",
-    ) -> None:
-        """
-        複数のリクエストのステータスを一括で更新し、同時に履歴イベントも記録します。
-        BigQueryのDML競合エラーとN+1パフォーマンス問題を完全に回避します。
-        """
-        if not updates:
-            return
-
-        # 1. 履歴テーブルへのバルクINSERT (Streaming Insert)
-        import uuid
-
-        history_rows = []
-        now_str = datetime.now(timezone.utc).isoformat()
-        for req, new_status in updates:
-            history_rows.append(
-                {
-                    "history_id": str(uuid.uuid4()),
-                    "request_id": req.request_id,
-                    "event_type": "STATUS_CHANGED",
-                    "old_status": req.status,
-                    "new_status": new_status,
-                    "reason_snapshot": req.reason or "",
-                    "request_type": req.request_type,
-                    "principal_email": req.principal_email,
-                    "resource_name": req.resource_name,
-                    "role": req.role,
-                    "requester_email": "system",
-                    "approver_email": "system",
-                    "acted_by": actor,
-                    "actor_source": "SYSTEM_BATCH",
-                    "event_at": now_str,
-                    "details": {"note": "Expired permission automatically revoked"},
-                }
-            )
-        if history_rows:
-            errors = self._client.insert_rows_json(
-                f"{self._project_id}.{self._dataset_id}.iam_access_request_history",
-                history_rows,
-            )
-            if errors:
-                raise RuntimeError(f"failed to insert bulk history: {errors}")
-
-        # 2. メインテーブルのバルクUPDATE (DML 1回)
-        cases = []
-        request_ids = []
-        for req, new_status in updates:
-            cases.append(f"WHEN request_id = '{req.request_id}' THEN '{new_status}'")
-            request_ids.append(f"'{req.request_id}'")
-
-        case_statement = " ".join(cases)
-        id_list = ", ".join(request_ids)
-
-        sql = f"""
-        UPDATE `{self.requests_table}`
-        SET
-            status = CASE {case_statement} ELSE status END,
-            updated_at = CURRENT_TIMESTAMP()
-        WHERE request_id IN ({id_list})
-        """
-        self._client.query(sql).result()
-
     def search_expired_approved_access_requests(
         self,
     ) -> list[ExpiredAccessRequest]:
@@ -621,7 +556,7 @@ class Repository:
           ON req.principal_email = perm.principal_email
           AND req.role = perm.role
           AND req.resource_name = perm.resource_name
-        WHERE req.status = 'APPROVED'
+        WHERE req.status IN ('APPROVED', 'REVOKE_FAILED')
           AND req.request_type != 'REVOKE'
           AND req.expires_at IS NOT NULL
           AND req.expires_at < CURRENT_TIMESTAMP()

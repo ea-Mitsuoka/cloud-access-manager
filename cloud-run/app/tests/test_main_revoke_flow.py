@@ -73,9 +73,11 @@ def test_revoke_expired_permissions_when_permission_exists(
     assert executed_req.request_id == "req-1"
 
     # Verify status was updated via bulk
-    mock_repo.bulk_update_request_status_and_history.assert_called_once()
+    mock_repo.bulk_update_request_status_and_history_secure.assert_called_once()
     assert (
-        mock_repo.bulk_update_request_status_and_history.call_args[0][0][0][1]
+        mock_repo.bulk_update_request_status_and_history_secure.call_args[1]["updates"][
+            0
+        ]["status"]
         == "REVOKED"
     )
 
@@ -129,8 +131,10 @@ def test_revoke_expired_permissions_when_permission_is_gone(
     mock_iam_executor.execute.assert_not_called()
 
     # Verify status was updated via bulk
-    mock_repo.bulk_update_request_status_and_history.assert_called_once()
+    mock_repo.bulk_update_request_status_and_history_secure.assert_called_once()
     assert (
-        mock_repo.bulk_update_request_status_and_history.call_args[0][0][0][1]
+        mock_repo.bulk_update_request_status_and_history_secure.call_args[1]["updates"][
+            0
+        ]["status"]
         == "REVOKED_ALREADY_GONE"
     )

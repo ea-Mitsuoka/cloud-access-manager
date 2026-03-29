@@ -457,7 +457,9 @@ def revoke_expired_permissions():
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
-                updates_for_db.append((req, "REVOKED_ALREADY_GONE"))
+                updates_for_db.append(
+                    {"request_id": req.request_id, "status": "REVOKED_ALREADY_GONE"}
+                )
                 skipped_count += 1
                 continue
 
@@ -469,13 +471,19 @@ def revoke_expired_permissions():
                 )
 
                 if result.result == "SUCCESS":
-                    updates_for_db.append((req, "REVOKED"))
+                    updates_for_db.append(
+                        {"request_id": req.request_id, "status": "REVOKED"}
+                    )
                     revoked_count += 1
                 elif result.result == "SKIPPED":
-                    updates_for_db.append((req, "REVOKED_ALREADY_GONE"))
+                    updates_for_db.append(
+                        {"request_id": req.request_id, "status": "REVOKED_ALREADY_GONE"}
+                    )
                     skipped_count += 1
                 else:
-                    updates_for_db.append((req, "REVOKE_FAILED"))
+                    updates_for_db.append(
+                        {"request_id": req.request_id, "status": "REVOKE_FAILED"}
+                    )
                     failed_count += 1
             except Exception as inner_exc:
                 result = ExecutionResult(
@@ -491,11 +499,17 @@ def revoke_expired_permissions():
                 repo.insert_change_log(
                     execution_id, req.request_id, EXECUTOR_IDENTITY, result
                 )
-                updates_for_db.append((req, "REVOKE_FAILED"))
+                updates_for_db.append(
+                    {"request_id": req.request_id, "status": "REVOKE_FAILED"}
+                )
                 failed_count += 1
 
         if updates_for_db:
-            repo.bulk_update_request_status_and_history(updates_for_db)
+            repo.bulk_update_request_status_and_history_secure(
+                updates=updates_for_db,
+                actor_email="SYSTEM_AUTO_REVOKE",
+                actor_source="SYSTEM_BATCH",
+            )
 
         report_result = "SUCCESS" if failed_count == 0 else "FAILED"
         repo.insert_pipeline_job_report(
