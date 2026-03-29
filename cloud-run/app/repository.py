@@ -610,7 +610,8 @@ class Repository:
           FROM requests r
           FULL OUTER JOIN actual a USING (principal_email, resource_name, role)
         )
-        SELECT
+        new_issues AS (
+          SELECT
           FORMAT('%s-%s-%s', COALESCE(request_id, 'UNMANAGED'), issue_type, FORMAT_TIMESTAMP('%Y%m%d%H%M%S', CURRENT_TIMESTAMP())) AS issue_id,
           issue_type,
           request_id,
@@ -660,6 +661,18 @@ class Repository:
           FROM joined
         )
         WHERE issue_type IS NOT NULL
+        )
+        SELECT n.*
+        FROM new_issues n
+        WHERE n.issue_type IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM `{self._project_id}.{self._dataset_id}.iam_reconciliation_issues` e
+            WHERE e.status = 'OPEN'
+              AND e.issue_type = n.issue_type
+              AND COALESCE(e.principal_email, '') = COALESCE(n.principal_email, '')
+              AND COALESCE(e.resource_name, '') = COALESCE(n.resource_name, '')
+              AND COALESCE(e.role, '') = COALESCE(n.role, '')
+          )
         """
         job = self._client.query(sql)
         job.result()
@@ -682,7 +695,6 @@ class Repository:
           recorded_at,
           resource_name,
           resource_id,
-          resource_full_path,
           principal_email,
           principal_type,
           iam_role,
@@ -700,12 +712,11 @@ class Repository:
           @execution_id AS execution_id,
           CURRENT_TIMESTAMP() AS recorded_at,
           p.resource_name,
-          p.resource_id,
-          p.full_resource_path,
+          REGEXP_EXTRACT(p.resource_name, r'^projects/([^/]+)') AS resource_id,
           p.principal_email,
           p.principal_type,
           p.role AS iam_role,
-          p.iam_condition,
+          CAST(NULL AS STRING) AS iam_condition,
           req.ticket_ref,
           req.reason AS request_reason,
           status_map.status_ja,

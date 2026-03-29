@@ -85,7 +85,6 @@ WITH
 SELECT
   p.resource_name AS `リソース名`,
   p.resource_id AS `リソースID`,
-  p.resource_full_path AS `リソースのフルパス`,
   p.principal_email AS `プリンシパル`,
   p.principal_type AS `種別`,
   p.iam_role AS `IAMロール`,

@@ -58,7 +58,6 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_permission_bindings_hi
   recorded_at TIMESTAMP NOT NULL,
   resource_name STRING,
   resource_id STRING,
-  resource_full_path STRING,
   principal_email STRING NOT NULL,
   principal_type STRING,
   iam_role STRING NOT NULL,
