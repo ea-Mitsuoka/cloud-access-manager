@@ -711,7 +711,7 @@ class Repository:
           resource_name, principal_type, principal_email, role
         )
         SELECT
-          @execution_id, CURRENT_TIMESTAMP(), NULL, NULL,
+          @execution_id, CURRENT_TIMESTAMP(), scope, resource_type,
           resource_name, principal_type, principal_email, role
         FROM `{self.iam_policy_permissions_table}`
         """
