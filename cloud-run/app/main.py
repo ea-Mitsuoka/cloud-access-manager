@@ -486,6 +486,10 @@ def revoke_expired_permissions():
                     )
                     failed_count += 1
             except Exception as inner_exc:
+                logging.error(
+                    f"Failed to automatically revoke permission for request {req.request_id}: {inner_exc}",
+                    exc_info=True,
+                )
                 result = ExecutionResult(
                     result="FAILED",
                     action="REVOKE",
