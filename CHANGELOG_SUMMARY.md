@@ -510,3 +510,21 @@ ______________________________________________________________________
 - **課題:** `GeminiRoleAdvisor.gs` をOAuth認証へ移行したにも関わらず、`sync-config.sh` が `script-properties.json` に空の `GEMINI_API_KEY` を生成し続ける状態になっていた。また、Apps ScriptのREADMEに古いAPIキー設定手順が残存していた。
 - **解決策:** `sync-config.sh` および `script-properties.json` から該当キーを削除し、古いプロパティ名（`GAS_INVOKER_EMAIL`）を正しい名前に修正。`apps-script/README.md` の記述を Vertex AI (OAuth) 向けに修正した。
 - **効果:** 環境変数の生成からドキュメントに至るまで、旧アーキテクチャの残骸（ゾンビキー）が完全に一掃された。
+
+## 70. バグ修正: Vertex AI (OAuth) 移行に伴うプロパティ不一致の解消とドキュメント拡充
+
+- **課題:** GASが参照するプロジェクトIDのプロパティ名が `GCP_PROJECT_ID` となっており、`BQ_PROJECT_ID` と不一致でクラッシュするバグがあった。また、必須となるOAuthスコープとIAMロールの設定案内が欠落していた。
+- **解決策:** `GeminiRoleAdvisor.gs` のプロパティ取得キーを `BQ_PROJECT_ID` に修正。`apps-script/README.md` にスコープ追加手順とIAMロール付与の前提条件を明記した。
+- **効果:** Vertex AI を用いたAI提案アシスタント機能が、権限エラーを起こすことなく正常に稼働できるようになった。
+
+## 71. インフラストラクチャ改善: Vertex AI実行権限のTerraform自動付与
+
+- **課題:** Gemini API廃止とVertex AIへの移行に伴い、GASをデプロイする運用管理者に手動で `roles/aiplatform.user` を付与する手順が発生し、設定漏れによるデプロイ・稼働失敗のリスク（IaCの未徹底）が生じていた。
+- **解決策:** `terraform/main.tf` を改修し、`saas.env` の `GAS_TRIGGER_OWNER_EMAIL` に指定されたユーザーに対して、Terraformが全自動で `roles/aiplatform.user` を付与するように変更した。合わせて運用手順書と未検証項目リストの記述を補完した。
+- **効果:** 運用者の手動操作（GCPコンソールでのポチポチ作業）が完全に撲滅され、セキュアなAIアシスタント機能がコマンド一発で立ち上がる堅牢なデプロイフローが確立された。
+
+## 72. バグ修正: 初回デプロイ時の非同期コレクションによるSeed空振り（タイミングバグ）の解消
+
+- **課題:** 手動データ収集スクリプトをCloud Schedulerトリガー（非同期）に変更した影響で、`bootstrap-deploy.sh` がデータ収集の完了を待たずに初期データ生成（Seed）へ進んでしまい、結果的にSeedが空振りして初期データが生成されないタイミングバグが発生していた。
+- **解決策:** `bootstrap-deploy.sh` にポーリングロジックを追加し、Cloud Schedulerキック後、BigQueryの `iam_policy_permissions` テーブルにデータがロードされるまでシェル側で待機（最大5分）してからSeed処理へ進む堅牢な同期化フローを実装した。
+- **効果:** 非同期のGCPネイティブなジョブ実行を利用しつつ、初回構築時の「Chicken and Egg」問題を完全に回避し、確実なデータセットアップが可能になった。

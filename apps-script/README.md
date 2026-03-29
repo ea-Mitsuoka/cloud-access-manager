@@ -83,8 +83,17 @@ cat apps-script/script-properties.json
 申請者がIAMロール名を知らなくても、「Google Cloudでやりたいこと」から候補ロールを事前に確認できます。
 
 1. Apps Script に `GeminiRoleAdvisor.gs` と `RoleAdvisor.html` を配置します。
-1. `プロジェクト設定 > スクリプトプロパティ` に `GEMINI_API_KEY` を設定します。
-1. Apps Script を Web アプリとしてデプロイします（実行ユーザー: 自分、アクセス: 組織内ユーザー）。
+1. **[重要] マニフェストファイルの修正**: GASエディタの「プロジェクト設定」で「`appsscript.json` マニフェスト ファイルをエディタで表示する」にチェックを入れます。エディタに表示された `appsscript.json` を開き、以下の `oauthScopes` を追加して保存してください。
+   ```json
+   {
+     "oauthScopes": [
+       "https://www.googleapis.com/auth/script.external_request",
+       "https://www.googleapis.com/auth/cloud-platform"
+     ]
+   }
+   ```
+1. **[重要] IAM権限の付与**: このWebアプリをデプロイするユーザー（あなた自身）に、GCPプロジェクト (`TOOL_PROJECT_ID`) に対する **「Vertex AI ユーザー (`roles/aiplatform.user`)」** ロールが付与されていることをGCPコンソールで確認してください。
+1. Apps Script を Web アプリとしてデプロイします（実行ユーザー: 自分、アクセス: 組織内ユーザーまたは全員）。この際、権限の承認ダイアログが出たら許可してください。
 1. 発行された Web アプリのURLを Googleフォームの説明文に貼り付けます。
 1. 申請者は URL 先で提案を取得し、`付与・変更ロール` と `申請理由・利用目的` に転記してフォームを送信します。
 

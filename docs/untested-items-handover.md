@@ -82,6 +82,7 @@
 ### 5.2 UT-002
 
 - [ ] GASに正しいOAuthスコープが設定され、権限承認済みであること
+- [ ] デプロイ実行者に `roles/aiplatform.user` が付与されていること（Terraform自動付与の確認）
 - [ ] `GeminiRoleAdvisor` Webアプリにアクセス可能
 - [ ] 入力に対して提案JSONレスポンスを取得できる
 

@@ -260,49 +260,57 @@ fi
 echo
 echo "[7/7] Initial Data Collection & Seeding"
 if ask_yes_no "Run initial data collection jobs and seed existing permissions? This may take a few minutes." y; then
-  cd "$ROOT_DIR/terraform"
-  if terraform output cloud_run_url >/dev/null 2>&1; then
-    cloud_run_url="$(terraform output -raw cloud_run_url)"
-    cd "$ROOT_DIR"
+  echo "Triggering data collection jobs via Cloud Scheduler (Async)..."
+  bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" || true
+  bash "$ROOT_DIR/scripts/collect-google-groups.sh" || true
+  bash "$ROOT_DIR/scripts/collect-iam-policies.sh" || true
+  
+  echo "Waiting for IAM policies to be collected into BigQuery before seeding..."
+  echo "(This usually takes 1-3 minutes. Polling every 10 seconds...)"
+  
+  MAX_WAIT=300
+  WAIT_INTERVAL=10
+  elapsed=0
+  seed_ready=false
+  
+  while [[ $elapsed -lt $MAX_WAIT ]]; do
+    # 収集データが1件でも入ったか確認
+    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '')
     
-    echo "Collecting resource inventory..."
-    bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" --cloud-run-url "$cloud_run_url" || true
-    
-    echo "Collecting Google Groups..."
-    bash "$ROOT_DIR/scripts/collect-google-groups.sh" --cloud-run-url "$cloud_run_url" || true
-    
-    echo "Collecting IAM Policies..."
-    if [[ -f "$ROOT_DIR/scripts/collect-iam-policies.sh" ]]; then
-      bash "$ROOT_DIR/scripts/collect-iam-policies.sh" --cloud-run-url "$cloud_run_url" || true
-    else
-      # エンドポイントのパスを修正 (/jobs/ を削除)
-      curl -s -X POST "$cloud_run_url/collect/iam-policies" -H "Authorization: Bearer $(gcloud auth print-identity-token)" || true
+    if [[ "$row_count" =~ ^[0-9]+$ ]] && [[ "$row_count" -gt 0 ]]; then
+      echo "✅ Data collection detected ($row_count rows). Proceeding to seed..."
+      seed_ready=true
+      break
     fi
     
-    echo "Seeding initial workbook from existing IAM policies..."
-    # 冪等性（Idempotency）の担保: テーブルが空の場合のみSeedを実行する
+    echo "⏳ Waiting... (${elapsed}s / ${MAX_WAIT}s)"
+    sleep $WAIT_INTERVAL
+    elapsed=$((elapsed + WAIT_INTERVAL))
+  done
+
+  if [[ "$seed_ready" == "true" ]]; then
+    # 冪等性（Idempotency）の担保: Historyテーブルが空の場合のみSeedを実行する
     seed_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_permission_bindings_history\`" 2>/dev/null | tail -n 1 | tr -d '')
     
     if [[ "$seed_count" =~ ^[0-9]+$ ]] && [[ "$seed_count" -eq 0 ]]; then
       echo "Executing: 007_seed_workbook_from_existing.sql"
       bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$ROOT_DIR/build/sql/007_seed_workbook_from_existing.sql"
+      echo "✅ Initial data seeding finished."
     elif [[ "$seed_count" =~ ^[0-9]+$ ]]; then
-      echo "History table already contains data ($seed_count rows). Skipping seed to prevent duplication."
+      echo "✅ History table already contains data ($seed_count rows). Skipping seed to prevent duplication."
     else
-      echo "Warning: Could not verify table row count. Skipping seed to prevent potential duplication."
+      echo "⚠️ Could not verify table row count. Skipping seed to prevent potential duplication."
     fi
-    
-    echo "Initial data collection and seeding finished."
   else
-    cd "$ROOT_DIR"
-    echo "Warning: Could not get Cloud Run URL from terraform output. Skipping data collection." >&2
+    echo "⚠️ Warning: IAM policies collection did not finish within $MAX_WAIT seconds."
+    echo "👉 Skipping automatic seed. Please run '007_seed_workbook_from_existing.sql' manually in BigQuery later."
   fi
 else
   echo "Skipping initial data collection. You can run collection scripts manually later."
 fi
 
 echo
-echo "=== Bootstrap & Deploy Complete ==="
+echo "=== Bootstrap & Deploy Complete ===
 cd "$ROOT_DIR/terraform"
 if terraform output cloud_run_url >/dev/null 2>&1; then
   cloud_run_url="$(terraform output -raw cloud_run_url)"

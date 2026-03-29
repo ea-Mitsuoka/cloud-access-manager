@@ -16,9 +16,9 @@ function doGet() {
 
 function suggestIamRoles(input) {
   const oauthToken = ScriptApp.getOAuthToken();
-  const project = PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID');
+  const project = PropertiesService.getScriptProperties().getProperty('BQ_PROJECT_ID');
   if (!project) {
-    throw new Error('missing script property: GCP_PROJECT_ID');
+    throw new Error('missing script property: BQ_PROJECT_ID');
   }
 
   const goal = String(input.goal || '').trim();
