@@ -299,36 +299,7 @@ function getOidcToken_(props) {
 }
 
 function callCloudRunExecute_(props, requestId) {
-  const token = getOidcToken_(props);
-  const payload = JSON.stringify({ request_id: requestId });
-  const headers = { 
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-
-  const options = {
-    method: 'post',
-    payload,
-    contentType: 'application/json',
-    muteHttpExceptions: true,
-    headers
-  };
-  const maxRetries = 3;
-  for (let i = 0; i < maxRetries; i += 1) {
-    try {
-      const resp = UrlFetchApp.fetch(props.cloudRunUrl, options);
-      const code = resp.getResponseCode();
-      if (code >= 300) {
-        throw new Error(`Cloud Run execute failed (${code}): ${resp.getContentText()}`);
-      }
-      return; // 成功した場合はループを抜ける
-    } catch (err) {
-      if (i === maxRetries - 1) {
-        throw err;
-      }
-      Utilities.sleep(1000 * (i + 1));
-    }
-  }
+  callCloudRunApi_(props, '/execute', 'post', { request_id: String(requestId) });
 }
 
 function appendReviewSheet_(request, aiSuggestion) {
