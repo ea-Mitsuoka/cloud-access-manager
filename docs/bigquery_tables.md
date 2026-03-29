@@ -244,7 +244,6 @@ ______________________________________________________________________
 | `recorded_at` | TIMESTAMP | NOT NULL | データが記録された日時 |
 | `resource_name` | STRING | NULLABLE | 権限が付与されているリソース名 |
 | `resource_id` | STRING | NULLABLE | リソースの一意識別子 |
-| `resource_full_path` | STRING | NULLABLE | リソースの完全なパス |
 | `principal_email` | STRING | NOT NULL | 権限を持つアカウントのメールアドレス |
 | `principal_type` | STRING | NULLABLE | アカウント種別 |
 | `iam_role` | STRING | NOT NULL | 付与されているIAMロール |
@@ -265,10 +264,11 @@ ______________________________________________________________________
 
 | カラム名 | 型 | NULL | 説明 |
 | :--- | :--- | :--- | :--- |
-| `principal_email` | STRING | NULLABLE | 権限を持つアカウントのメールアドレス |
-| `resource_name` | STRING | NULLABLE | 権限が付与されているリソース名 |
-| `role` | STRING | NULLABLE | 付与されているIAMロール |
+| `execution_id` | STRING | NOT NULL | 1回の評価実行を一意に識別するUUID |
+| `assessment_timestamp` | TIMESTAMP | NOT NULL | 評価日時 |
+| `scope` | STRING | NOT NULL | 収集スコープ |
+| `resource_type` | STRING | NOT NULL | リソースの種類 |
+| `resource_name` | STRING | NOT NULL | 具体的なリソース名 |
 | `principal_type` | STRING | NULLABLE | アカウントの種別 |
-| `resource_id` | STRING | NULLABLE | リソースの一意識別子 |
-| `full_resource_path` | STRING | NULLABLE | リソースの完全なパス |
-| `iam_condition` | STRING | NULLABLE | IAM Condition（条件付きロールの場合） |
+| `principal_email` | STRING | NULLABLE | アカウントのメールアドレス |
+| `role` | STRING | NOT NULL | 付与されているIAMロール |

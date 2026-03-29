@@ -198,7 +198,7 @@ graph TD
 - `iam_permission_bindings_history`
 
   - 用途: **帳票用の整形済み履歴**。現在のIAM設定 (`iam_policy_permissions`) に、関連する申請・承認情報 (`iam_access_requests` など) を結合したもの。`sql/008_update_bindings_history.sql` によって定期的に生成され、人間が読みやすい形式で権限の背景や理由を提供する。
-  - 主要列: `execution_id, recorded_at, resource_name, resource_id, resource_full_path, principal_email, principal_type, iam_role, iam_condition, ticket_ref, request_reason, status_ja, approved_at, next_review_at, approver, request_id, note`
+  - 主要列: `execution_id, recorded_at, resource_name, resource_id, principal_email, principal_type, iam_role, iam_condition, ticket_ref, request_reason, status_ja, approved_at, next_review_at, approver, request_id, note`
   - 更新: `WRITE_APPEND`
 
 - `iam_access_requests`
