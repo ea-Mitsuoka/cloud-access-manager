@@ -58,6 +58,8 @@ function onFormSubmit(e) {
   if (expiresRaw && expiresRaw.indexOf('恒久') === -1 && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
     const d = new Date(expiresRaw);
     if (!isNaN(d.getTime())) {
+      // 期限日の終端 (23:59:59.999) を有効期限として設定し、当日の早朝剥奪を防ぐ
+      d.setHours(23, 59, 59, 999);
       expiresAt = d.toISOString();
     }
   }

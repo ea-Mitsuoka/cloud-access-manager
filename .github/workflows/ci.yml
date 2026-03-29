@@ -157,24 +157,24 @@ jobs:
         if: steps.check_wif.outputs.wif_enabled == 'true'
         run: |
           CLOUD_RUN_IMAGE=$(cat image_name.txt)
-          echo "tool_project_id = "${{ vars.TOOL_PROJECT_ID }}"" > terraform/environment.auto.tfvars
-          echo "region = "${{ vars.REGION }}"" >> terraform/environment.auto.tfvars
-          echo "managed_project_id = "${{ vars.MANAGED_PROJECT_ID }}"" >> terraform/environment.auto.tfvars
-          echo "organization_id = "${{ vars.ORGANIZATION_ID }}"" >> terraform/environment.auto.tfvars
-          echo "cloud_run_image = "$CLOUD_RUN_IMAGE"" >> terraform/environment.auto.tfvars
-          echo "dataset_id = "${{ vars.BQ_DATASET_ID }}"" >> terraform/environment.auto.tfvars
-          echo "cloud_run_service_name = "iam-access-executor"" >> terraform/environment.auto.tfvars
-          echo "gas_trigger_owner_email = "${{ vars.GAS_TRIGGER_OWNER_EMAIL }}"" >> terraform/environment.auto.tfvars
-          echo "alert_notification_email = "${{ vars.ALERT_NOTIFICATION_EMAIL }}"" >> terraform/environment.auto.tfvars
-          echo "alert_notification_webhook_url = "${{ secrets.ALERT_NOTIFICATION_WEBHOOK_URL }}"" >> terraform/environment.auto.tfvars
-          echo "workspace_customer_id = "${{ vars.WORKSPACE_CUSTOMER_ID }}"" >> terraform/environment.auto.tfvars
-          echo "resource_collection_schedule = "0 3 * * *"" >> terraform/environment.auto.tfvars
-          echo "group_collection_schedule = "30 3 * * *"" >> terraform/environment.auto.tfvars
+          echo "tool_project_id = \"${{ vars.TOOL_PROJECT_ID }}\"" > terraform/environment.auto.tfvars
+          echo "region = \"${{ vars.REGION }}\"" >> terraform/environment.auto.tfvars
+          echo "managed_project_id = \"${{ vars.MANAGED_PROJECT_ID }}\"" >> terraform/environment.auto.tfvars
+          echo "organization_id = \"${{ vars.ORGANIZATION_ID }}\"" >> terraform/environment.auto.tfvars
+          echo "cloud_run_image = \"$CLOUD_RUN_IMAGE\"" >> terraform/environment.auto.tfvars
+          echo "dataset_id = \"${{ vars.BQ_DATASET_ID }}\"" >> terraform/environment.auto.tfvars
+          echo "cloud_run_service_name = \"iam-access-executor\"" >> terraform/environment.auto.tfvars
+          echo "gas_trigger_owner_email = \"${{ vars.GAS_TRIGGER_OWNER_EMAIL }}\"" >> terraform/environment.auto.tfvars
+          echo "alert_notification_email = \"${{ vars.ALERT_NOTIFICATION_EMAIL }}\"" >> terraform/environment.auto.tfvars
+          echo "alert_notification_webhook_url = \"${{ secrets.ALERT_NOTIFICATION_WEBHOOK_URL }}\"" >> terraform/environment.auto.tfvars
+          echo "workspace_customer_id = \"${{ vars.WORKSPACE_CUSTOMER_ID }}\"" >> terraform/environment.auto.tfvars
+          echo "resource_collection_schedule = \"0 3 * * *\"" >> terraform/environment.auto.tfvars
+          echo "group_collection_schedule = \"30 3 * * *\"" >> terraform/environment.auto.tfvars
           echo "iam_policy_collection_schedule = \"15 3 * * *\"" >> terraform/environment.auto.tfvars
-          echo "reconciliation_schedule = "0 4 * * *"" >> terraform/environment.auto.tfvars
-          echo "revoke_expired_permissions_schedule = "0 5 * * *"" >> terraform/environment.auto.tfvars
-          echo "iam_bindings_history_update_schedule = "0 2 * * *"" >> terraform/environment.auto.tfvars
-          echo "scheduler_time_zone = "Asia/Tokyo"" >> terraform/environment.auto.tfvars
+          echo "reconciliation_schedule = \"0 4 * * *\"" >> terraform/environment.auto.tfvars
+          echo "revoke_expired_permissions_schedule = \"0 1 * * *\"" >> terraform/environment.auto.tfvars
+          echo "iam_bindings_history_update_schedule = \"0 2 * * *\"" >> terraform/environment.auto.tfvars
+          echo "scheduler_time_zone = \"Asia/Tokyo\"" >> terraform/environment.auto.tfvars
 
       - name: Setup Terraform
         if: steps.check_wif.outputs.wif_enabled == 'true'
