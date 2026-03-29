@@ -155,6 +155,7 @@ class IamExecutor:
     def _get_policy(self, resource: str) -> dict[str, Any]:
         """
         指定されたリソースのIAMポリシーを取得します。
+        ※既存の条件付きバインディング（IAM Condition）の消失を防ぐため、必ず Policy Version 3 を指定します。
 
         Args:
             resource (str): ポリシーを取得するリソースの完全な名前。
@@ -165,12 +166,23 @@ class IamExecutor:
         Raises:
             ValueError: サポートされていないリソースタイプの場合。
         """
+        body = {"options": {"requestedPolicyVersion": 3}}
         if resource.startswith("projects/"):
-            return self._crm.projects().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.projects()
+                .getIamPolicy(resource=resource, body=body)
+                .execute()
+            )
         elif resource.startswith("folders/"):
-            return self._crm.folders().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.folders().getIamPolicy(resource=resource, body=body).execute()
+            )
         elif resource.startswith("organizations/"):
-            return self._crm.organizations().getIamPolicy(resource=resource).execute()
+            return (
+                self._crm.organizations()
+                .getIamPolicy(resource=resource, body=body)
+                .execute()
+            )
         else:
             raise ValueError(
                 "Unsupported resource type for getIamPolicy: {}".format(resource)

@@ -10,16 +10,18 @@ SELECT
 FROM `your_project.your_dataset.principal_catalog`;
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_group_members` AS
-WITH latest AS (
-  SELECT *
+WITH latest_exec AS (
+  SELECT execution_id
   FROM `your_project.your_dataset.google_group_membership_history`
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY group_email, member_email ORDER BY assessed_at DESC, execution_id DESC) = 1
+  ORDER BY assessed_at DESC
+  LIMIT 1
 )
 SELECT
   group_email AS `グループEmail`,
   member_email AS `メンバーEmail`,
   member_display_name AS `メンバー表示名`
-FROM latest;
+FROM `your_project.your_dataset.google_group_membership_history`
+WHERE execution_id = (SELECT execution_id FROM latest_exec);
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_group` AS
 SELECT
@@ -29,10 +31,11 @@ SELECT
 FROM `your_project.your_dataset.google_groups`;
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_resource` AS
-WITH latest AS (
-  SELECT *
+WITH latest_exec AS (
+  SELECT execution_id
   FROM `your_project.your_dataset.gcp_resource_inventory_history`
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY assessed_at DESC, execution_id DESC) = 1
+  ORDER BY assessed_at DESC
+  LIMIT 1
 )
 SELECT
   resource_type AS `リソースタイプ`,
@@ -40,21 +43,22 @@ SELECT
   resource_id AS `リソースID`,
   parent_resource_id AS `親リソースID`,
   note AS `備考`
-FROM latest;
+FROM `your_project.your_dataset.gcp_resource_inventory_history`
+WHERE execution_id = (SELECT execution_id FROM latest_exec);
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_iam_role` AS
 WITH catalog_roles AS (
   SELECT DISTINCT
     CASE
-      WHEN STARTS_WITH(iam_role, 'roles/') THEN REGEXP_EXTRACT(iam_role, r'roles/([^/]+)$')
-      WHEN REGEXP_CONTAINS(iam_role, r'/roles/') THEN REGEXP_EXTRACT(iam_role, r'/roles/([^/]+)$')
-      ELSE iam_role
+      WHEN STARTS_WITH(role, 'roles/') THEN REGEXP_EXTRACT(role, r'roles/([^/]+)$')
+      WHEN REGEXP_CONTAINS(role, r'/roles/') THEN REGEXP_EXTRACT(role, r'/roles/([^/]+)$')
+      ELSE role
     END AS role_name,
     CASE
-      WHEN STARTS_WITH(iam_role, 'roles/') THEN '事前定義'
+      WHEN STARTS_WITH(role, 'roles/') THEN '事前定義'
       ELSE 'カスタム'
     END AS role_type
-  FROM `your_project.your_dataset.iam_permission_bindings_history`
+  FROM `your_project.your_dataset.iam_policy_permissions`
 )
 SELECT
   role_name AS `ロール名`,
@@ -71,6 +75,12 @@ WITH
       ARRAY_AGG(STRUCT(action, result) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS latest_exec
     FROM `your_project.your_dataset.iam_access_change_log`
     GROUP BY request_id
+  ),
+  LatestSnapshot AS (
+    SELECT execution_id
+    FROM `your_project.your_dataset.iam_permission_bindings_history`
+    ORDER BY recorded_at DESC
+    LIMIT 1
   )
 SELECT
   p.resource_name AS `リソース名`,
@@ -98,8 +108,8 @@ LEFT JOIN `your_project.your_dataset.iam_access_requests` AS r
 LEFT JOIN `your_project.your_dataset.iam_status_master` AS sm
   ON r.status = sm.status_code
 LEFT JOIN LatestChangeLog AS lcl
-  ON p.request_id = lcl.request_id;
-
+  ON p.request_id = lcl.request_id
+WHERE p.execution_id = (SELECT execution_id FROM LatestSnapshot);
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_status` AS
 SELECT
