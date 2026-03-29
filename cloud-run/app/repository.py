@@ -474,7 +474,7 @@ class Repository:
 
         sql = f"""
         UPDATE `{self.requests_table}`
-        SET 
+        SET
             status = CASE {case_statement} ELSE status END,
             updated_at = CURRENT_TIMESTAMP()
         WHERE request_id IN ({id_list})
