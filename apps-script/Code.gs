@@ -144,58 +144,77 @@ function onEdit(e) {
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const statusCol = header.indexOf('status') + 1;
   const reqIdCol = header.indexOf('request_id');
-  if (reqIdCol < 0) return;
+  if (reqIdCol < 0 || statusCol <= 0) return;
 
-  // ステータス列が編集範囲に含まれていない場合は無視
-  if (statusCol <= 0 || range.getColumn() > statusCol || range.getColumn() + range.getNumColumns() - 1 < statusCol) return;
+  if (range.getColumn() > statusCol || range.getColumn() + range.getNumColumns() - 1 < statusCol) return;
 
   const props = getProps_();
   const startRow = range.getRow();
   const numRows = range.getNumRows();
   const rowData = sheet.getRange(startRow, 1, numRows, sheet.getLastColumn()).getValues();
-  const editedIds = [];
 
+  const updates = [];
+  const requestIdsToExecute = [];
+  
   for (let i = 0; i < numRows; i++) {
-    if (startRow + i === 1) continue; // ヘッダー行の編集はスキップ
+    if (startRow + i === 1) continue; // ヘッダーはスキップ
     const row = rowData[i];
-    const requestId = row[reqIdCol];
+    const requestId = String(row[reqIdCol] || '').trim();
     const newStatusRaw = String(row[statusCol - 1] || '').trim();
-    if (!requestId || !newStatusRaw) continue;
-
-    const normalized = normalizeStatus_(newStatusRaw);
-    const snapshot = getRequestSnapshot_(props, requestId);
-    if (!snapshot) continue; // 削除された不正な行はスキップ
     
-    const prevStatus = String(snapshot.status || '');
-    if (!prevStatus || prevStatus === normalized) continue;
-
-    updateStatusInBigQuery_(props, requestId, normalized);
-    insertRequestHistoryEvent_(props, {
-      request_id: String(requestId),
-      event_type: EVENT_STATUS_CHANGED,
-      old_status: prevStatus,
-      new_status: normalized,
-      reason_snapshot: snapshot.reason || '',
-      request_type: snapshot.request_type || '',
-      principal_email: snapshot.principal_email || '',
-      resource_name: snapshot.resource_name || '',
-      role: snapshot.role || '',
-      requester_email: snapshot.requester_email || '',
-      approver_email: snapshot.approver_email || '',
-      acted_by: getActorEmail_(),
-      actor_source: 'SHEET_EDIT',
-      details_json: JSON.stringify({ sheet: REQUEST_SHEET_NAME, edited_status_raw: newStatusRaw })
-    });
-
-    if (normalized === STATUS_APPROVED) {
-      callCloudRunExecute_(props, requestId);
+    if (requestId && newStatusRaw) {
+      const normalizedStatus = normalizeStatus_(newStatusRaw);
+      updates.push({ request_id: requestId, status: normalizedStatus });
+      if (normalizedStatus === STATUS_APPROVED) {
+        requestIdsToExecute.push(requestId);
+      }
     }
-    editedIds.push(String(requestId));
   }
 
-  if (editedIds.length > 0) {
-    refreshRequestReviewStatusForRequestIds_(editedIds);
+  if (updates.length === 0) return;
+
+  const token = getOidcToken_(props);
+  const baseUrl = props.cloudRunUrl.replace(/\/execute\/?$/, '');
+  const actorEmail = getActorEmail_();
+
+  // 1. スナップショットなどの複雑な処理はすべてバックエンドに任せ、IDとステータスだけを送る
+  try {
+    const bulkPayload = { updates: updates, actor_email: actorEmail };
+    const res = UrlFetchApp.fetch(`${baseUrl}/api/requests/bulk-status`, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(bulkPayload),
+      headers: { Authorization: `Bearer ${token}` },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() >= 400) {
+      console.error("Bulk update failed: " + res.getContentText());
+      return;
+    }
+  } catch (e) {
+    console.error("Bulk API error: " + e);
+    return;
   }
+
+  // 2. 更新が成功したら、承認済みのものだけ並列で /execute を叩く
+  if (requestIdsToExecute.length > 0) {
+    const executeRequests = requestIdsToExecute.map(id => ({
+      url: `${baseUrl}/execute`,
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ request_id: id }),
+      headers: { Authorization: `Bearer ${token}` },
+      muteHttpExceptions: true
+    }));
+    try {
+      UrlFetchApp.fetchAll(executeRequests);
+    } catch (e) {
+      console.error("Execute API error: " + e);
+    }
+  }
+
+  const allIds = updates.map(u => u.request_id);
+  refreshRequestReviewStatusForRequestIds_(allIds);
 }
 
 function callCloudRunApi_(props, path, method, payloadObj) {

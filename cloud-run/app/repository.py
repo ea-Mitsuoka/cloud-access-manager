@@ -418,6 +418,92 @@ class Repository:
             sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
         ).result()
 
+
+    def bulk_update_request_status_and_history_secure(
+        self,
+        updates: list[dict],
+        actor_email: str = "SYSTEM",
+        actor_source: str = "SYSTEM_BATCH"
+    ) -> list[str]:
+        if not updates:
+            return []
+
+        import uuid
+        from datetime import datetime, timezone
+        from google.cloud import bigquery
+        
+        req_ids = [u.get("request_id") for u in updates if u.get("request_id")]
+        if not req_ids:
+            return []
+        
+        # 1. バックエンド側で安全に現在のスナップショットを取得する（SQLインジェクション防止）
+        query = f"SELECT * FROM `{self.requests_table}` WHERE request_id IN UNNEST(@req_ids)"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ArrayQueryParameter("req_ids", "STRING", req_ids)]
+        )
+        rows = self._client.query(query, job_config=job_config).result()
+        snapshots = {row["request_id"]: dict(row) for row in rows}
+        
+        history_rows = []
+        now_str = datetime.now(timezone.utc).isoformat()
+        processed_ids = []
+        
+        # 2. 履歴データの構築と更新クエリの実行
+        for u in updates:
+            req_id = u.get("request_id")
+            new_status = u.get("status")
+            snap = snapshots.get(req_id)
+            
+            if not snap or snap.get("status") == new_status:
+                continue
+                
+            history_id = str(uuid.uuid4())
+            history_rows.append({
+                "history_id": history_id,
+                "request_id": req_id,
+                "event_type": "STATUS_CHANGED",
+                "old_status": snap.get("status", ""),
+                "new_status": new_status,
+                "reason_snapshot": snap.get("reason", ""),
+                "request_type": snap.get("request_type", ""),
+                "principal_email": snap.get("principal_email", ""),
+                "resource_name": snap.get("resource_name", ""),
+                "role": snap.get("role", ""),
+                "requester_email": snap.get("requester_email", ""),
+                "approver_email": snap.get("approver_email", ""),
+                "acted_by": actor_email,
+                "actor_source": actor_source,
+                "event_at": now_str,
+                "details": {"note": "Bulk status update"}
+            })
+            
+            # 安全なパラメータ化クエリによる単一更新
+            update_query = f"""
+                UPDATE `{self.requests_table}`
+                SET status = @new_status, updated_at = CURRENT_TIMESTAMP(),
+                    approved_at = CASE WHEN @new_status = 'APPROVED' THEN CURRENT_TIMESTAMP() ELSE approved_at END
+                WHERE request_id = @req_id
+            """
+            u_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("new_status", "STRING", new_status),
+                    bigquery.ScalarQueryParameter("req_id", "STRING", req_id)
+                ]
+            )
+            self._client.query(update_query, job_config=u_config).result()
+            processed_ids.append(history_id)
+
+        # 3. 履歴の書き込み
+        if history_rows:
+            errors = self._client.insert_rows_json(
+                f"{self._project_id}.{self._dataset_id}.iam_access_request_history",
+                history_rows,
+            )
+            if errors:
+                raise RuntimeError(f"failed to insert bulk history: {errors}")
+                
+        return processed_ids
+
     def bulk_update_request_status_and_history(
         self,
         updates: list[tuple[ExpiredAccessRequest, str]],
