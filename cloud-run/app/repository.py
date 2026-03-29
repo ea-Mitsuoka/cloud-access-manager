@@ -469,7 +469,7 @@ class Repository:
         if cases:
             case_statement = " ".join(cases)
             query_params.append(
-                bigquery.ArrayQueryParameter("all_req_ids", "STRING", req_ids)
+                bigquery.ArrayQueryParameter("all_req_ids", "STRING", actual_update_req_ids)
             )
 
             update_query = f"""

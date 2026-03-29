@@ -70,13 +70,13 @@ variable "access_policy_name" {
 variable "resource_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/resources"
-  default     = "0 3 * * *"
+  default     = "0 2 * * *"
 }
 
 variable "group_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/groups"
-  default     = "30 3 * * *"
+  default     = "30 2 * * *"
 }
 
 variable "reconciliation_schedule" {
@@ -94,7 +94,7 @@ variable "revoke_expired_permissions_schedule" {
 variable "iam_bindings_history_update_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/update-iam-bindings-history"
-  default     = "0 2 * * *" # Daily at 02:00 AM
+  default     = "30 3 * * *" # Daily at 03:30 AM
 }
 
 variable "scheduler_time_zone" {
@@ -118,5 +118,5 @@ variable "alert_notification_webhook_url" {
 variable "iam_policy_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/iam-policies"
-  default     = "15 3 * * *"
+  default     = "15 2 * * *"
 }
