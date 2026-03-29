@@ -472,8 +472,11 @@ class Repository:
         )
         WITH requests AS (
           SELECT request_id, request_type, principal_email, resource_name, role, status, expires_at
-          FROM `{self.requests_table}`
-          WHERE status IN ('APPROVED', 'REJECTED', 'CANCELLED')
+          FROM (
+            SELECT *, ROW_NUMBER() OVER(PARTITION BY principal_email, resource_name, role ORDER BY requested_at DESC) AS rn
+            FROM `{self.requests_table}`
+          )
+          WHERE rn = 1
         ),
         actual AS (
           SELECT principal_email, resource_name, role, TRUE AS exists_now
@@ -507,9 +510,9 @@ class Repository:
             request_id, principal_email, resource_name, role,
             CASE
               WHEN status = 'APPROVED' AND exists_now = FALSE THEN 'APPROVED_NOT_APPLIED'
-              WHEN status IN ('REJECTED', 'CANCELLED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
+              WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE THEN 'REJECTED_BUT_EXISTS'
               WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
-              WHEN status IS NULL AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
+              WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
               ELSE NULL
             END AS issue_type,
             CASE
@@ -578,8 +581,10 @@ class Repository:
           req.request_id,
           'Snapshot from iam_policy_permissions' AS note
         FROM `{self.iam_policy_permissions_table}` AS p
-        LEFT JOIN
-          `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest` AS req
+        LEFT JOIN (
+          SELECT * FROM `{self._project_id}.{self._dataset_id}.v_iam_request_execution_latest`
+          QUALIFY ROW_NUMBER() OVER(PARTITION BY principal_email, role, resource_name ORDER BY requested_at DESC) = 1
+        ) AS req
           ON p.principal_email = req.principal_email
           AND p.role = req.role
           AND p.resource_name = req.resource_name
