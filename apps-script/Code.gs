@@ -23,6 +23,7 @@ const MATRIX_SHEET_NAME = 'IAM権限設定マトリクス';
 const FIELD_REQUEST_TYPE = '申請種別';
 const FIELD_PRINCIPAL = '対象プリンシパル';
 const FIELD_RESOURCE = '対象リソース';
+const FIELD_PROJECT = '対象プロジェクト';
 const FIELD_ROLE = '付与・変更ロール';
 const FIELD_REASON = '申請理由・利用目的';
 const FIELD_REASON_ALT = '利用目的';
@@ -68,7 +69,7 @@ function onFormSubmit(e) {
     request_id: Utilities.getUuid(),
     request_type: normalizeRequestType_(rawRequestType),
     principal_email: pick_(named, FIELD_PRINCIPAL),
-    resource_name: pick_(named, FIELD_RESOURCE),
+    resource_name: normalizeResourceName_(pickFirst_(named, [FIELD_RESOURCE, FIELD_PROJECT])),
     role: pick_(named, FIELD_ROLE),
     reason: reason,
     expires_at: expiresAt,
@@ -834,4 +835,17 @@ function indexMap_(headerRow) {
     }
   });
   return map;
+}
+
+function normalizeResourceName_(raw) {
+  let v = String(raw || '').trim();
+  if (!v) return v;
+  
+  // すでに正しいプレフィックスが付いている場合はそのまま
+  if (v.startsWith('projects/') || v.startsWith('folders/') || v.startsWith('organizations/')) {
+    return v;
+  }
+  
+  // プレフィックスがない場合は、最も一般的な「プロジェクトID」と推測して補完する
+  return 'projects/' + v;
 }
