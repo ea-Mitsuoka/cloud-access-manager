@@ -33,7 +33,6 @@ ______________________________________________________________________
 - `roles/bigquery.dataEditor` on `tool_project:dataset`（dataset単位）
 - `roles/bigquery.jobUser` on `tool_project`
 - `roles/artifactregistry.reader` on `tool_project`（Artifact Registryのプライベートイメージを使う場合）
-- `roles/secretmanager.secretAccessor` on GAS用OIDC認証
 
 **管理対象への付与（要件に応じて）:**
 
@@ -59,7 +58,6 @@ ______________________________________________________________________
 - `roles/run.admin`
 - `roles/iam.serviceAccountAdmin`
 - `roles/resourcemanager.projectIamAdmin`
-- `roles/secretmanager.admin`（GAS用OIDC認証 の作成/更新を行う場合）
 - `roles/iam.serviceAccountUser` on executor SA
 
 **`tfstate` バケット作成・管理用（初回ブートストラップ）:**
@@ -78,7 +76,6 @@ TOOL_PROJECT_ID="<tool-project-id>"
 MANAGED_PROJECT_ID="<managed-project-id>"
 ORG_ID="<organization-id-or-empty>"
 EXECUTOR_SA="iam-access-executor@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
-GAS_TRIGGER_OWNER_EMAIL="iam-access-webhook-token"
 TF_PRINCIPAL="user:your.name@example.com" # or serviceAccount:ci-terraform@...
 
 # Terraform実行主体
@@ -95,7 +92,6 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPA
 # Cloud Run実行サービスアカウント
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/bigquery.jobUser
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/artifactregistry.reader
-gcloud secrets add-iam-policy-binding "$GAS_TRIGGER_OWNER_EMAIL" --project "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/secretmanager.secretAccessor
 
 # organization_idを使う場合のみ
 if [[ -n "$ORG_ID" ]]; then
@@ -278,7 +274,7 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
   - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
 
 **VPC-SCとGoogle Apps Script (GAS) の致命的な相性に関する重要事項:**
-もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunへのOIDC通信 (`POST /execute`) は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
+もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunのバックエンドAPI (`/api/requests`, `/execute` 等) へのOIDC通信は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。
 これは、GASがGoogleのパブリックな汎用サーバー（動的IP）上で動作しており、VPC-SCの「境界の外側」からのアクセスと見なされるためです。これを解決するには、GAS側に自力でOIDCトークンを生成させる複雑な改修が必要となり、「OIDCによるシンプルな連携」という現在のMVPの良さが失われてしまいます。
 そのため、今回は\*\*「いつでもVPC-SCを有効化できるコード（スイッチ）は用意しておくが、GASの連携方式を根本から見直すまではフラグを `false` のまま運用する」\*\*という方針にご注意ください。
 
@@ -363,8 +359,12 @@ terraform output cloud_run_url
 ### 8.3 SQL適用（帳票準拠）
 
 ```bash
-# BigQuery UI か bq query で build/sql/*.sql を順に実行
-# 実行順は sql/README.md を参照
+# BigQuery UI か bq query で以下のSQLを順番に実行してください
+# 1. build/sql/001_tables.sql (コアテーブル)
+# 2. build/sql/004_workbook_tables.sql (ワークブックマスタ)
+# 3. build/sql/002_views.sql (コアビュー)
+# 4. build/sql/005_workbook_views.sql (シート互換ビュー)
+# 5. build/sql/007_seed_workbook_from_existing.sql (初期データシード)
 ```
 
 ### 8.4 変更リリース（通常運用）
@@ -394,6 +394,9 @@ terraform output resource_inventory_scheduler_job
 terraform output group_collection_scheduler_job
 gcloud scheduler jobs describe iam-resource-inventory-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-group-collection-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
+gcloud scheduler jobs describe iam-reconciliation-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
+gcloud scheduler jobs describe iam-revoke-expired-permissions-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
+gcloud scheduler jobs describe iam-bindings-history-update-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 ```
 
 ### 8.7 障害時の一次切り分け
