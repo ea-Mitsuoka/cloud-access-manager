@@ -62,9 +62,6 @@ def test_revoke_expired_permissions_when_permission_exists(
     assert json_data["skipped"] == 0
     assert json_data["failed"] == 0
 
-    # Verify that get_iam_policy_permission was NOT called
-    mock_repo.get_iam_policy_permission.assert_not_called()
-
     # Verify that iam_executor.execute was called with a REVOKE request
     mock_iam_executor.execute.assert_called_once()
     call_args, _ = mock_iam_executor.execute.call_args
@@ -123,9 +120,6 @@ def test_revoke_expired_permissions_when_permission_is_gone(
     assert json_data["revoked"] == 0
     assert json_data["skipped"] == 1
     assert json_data["failed"] == 0
-
-    # Verify that get_iam_policy_permission was NOT called
-    mock_repo.get_iam_policy_permission.assert_not_called()
 
     # Verify that iam_executor.execute was NOT called
     mock_iam_executor.execute.assert_not_called()

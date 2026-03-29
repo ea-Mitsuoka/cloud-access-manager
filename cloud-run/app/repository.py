@@ -291,43 +291,6 @@ class Repository:
         job.result()
         return job.output_rows
 
-    def get_iam_policy_permission(
-        self, principal_email: str, role: str, resource_name: str
-    ) -> dict[str, Any] | None:
-        """
-        指定された条件でIAMポリシー権限が存在するかどうかを確認します。
-
-        Args:
-            principal_email (str): プリンシパルのメールアドレス。
-            role (str): IAMロール。
-            resource_name (str): リソース名。
-
-        Returns:
-            dict[str, Any] | None: 権限が存在する場合は行データ、そうでない場合はNone。
-        """
-        sql = f"""
-        SELECT 1
-        FROM `{self.iam_policy_permissions_table}`
-        WHERE principal_email = @principal_email
-          AND role = @role
-          AND resource_name = @resource_name
-        LIMIT 1
-        """
-        params = [
-            bigquery.ScalarQueryParameter("principal_email", "STRING", principal_email),
-            bigquery.ScalarQueryParameter("role", "STRING", role),
-            bigquery.ScalarQueryParameter("resource_name", "STRING", resource_name),
-        ]
-        rows = list(
-            self._client.query(
-                sql,
-                job_config=bigquery.QueryJobConfig(query_parameters=params),
-            ).result()
-        )
-        if not rows:
-            return None
-        return rows[0]
-
     def get_status_master(self) -> dict[str, str]:
         """DBからステータスマスタを取得し、日本語名とコードの対応辞書を返します。"""
         sql = f"SELECT status_ja, status_code FROM `{self._project_id}.{self._dataset_id}.iam_status_master` WHERE is_active"
