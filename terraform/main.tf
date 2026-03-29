@@ -176,7 +176,7 @@ resource "google_access_context_manager_service_perimeter" "tool_perimeter" {
       "cloudresourcemanager.googleapis.com",
       "cloudasset.googleapis.com",
       "cloudidentity.googleapis.com",
-    "aiplatform.googleapis.com",
+      "aiplatform.googleapis.com",
       "iamcredentials.googleapis.com",
       "artifactregistry.googleapis.com"
     ]
@@ -202,9 +202,9 @@ resource "google_cloud_run_v2_service_iam_member" "gas_run_invoker" {
 
 # Geminiアシスタント（Webアプリ）実行者のためのVertex AI権限自動付与
 resource "google_project_iam_member" "gas_owner_vertex_user" {
-  count   = trimspace(var.gas_trigger_owner_email) != "" ? 1 : 0
-  project = var.tool_project_id
-  role    = "roles/aiplatform.user"
-  member  = "user:${var.gas_trigger_owner_email}"
+  count      = trimspace(var.gas_trigger_owner_email) != "" ? 1 : 0
+  project    = var.tool_project_id
+  role       = "roles/aiplatform.user"
+  member     = "user:${var.gas_trigger_owner_email}"
   depends_on = [google_project_service.services]
 }
