@@ -82,7 +82,7 @@ SELECT
   p.iam_condition AS `IAM Condition`,
   p.ticket_ref AS `申請チケット番号`,
   p.request_reason AS `申請理由・用途`,
-  COALESCE(r.status, p.status_ja) AS `ステータス`, -- Use request status if available, fallback to history status
+  COALESCE(sm.status_ja, p.status_ja) AS `ステータス`,
   p.approved_at AS `承認日`,
   p.next_review_at AS `次回レビュー日`,
   p.approver AS `承認者`,
@@ -95,6 +95,8 @@ SELECT
 FROM `your_project.your_dataset.iam_permission_bindings_history` AS p
 LEFT JOIN `your_project.your_dataset.iam_access_requests` AS r
   ON p.request_id = r.request_id
+LEFT JOIN `your_project.your_dataset.iam_status_master` AS sm
+  ON r.status = sm.status_code
 LEFT JOIN LatestChangeLog AS lcl
   ON p.request_id = lcl.request_id;
 

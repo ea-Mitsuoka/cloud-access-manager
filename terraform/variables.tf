@@ -88,7 +88,7 @@ variable "reconciliation_schedule" {
 variable "revoke_expired_permissions_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /revoke_expired_permissions"
-  default     = "0 5 * * *" # Daily at 05:00 AM
+  default     = "0 1 * * *" # Daily at 01:00 AM
 }
 
 variable "iam_bindings_history_update_schedule" {

@@ -335,10 +335,57 @@ class Repository:
         }
 
     def insert_access_request_raw(self, row: dict[str, Any]) -> None:
-        """新規アクセスリクエストをStreaming Insertで記録します。"""
-        errors = self._client.insert_rows_json(self.requests_table, [row])
-        if errors:
-            raise RuntimeError(f"failed to insert access request: {errors}")
+        """
+        新規アクセスリクエストをDML(INSERT INTO)で記録します。
+        ※直後のステータスUPDATE（緊急承認フロー等）を確実に成功させるため、
+        BigQueryのストリーミングバッファ制限を回避します。
+        """
+        sql = f"""
+        INSERT INTO `{self.requests_table}` (
+            request_id, request_type, principal_email, resource_name, role,
+            reason, expires_at, requester_email, approver_email, status,
+            requested_at, ticket_ref, created_at, updated_at
+        ) VALUES (
+            @request_id, @request_type, @principal_email, @resource_name, @role,
+            @reason, @expires_at, @requester_email, @approver_email, @status,
+            @requested_at, @ticket_ref, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
+        )
+        """
+        params = [
+            bigquery.ScalarQueryParameter(
+                "request_id", "STRING", row.get("request_id")
+            ),
+            bigquery.ScalarQueryParameter(
+                "request_type", "STRING", row.get("request_type")
+            ),
+            bigquery.ScalarQueryParameter(
+                "principal_email", "STRING", row.get("principal_email")
+            ),
+            bigquery.ScalarQueryParameter(
+                "resource_name", "STRING", row.get("resource_name")
+            ),
+            bigquery.ScalarQueryParameter("role", "STRING", row.get("role")),
+            bigquery.ScalarQueryParameter("reason", "STRING", row.get("reason")),
+            bigquery.ScalarQueryParameter(
+                "expires_at", "TIMESTAMP", row.get("expires_at")
+            ),
+            bigquery.ScalarQueryParameter(
+                "requester_email", "STRING", row.get("requester_email")
+            ),
+            bigquery.ScalarQueryParameter(
+                "approver_email", "STRING", row.get("approver_email")
+            ),
+            bigquery.ScalarQueryParameter("status", "STRING", row.get("status")),
+            bigquery.ScalarQueryParameter(
+                "requested_at", "TIMESTAMP", row.get("requested_at")
+            ),
+            bigquery.ScalarQueryParameter(
+                "ticket_ref", "STRING", row.get("ticket_ref")
+            ),
+        ]
+        self._client.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
 
     def insert_request_history_event(self, row: dict[str, Any]) -> None:
         """アクセスリクエストの履歴イベントをStreaming Insertで記録します。"""
