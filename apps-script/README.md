@@ -9,7 +9,6 @@
 - `BQ_LOCATION`
 - `CLOUD_RUN_EXECUTE_URL` (例: `https://<service-url>/execute`)
 - `GAS_INVOKER_SA_EMAIL` (必須: Terraform outputの gas_invoker_service_account を設定)
-- `GEMINI_API_KEY` (Gemini提案アシスタントを使う場合に必須)
 
 ルートの設定ファイルから以下のコマンドでJSONとして生成できます:
 

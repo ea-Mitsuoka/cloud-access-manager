@@ -23,7 +23,7 @@
 | ID | 区分 | 項目 | 想定リスク | 検証手順（最小） | 状態 | 担当 |
 |---|---|---|---|---|---|---|
 | UT-001 | Apps Script | `Code.gs` 最新版を本番スプレッドシートにデプロイし、`onFormSubmit`/`onEdit` が動くこと | 申請・承認フローが動かない | フォーム送信1件、`requests_review`更新1件で BigQuery 反映を確認 | 未着手 | 開発者 |
-| UT-002 | Apps Script | `GeminiRoleAdvisor.gs` Webアプリの動作確認（`GEMINI_API_KEY` 含む） | 申請前提案UIが使えない | WebアプリURLにアクセスし、提案レスポンス取得を確認 | 未着手 | 開発者 |
+| UT-002 | Apps Script | `GeminiRoleAdvisor.gs` Webアプリの動作確認（OAuth権限借用） | 申請前提案UIが使えない | WebアプリURLにアクセスし、提案レスポンス取得を確認 | 未着手 | 開発者 |
 | UT-003 | BigQuery | `iam_access_request_history` へ `REQUESTED/STATUS_CHANGED` が記録されること | 利用目的・承認履歴の監査欠落 | 申請→却下/承認を実行し、履歴テーブルをクエリ確認 | 未着手 | 開発者 |
 | UT-004 | BigQuery | `v_iam_request_approval_history` の監査ビュー確認 | 監査時に履歴参照できない | ビューから `reason`/`old_status`/`new_status` を取得確認 | 未着手 | 開発者 |
 | UT-005 | Terraform | クリーン環境で `bootstrap-tfstate`→`terraform apply` の一連確認 | 初回導入で失敗 | Runbook通りに初回手順を通し、output取得まで確認 | 未着手 | 開発者 |
@@ -81,7 +81,7 @@
 
 ### 5.2 UT-002
 
-- [ ] `GEMINI_API_KEY` を Script Properties に設定済み
+- [ ] GASに正しいOAuthスコープが設定され、権限承認済みであること
 - [ ] `GeminiRoleAdvisor` Webアプリにアクセス可能
 - [ ] 入力に対して提案JSONレスポンスを取得できる
 

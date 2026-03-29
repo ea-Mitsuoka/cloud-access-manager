@@ -29,6 +29,7 @@ locals {
     "bigquery.googleapis.com",
     "cloudasset.googleapis.com",
     "cloudidentity.googleapis.com",
+    "aiplatform.googleapis.com",
     "cloudscheduler.googleapis.com",
     "run.googleapis.com",
     "cloudbuild.googleapis.com",
@@ -175,6 +176,7 @@ resource "google_access_context_manager_service_perimeter" "tool_perimeter" {
       "cloudresourcemanager.googleapis.com",
       "cloudasset.googleapis.com",
       "cloudidentity.googleapis.com",
+    "aiplatform.googleapis.com",
       "iamcredentials.googleapis.com",
       "artifactregistry.googleapis.com"
     ]

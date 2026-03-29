@@ -96,8 +96,7 @@ cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
   "BQ_DATASET_ID": "$BQ_DATASET_ID",
   "BQ_LOCATION": "$BQ_LOCATION",
   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
-  "GAS_INVOKER_SA_EMAIL": "iam-gas-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com",
-  "GEMINI_API_KEY": "${GEMINI_API_KEY:-}"
+  "GAS_INVOKER_SA_EMAIL": "iam-gas-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com"
 }
 JSON
 

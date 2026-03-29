@@ -15,9 +15,10 @@ function doGet() {
 }
 
 function suggestIamRoles(input) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!apiKey) {
-    throw new Error('missing script property: GEMINI_API_KEY');
+  const oauthToken = ScriptApp.getOAuthToken();
+  const project = PropertiesService.getScriptProperties().getProperty('GCP_PROJECT_ID');
+  if (!project) {
+    throw new Error('missing script property: GCP_PROJECT_ID');
   }
 
   const goal = String(input.goal || '').trim();
@@ -29,7 +30,7 @@ function suggestIamRoles(input) {
   }
 
   const prompt = buildPrompt_(goal, resource, principal);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const url = `https://asia-northeast1-aiplatform.googleapis.com/v1/projects/${project}/locations/asia-northeast1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
 
   const payload = {
     contents: [{
@@ -45,6 +46,9 @@ function suggestIamRoles(input) {
   const resp = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
+    headers: {
+      Authorization: `Bearer ${oauthToken}`
+    },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
