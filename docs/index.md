@@ -1,6 +1,6 @@
-# IAM Access Manager ドキュメント
+# Cloud Access Manager ドキュメント
 
-IAM Access Managerの公式ドキュメントサイトへようこそ。
+Cloud Access Managerの公式ドキュメントサイトへようこそ。
 
 このサイトでは、システム全体の運用マニュアル、データベース仕様、およびPythonバックエンドの自動生成APIリファレンスを提供します。
 
