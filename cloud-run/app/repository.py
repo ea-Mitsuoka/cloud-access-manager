@@ -236,10 +236,12 @@ class Repository:
                 }
             )
 
-        errors = self._client.insert_rows_json(self.groups_table, payload)
-        if errors:
-            raise RuntimeError(f"failed to replace groups: {errors}")
-        return len(payload)
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
+        job = self._client.load_table_from_json(
+            payload, self.groups_table, job_config=job_config
+        )
+        job.result()
+        return job.output_rows
 
     def insert_group_membership_rows(
         self, rows: list[dict[str, Any]], chunk_size: int = 500
