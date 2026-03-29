@@ -472,6 +472,9 @@ def revoke_expired_permissions():
                 if result.result == "SUCCESS":
                     repo.update_request_status(req.request_id, "REVOKED")
                     revoked_count += 1
+                elif result.result == "SKIPPED":
+                    repo.update_request_status(req.request_id, "REVOKED_ALREADY_GONE")
+                    skipped_count += 1
                 else:
                     repo.update_request_status(req.request_id, "REVOKE_FAILED")
                     failed_count += 1

@@ -26,6 +26,7 @@ const FIELD_RESOURCE = '対象リソース';
 const FIELD_ROLE = '付与・変更ロール';
 const FIELD_REASON = '申請理由・利用目的';
 const FIELD_REASON_ALT = '利用目的';
+const FIELD_EXPIRES_AT = '利用期限';
 const FIELD_REQUESTER = '申請者メール';
 const FIELD_APPROVER = '承認者メール（または承認グループ）';
 const COL_AI_SUGGEST = 'AI推奨（最小権限）';
@@ -52,6 +53,15 @@ function onFormSubmit(e) {
   const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
   const reason = (isEmergency ? '[緊急] ' : '') + pickFirst_(named, [FIELD_REASON, FIELD_REASON_ALT]);
 
+  let expiresAt = null;
+  const expiresRaw = pick_(named, FIELD_EXPIRES_AT);
+  if (expiresRaw && expiresRaw.indexOf('恒久') === -1 && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
+    const d = new Date(expiresRaw);
+    if (!isNaN(d.getTime())) {
+      expiresAt = d.toISOString();
+    }
+  }
+
   const request = {
     request_id: Utilities.getUuid(),
     request_type: normalizeRequestType_(rawRequestType),
@@ -59,6 +69,7 @@ function onFormSubmit(e) {
     resource_name: pick_(named, FIELD_RESOURCE),
     role: pick_(named, FIELD_ROLE),
     reason: reason,
+    expires_at: expiresAt,
     requester_email: pick_(named, FIELD_REQUESTER),
     approver_email: pick_(named, FIELD_APPROVER),
     status: STATUS_PENDING,
@@ -215,6 +226,7 @@ function insertRequestToBigQuery_(props, request) {
     resource_name: request.resource_name,
     role: request.role,
     reason: request.reason,
+    expires_at: request.expires_at || null,
     requester_email: request.requester_email,
     approver_email: request.approver_email,
     status: request.status,
@@ -309,7 +321,7 @@ function appendReviewSheet_(request, aiSuggestion) {
     sheet = ss.insertSheet(REQUEST_SHEET_NAME);
     sheet.appendRow([
       'request_id', 'request_type', 'principal_email', 'resource_name', 'role',
-      'reason', 'requester_email', 'approver_email', 'status', 'requested_at', 'ticket_ref', COL_AI_SUGGEST
+      'reason', 'expires_at', 'requester_email', 'approver_email', 'status', 'requested_at', 'ticket_ref', COL_AI_SUGGEST
     ]);
   }
 
@@ -325,6 +337,7 @@ function appendReviewSheet_(request, aiSuggestion) {
   if (idx.resource_name) rowData[idx.resource_name - 1] = request.resource_name;
   if (idx.role) rowData[idx.role - 1] = request.role;
   if (idx.reason) rowData[idx.reason - 1] = request.reason;
+  if (idx.expires_at) rowData[idx.expires_at - 1] = request.expires_at ? new Date(request.expires_at).toLocaleString() : '恒久';
   if (idx.requester_email) rowData[idx.requester_email - 1] = request.requester_email;
   if (idx.approver_email) rowData[idx.approver_email - 1] = request.approver_email;
   if (idx.status) rowData[idx.status - 1] = request.status;
@@ -686,7 +699,7 @@ function getRequestReviewSheet_() {
 
 function ensureRequestReviewColumns_(sheet) {
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const missing = [COL_AI_SUGGEST, COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
+  const missing = ['expires_at', COL_AI_SUGGEST, COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
   missing.forEach((name) => {
     sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
   });
