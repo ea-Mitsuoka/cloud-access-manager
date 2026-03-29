@@ -1,4 +1,4 @@
-site_name: IAM Access Manager
+site_name: Cloud Access Manager
 site_description: SaaS基盤向けのIAM権限管理システム
 theme:
   name: material
