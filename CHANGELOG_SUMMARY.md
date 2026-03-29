@@ -354,3 +354,9 @@ ______________________________________________________________________
 - **問題:** `repository.py` の `replace_groups` において、特定のソースのデータを `DELETE` した直後に `insert_rows_json` (Streaming API) を用いてデータを挿入していた。これにより、BigQueryのストリーミングバッファにデータが残っている間（最大90分）に次回のジョブが走ると、`DELETE` がバッファと競合して確定でクラッシュする時限爆弾バグが存在した。
 - **解決策:** Streaming API の使用をやめ、挿入処理を `bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")` を用いた一括ロード（Load Job）に変更した。Load Jobはストリーミングバッファを使用しないため、次回実行時の `DELETE` と競合しない。
 - **効果:** 他ソースのデータを安全に保護しつつ、グループ収集ジョブが短期間に何度走ってもBigQueryのDML制約によるエラーが発生しなくなった。
+
+## 48. 重大バグ修正: 履歴更新ジョブにおけるBigQueryの型不一致エラーの解消
+
+- **問題:** `repository.py` の `run_update_bindings_history_job` において、`TIMESTAMP` 型の `expires_at` を `DATE` 型の `next_review_at` カラムに暗黙的に挿入しようとしていた。BigQueryは `TIMESTAMP` から `DATE` への暗黙キャストをサポートしていないため、日次の履歴更新バッチが100%クラッシュする時限爆弾バグが存在した。
+- **解決策:** SQLクエリ内で `CAST(req.expires_at AS DATE) AS next_review_at` と明示的にキャストを行うように修正した。
+- **効果:** 日次の帳票用データ生成バッチが型エラーで落ちることなく、安定して稼働するようになった。

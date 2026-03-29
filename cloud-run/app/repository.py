@@ -710,7 +710,7 @@ class Repository:
           req.reason AS request_reason,
           status_map.status_ja,
           req.approved_at,
-          req.expires_at AS next_review_at,
+          CAST(req.expires_at AS DATE) AS next_review_at,
           req.approver_email AS approver,
           req.request_id,
           'Snapshot from iam_policy_permissions' AS note
