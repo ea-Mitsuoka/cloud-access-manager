@@ -594,7 +594,7 @@ class Repository:
           WHERE rn = 1
         ),
         actual AS (
-          SELECT principal_email, resource_name, role, TRUE AS exists_now
+          SELECT DISTINCT principal_email, resource_name, role, TRUE AS exists_now
           FROM `{self.iam_policy_permissions_table}`
         ),
         joined AS (
@@ -753,11 +753,12 @@ class Repository:
         sql = f"""
         MERGE `{self._project_id}.{self._dataset_id}.principal_catalog` T
         USING (
-          SELECT DISTINCT
+          SELECT
             principal_email,
-            principal_type
+            ANY_VALUE(principal_type) AS principal_type
           FROM `{self.iam_policy_permissions_table}`
           WHERE principal_email IS NOT NULL AND principal_email != ''
+          GROUP BY principal_email
         ) S
         ON T.principal_email = S.principal_email
         WHEN MATCHED THEN

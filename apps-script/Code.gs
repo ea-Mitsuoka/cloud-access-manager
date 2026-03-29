@@ -139,7 +139,7 @@ ${suggestion.reviewer_note || suggestion.summary || ''}`;
 function onEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
-  if (sheet.getName() !== REQUEST_SHEET_NAME || range.getRow() === 1) return;
+  if (sheet.getName() !== REQUEST_SHEET_NAME) return;
 
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const statusCol = header.indexOf('status') + 1;
@@ -156,6 +156,7 @@ function onEdit(e) {
   const editedIds = [];
 
   for (let i = 0; i < numRows; i++) {
+    if (startRow + i === 1) continue; // ヘッダー行の編集はスキップ
     const row = rowData[i];
     const requestId = row[reqIdCol];
     const newStatusRaw = String(row[statusCol - 1] || '').trim();
