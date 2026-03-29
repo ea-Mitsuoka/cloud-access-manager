@@ -365,6 +365,9 @@ terraform output cloud_run_url
 # 3. build/sql/002_views.sql (コアビュー)
 # 4. build/sql/005_workbook_views.sql (シート互換ビュー)
 # 5. build/sql/007_seed_workbook_from_existing.sql (初期データシード)
+# 5. build/sql/003_reconciliation.sql (初期データシード)
+# 5. build/sql/006_matrix_pivot.sql (初期データシード)
+# 5. build/sql/008_update_bindings_history.sql (初期データシード)
 ```
 
 ### 8.4 変更リリース（通常運用）
