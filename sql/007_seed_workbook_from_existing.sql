@@ -26,7 +26,7 @@ INSERT INTO `your_project.your_dataset.iam_permission_bindings_history` (
   principal_email,
   principal_type,
   iam_role,
-  iam_condition,
+  CAST(iam_condition AS STRING),
   ticket_ref,
   request_reason,
   status_ja,
@@ -73,7 +73,7 @@ SELECT
   req.principal_email,
   req.principal_type,
   req.iam_role,
-  NULL AS iam_condition,
+  NULL AS CAST(iam_condition AS STRING),
   req.ticket_ref,
   req.request_reason,
   CASE
