@@ -1,16 +1,24 @@
 # Cloud Access Manager ドキュメント
 
-Cloud Access Managerの公式ドキュメントサイトへようこそ。
+Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承認、自動付与、監査、および定期棚卸しを一気通貫で管理するためのサーバーレスSaaS基盤です。
 
-このサイトでは、システム全体の運用マニュアル、データベース仕様、およびPythonバックエンドの自動生成APIリファレンスを提供します。
+## 🚀 アーキテクチャ概要
+
+システムは仮想マシンを一切持たず、Google Workspace（フォーム/スプレッドシート）とGCPのフルマネージドサービス（Cloud Run/BigQuery）を組み合わせることで、「アイドル時の固定費ゼロ（Scale-to-Zero）」を実現しています。
+（※アーキテクチャ図の詳細はリポジトリのREADMEをご参照ください）
+
+## 📚 ドキュメントナビゲーション
 
 上部のナビゲーションバー、または以下のリンクから各ドキュメントにアクセスしてください。
 
-## 主要リンク
-
-- [運用マニュアル](operations-runbook.md)
-- [BigQuery テーブル仕様書](bigquery_tables.md)
-- [Python API リファレンス](api/main.md)
-- [データリネージとマッピング定義](data_lineage_and_mapping.md)
-- [ユーザーガイド](user_guide.md)
-- [IAM権限の整合性管理とインシデント対応フロー](iam-reconciliation-and-incident-flow.md)
+- **ユーザー・運用向け**
+  - [ユーザーガイド (申請者向け)](user-guide.md)
+  - [運用マニュアル (SRE向け)](operations-runbook.md)
+  - [IAM権限の整合性管理とインシデント対応フロー](iam-reconciliation-and-incident-flow.md)
+- **設計・データ仕様**
+  - [要件定義書](requirements.md)
+  - [BigQuery テーブル仕様書](bigquery_tables.md)
+  - [データリネージとマッピング](data_lineage_and_mapping.md)
+- **開発・API**
+  - [未検証項目引継ぎ](untested-items-handover.md)
+  - [Python API リファレンス](api/main.md)

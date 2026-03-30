@@ -25,6 +25,7 @@ nav:
   - ホーム: index.md
   - ユーザーガイド (申請者向け): user-guide.md
   - 運用マニュアル (SRE向け): operations-runbook.md
+  - 要件定義書: requirements.md
   - BigQuery仕様: bigquery_tables.md
   - データリネージとマッピング: data_lineage_and_mapping.md
   - 未検証項目引継ぎ: untested-items-handover.md
