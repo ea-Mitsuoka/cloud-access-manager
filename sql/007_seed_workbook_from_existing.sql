@@ -73,7 +73,7 @@ SELECT
   req.principal_email,
   req.principal_type,
   req.iam_role,
-  NULL AS iam_condition,
+  CAST(NULL AS STRING) AS iam_condition,
   req.ticket_ref,
   req.request_reason,
   CASE
