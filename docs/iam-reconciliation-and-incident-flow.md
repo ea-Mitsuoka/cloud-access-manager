@@ -84,3 +84,89 @@ ______________________________________________________________________
 
 **(※運用上の注意)**
 本システムは監査証跡の信頼性を第一とするため、**「システムが自動的に未管理権限を正当なものとして取り込む（リバースシンク）」機能は意図的に排除**しています。未管理権限をシステムに登録したい場合は、必ず「パターンA（事後承認フロー）」の手順を踏んでください。
+
+## 5. インシデント調査・監査用SQLクエリ集
+
+アラートを受信した後や、定期的なセキュリティ監査において、BigQueryのログを深掘り調査（ドリルダウン）するための実用的なSQLスニペット集です。
+※ `your_project.your_dataset` を実際の環境に合わせて置換してから実行してください。
+
+### 5.1 特定ユーザーの全申請・承認・変更履歴の追跡
+
+「退職予定者」や「不審な動きをしたユーザー」の過去のすべての権限申請と、誰がそれを承認したかを時系列で追跡します。
+
+```sql
+SELECT
+  event_at,
+  request_id,
+  event_type,
+  old_status,
+  new_status,
+  reason_snapshot,
+  resource_name,
+  role,
+  requester_email,
+  approver_email,
+  acted_by
+FROM `your_project.your_dataset.v_iam_request_approval_history`
+WHERE principal_email = 'target-user@example.com'
+ORDER BY event_at DESC;
+```
+
+### 5.2 緊急アクセス（Break-glass）発動の事後監査
+
+`[BREAK-GLASS]` アラートを受信した際、誰が・どのリソースに対して・どんな理由で緊急アクセスを発動したのか、そしてAPIが正しく成功したのかを確認します。
+
+```sql
+SELECT
+  req.requested_at,
+  req.request_id,
+  req.requester_email,
+  req.resource_name,
+  req.role,
+  req.reason,
+  log.result AS execution_result,
+  log.executed_at
+FROM `your_project.your_dataset.iam_access_requests` req
+LEFT JOIN `your_project.your_dataset.iam_access_change_log` log
+  ON req.request_id = log.request_id
+WHERE req.request_type IN ('GRANT', 'CHANGE')
+  AND req.reason LIKE '%[緊急]%'
+ORDER BY req.requested_at DESC;
+```
+
+### 5.3 野良権限（UNMANAGED_BINDING）の深掘り調査
+
+システム外で直接付与された権限が検知された場合、その権限が「いつから存在するのか」、過去の生履歴（Raw History）を遡って特定します。
+
+```sql
+SELECT 
+  assessment_timestamp,
+  principal_email,
+  resource_name,
+  role
+FROM `your_project.your_dataset.iam_policy_bindings_raw_history`
+WHERE principal_email = 'unknown-user@example.com'
+  AND resource_name = 'projects/target-project-id'
+ORDER BY assessment_timestamp ASC
+LIMIT 10;
+```
+
+### 5.4 API実行エラー（FAILED）の詳細解析
+
+スプレッドシート上でステータスが「承認済」なのに「未実行」または「FAILED」から進まない場合、Cloud Runが吐き出したバックエンドの生のエラーメッセージ（APIの競合や権限不足など）を特定します。
+
+```sql
+SELECT
+  executed_at,
+  request_id,
+  action,
+  target,
+  result,
+  error_code,
+  error_message,
+  details
+FROM `your_project.your_dataset.iam_access_change_log`
+WHERE result = 'FAILED'
+  AND executed_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+ORDER BY executed_at DESC;
+```
