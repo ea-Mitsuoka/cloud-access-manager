@@ -154,21 +154,57 @@ function onEdit(e) {
   const startRow = range.getRow();
   const numRows = range.getNumRows();
   const rowData = sheet.getRange(startRow, 1, numRows, sheet.getLastColumn()).getValues();
+  const idx = indexMap_(header);
+
+  // 1. スパム通知を防ぐため、変更対象のIDの現在のステータスをBigQueryから取得
+  const reqIdsToCheck = [];
+  for (let i = 0; i < numRows; i++) {
+    if (startRow + i === 1) continue;
+    const row = rowData[i];
+    const requestId = String(row[reqIdCol - 1] || '').trim();
+    if (requestId) reqIdsToCheck.push(requestId);
+  }
+
+  let oldStatusMap = {};
+  if (reqIdsToCheck.length > 0) {
+    oldStatusMap = getRequestStatusesFromBQ_(props, reqIdsToCheck);
+  }
 
   const updates = [];
   const requestIdsToExecute = [];
-  
+  const emailsToSend = [];
+
   for (let i = 0; i < numRows; i++) {
     if (startRow + i === 1) continue; // ヘッダーはスキップ
     const row = rowData[i];
     const requestId = String(row[reqIdCol] || '').trim();
     const newStatusRaw = String(row[statusCol - 1] || '').trim();
-    
+
     if (requestId && newStatusRaw) {
       const normalizedStatus = normalizeStatus_(newStatusRaw);
-      updates.push({ request_id: requestId, status: normalizedStatus });
-      if (normalizedStatus === STATUS_APPROVED) {
-        requestIdsToExecute.push(requestId);
+      const oldStatus = oldStatusMap[requestId] || STATUS_PENDING;
+
+      if (normalizedStatus !== oldStatus) {
+        updates.push({ request_id: requestId, status: normalizedStatus });
+
+        if (normalizedStatus === STATUS_APPROVED) {
+          requestIdsToExecute.push(requestId);
+        }
+
+        if (normalizedStatus === STATUS_APPROVED || normalizedStatus === 'REJECTED') {
+           const requesterEmail = String(row[idx.requester_email - 1] || '');
+           if (requesterEmail) {
+             const prefillData = {
+               [FIELD_REQUEST_TYPE]: String(row[idx.request_type - 1] || ''),
+               [FIELD_PRINCIPAL]: String(row[idx.principal_email - 1] || ''),
+               [FIELD_RESOURCE]: String(row[idx.resource_name - 1] || ''),
+               [FIELD_ROLE]: String(row[idx.role - 1] || ''),
+               [FIELD_REASON]: String(row[idx.reason - 1] || ''),
+               [FIELD_APPROVER]: String(row[idx.approver_email - 1] || '')
+             };
+             emailsToSend.push({ type: normalizedStatus, prefillData: prefillData, requester: requesterEmail });
+           }
+        }
       }
     }
   }
@@ -222,6 +258,11 @@ function onEdit(e) {
 
   const allIds = updates.map(u => u.request_id);
   refreshRequestReviewStatusForRequestIds_(allIds);
+
+  // 3. API実行などがすべて終わった後に通知メールを送信
+  if (emailsToSend.length > 0) {
+    sendNotificationEmails_(emailsToSend);
+  }
 }
 
 function callCloudRunApi_(props, path, method, payloadObj) {
@@ -854,4 +895,98 @@ function normalizeResourceName_(raw) {
   
   // プレフィックスがない場合は、最も一般的な「プロジェクトID」と推測して補完する
   return 'projects/' + v;
+}
+
+function getRequestStatusesFromBQ_(props, requestIds) {
+  if (!requestIds || requestIds.length === 0) return {};
+  const sql = `SELECT request_id, status FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\` WHERE request_id IN UNNEST(@request_ids)`;
+  try {
+    const rows = runSelectQuery_(props, sql, [arrayParam_('request_ids', 'STRING', requestIds)]);
+    const map = {};
+    rows.forEach(r => { map[String(r.request_id)] = String(r.status); });
+    return map;
+  } catch(e) {
+    console.error('getRequestStatusesFromBQ_ error: ' + e);
+    return {};
+  }
+}
+
+function sendNotificationEmails_(emailsToSend) {
+  emailsToSend.forEach(item => {
+    const type = item.type;
+    const prefillData = item.prefillData;
+    const requester = item.requester;
+    if (!requester) return;
+    
+    const resource = prefillData[FIELD_RESOURCE] || prefillData[FIELD_PROJECT] || '';
+    const role = prefillData[FIELD_ROLE] || '';
+    const reason = prefillData[FIELD_REASON] || prefillData[FIELD_REASON_ALT] || '';
+    
+    if (type === STATUS_APPROVED) {
+      const subject = `【Cloud Access Manager】IAM権限申請が承認されました`;
+      const body = `以下のIAM権限申請が承認され、自動付与処理が開始されました。\n\n`
+        + `対象リソース: ${resource}\n`
+        + `ロール: ${role}\n`
+        + `申請理由: ${reason}\n\n`
+        + `数分以内にGoogle Cloud環境へ反映されます。`;
+      try {
+        MailApp.sendEmail(requester, subject, body);
+      } catch (e) {
+        console.error("MailApp error (APPROVED): " + e);
+      }
+    } else if (type === 'REJECTED') {
+      const subject = `【Cloud Access Manager】IAM権限申請が却下されました`;
+      const prefilledUrl = generatePrefilledUrl_(prefillData) || '(フォームのURLを取得できませんでした)';
+      
+      const body = `以下のIAM権限申請が却下されました。\n\n`
+        + `対象リソース: ${resource}\n`
+        + `ロール: ${role}\n`
+        + `申請理由: ${reason}\n\n`
+        + `内容を修正して再申請する場合は、以下の事前入力リンクから申請してください:\n`
+        + `${prefilledUrl}`;
+      try {
+        MailApp.sendEmail(requester, subject, body);
+      } catch (e) {
+        console.error("MailApp error (REJECTED): " + e);
+      }
+    }
+  });
+}
+
+function generatePrefilledUrl_(prefillData) {
+  try {
+    const formUrl = SpreadsheetApp.getActiveSpreadsheet().getFormUrl();
+    if (!formUrl) return null;
+    const form = FormApp.openByUrl(formUrl);
+    const items = form.getItems();
+    const formResponse = form.createResponse();
+    
+    items.forEach(item => {
+      const title = item.getTitle();
+      let val = prefillData[title];
+      if (!val && title === FIELD_PROJECT) val = prefillData[FIELD_RESOURCE];
+      if (!val && title === FIELD_REASON_ALT) val = prefillData[FIELD_REASON];
+      
+      if (!val) return;
+      
+      try {
+        const type = item.getType();
+        if (type === FormApp.ItemType.TEXT) {
+          formResponse.withItemResponse(item.asTextItem().createResponse(String(val)));
+        } else if (type === FormApp.ItemType.PARAGRAPH_TEXT) {
+          formResponse.withItemResponse(item.asParagraphTextItem().createResponse(String(val)));
+        } else if (type === FormApp.ItemType.MULTIPLE_CHOICE) {
+          formResponse.withItemResponse(item.asMultipleChoiceItem().createResponse(String(val)));
+        } else if (type === FormApp.ItemType.LIST) {
+          formResponse.withItemResponse(item.asListItem().createResponse(String(val)));
+        }
+      } catch (e) {
+        console.warn(`Failed to pre-fill item ${title}: ` + e);
+      }
+    });
+    return formResponse.toPrefilledUrl();
+  } catch (e) {
+    console.error("generatePrefilledUrl_ error: " + e);
+    return null;
+  }
 }

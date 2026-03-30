@@ -17,10 +17,28 @@ bash scripts/sync-config.sh
 cat apps-script/script-properties.json
 ```
 
-## 2. サービスの有効化
+## 2. サービスの有効化とOAuthスコープ（権限）の追加
 
 - `サービス` -> `BigQuery API` を追加 (Googleの拡張サービス)
 - リンクされたGoogle Cloudプロジェクトでも、BigQuery APIを有効化してください。
+
+**[重要] マニフェストファイルの修正とメール・フォーム権限の追加**:
+承認/却下時のメール通知と、再申請用フォームURLの自動生成を行うため、以下の設定が必須です。これを忘れると承認時にエラーでクラッシュします。
+
+1. GASエディタの「プロジェクト設定（歯車マーク）」で「`appsscript.json` マニフェスト ファイルをエディタで表示する」にチェックを入れます。
+
+1. エディタに表示された `appsscript.json` を開き、以下の `oauthScopes` を追加して保存してください。
+
+   ```json
+   {
+     "oauthScopes": [
+       "https://www.googleapis.com/auth/script.external_request",
+       "https://www.googleapis.com/auth/cloud-platform",
+       "https://www.googleapis.com/auth/script.send_mail",
+       "https://www.googleapis.com/auth/forms"
+     ]
+   }
+   ```
 
 ## 3. トリガー
 
