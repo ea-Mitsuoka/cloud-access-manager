@@ -57,6 +57,18 @@
 
    ```bash
    cd terraform
+   terraform state rm 'google_project_service.services["aiplatform.googleapis.com"]'
+   terraform state rm 'google_project_service.services["artifactregistry.googleapis.com"]'
+   terraform state rm 'google_project_service.services["bigquery.googleapis.com"]'
+   terraform state rm 'google_project_service.services["cloudasset.googleapis.com"]'
+   terraform state rm 'google_project_service.services["cloudbuild.googleapis.com"]'
+   terraform state rm 'google_project_service.services["cloudidentity.googleapis.com"]'
+   terraform state rm 'google_project_service.services["cloudresourcemanager.googleapis.com"]'
+   terraform state rm 'google_project_service.services["cloudscheduler.googleapis.com"]'
+   terraform state rm 'google_project_service.services["iam.googleapis.com"]'
+   terraform state rm 'google_project_service.services["iamcredentials.googleapis.com"]'
+   terraform state rm 'google_project_service.services["run.googleapis.com"]'
+   terraform state rm 'google_project_service.services["secretmanager.googleapis.com"]'
    terraform destroy -var-file=../environment.auto.tfvars
    ```
 
