@@ -204,6 +204,9 @@ bash "$ROOT_DIR/scripts/bootstrap-tfstate.sh" "$CONFIG_FILE"
 
 echo
 echo "[3/8] Preparing Docker Image (Artifact Registry)..."
+echo "Ensuring required APIs are enabled..."
+gcloud services enable artifactregistry.googleapis.com cloudbuild.googleapis.com --project="$TOOL_PROJECT_ID"
+
 # イメージURLからリポジトリ名（iam-access-repo）を自動抽出
 AR_REPO_NAME=$(echo "$CLOUD_RUN_IMAGE" | cut -d/ -f3)
 
