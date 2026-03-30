@@ -783,7 +783,7 @@ def _build_collection_error_report(
         "error_message": error_message,
         "hint": hint,
         "counts": {},
-        "details": {"exception_type": error_code},
+        "details": {},
         "http_status": http_status,
     }
 
