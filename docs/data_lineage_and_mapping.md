@@ -250,3 +250,17 @@ ______________________________________________________________________
    - UIの「IAM権限設定マトリクス」では、グループに付与された権限を展開して「個人の権限」として紐づけて可視化するSQLビューが存在しないため、監査時に「間接的に権限を持っているユーザー」を見落とすリスクがあります。
 1. **Cloud Asset APIの遅延特性**
    - Cloud Runが実行（`setIamPolicy`）した直後に収集バッチが走った場合、Cloud Asset API側のインデックス更新遅延により、古いIAM状態が取得されることがあります。これにより、一時的に「承認済なのに付与されていない（`APPROVED_NOT_APPLIED`）」という偽陽性アラートが発報される可能性があります。
+
+## 5. データ型のマッピングポリシー (Data Type Consistency)
+
+システム全体を通じて、以下のデータ型マッピングポリシーを厳格に適用し、PythonアプリケーションとBigQuery間の型不一致エラー（Schema Mismatch）を防いでいます。
+
+- **日時データ (Timestamps / Dates):**
+  - **Python側:** `datetime.now(timezone.utc).isoformat()` (ISO 8601形式の文字列)
+  - **BigQuery側:** `TIMESTAMP` 型。文字列として挿入されたISO 8601フォーマットはBigQueryにより自動的にTIMESTAMPにパースされます。
+- **動的構造データ (Dynamic Structures):**
+  - **Python側:** 任意のキーと値を持つ `dict`
+  - **BigQuery側:** `JSON` 型。`RECORD` (STRUCT) 型はキーが事前に静的に決定できる場合にのみ使用し、レポートのメトリクス（`counts`）やトレースバック（`details`）のようなジョブごとにキーが変動する動的な構造には、必ず `JSON` 型を使用します。
+- **識別子・列挙値 (Identifiers / Enums):**
+  - **Python側:** `str`
+  - **BigQuery側:** `STRING` 型。UUID、メールアドレス、リソース名、`SUCCESS / FAILED` などのステータスはすべて文字列として扱います。
