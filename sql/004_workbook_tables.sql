@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.principal_catalog` (
   principal_name STRING,
   principal_type STRING,
   note STRING,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 CLUSTER BY principal_type;
 
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.google_groups` (
   group_name STRING,
   description STRING,
   source STRING,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 CLUSTER BY group_email;
 
@@ -49,8 +49,8 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_status_master` (
   status_code STRING,
   description STRING,
   sort_order INT64,
-  is_active BOOL NOT NULL DEFAULT TRUE,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+  is_active BOOL DEFAULT TRUE NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_permission_bindings_history` (
