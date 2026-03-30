@@ -100,6 +100,57 @@ require_cmd terraform
 require_cmd bash
 require_cmd docker
 
+ensure_docker_running() {
+  if docker system info >/dev/null 2>&1; then
+    return 0
+  fi
+  echo
+  echo "⚠️  Docker daemon is not running."
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    if ask_yes_no "Would you like me to try starting Docker for you?" "y"; then
+      if command -v orb >/dev/null 2>&1; then
+        echo "🚀 Starting OrbStack..."
+        orb start
+      elif command -v colima >/dev/null 2>&1; then
+        echo "🚀 Starting Colima..."
+        colima start
+      elif command -v rdctl >/dev/null 2>&1; then
+        echo "🚀 Starting Rancher Desktop..."
+        rdctl start
+      elif [[ -d "/Applications/Docker.app" ]]; then
+        echo "🚀 Starting Docker Desktop..."
+        open --background -a Docker
+      else
+        echo "❌ Could not detect a known Docker manager. Please start Docker manually."
+        exit 1
+      fi
+      
+      echo -n "⏳ Waiting for Docker daemon to be ready..."
+      local max_wait=60
+      local elapsed=0
+      while ! docker system info >/dev/null 2>&1; do
+        sleep 2
+        elapsed=$((elapsed + 2))
+        echo -n "."
+        if [[ $elapsed -ge $max_wait ]]; then
+          echo " Timeout! Please check your Docker app and start it manually."
+          exit 1
+        fi
+      done
+      echo " ✅ Docker is up!"
+      echo
+    else
+      echo "Please start Docker manually and rerun the script."
+      exit 1
+    fi
+  else
+    echo "Please start the Docker daemon (e.g., 'sudo systemctl start docker') and rerun the script."
+    exit 1
+  fi
+}
+
+ensure_docker_running
+
 # shellcheck disable=SC1090
 set -a
 source "$CONFIG_FILE"
