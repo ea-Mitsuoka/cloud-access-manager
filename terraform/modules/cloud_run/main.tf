@@ -1,7 +1,8 @@
 resource "google_cloud_run_v2_service" "executor" {
-  name     = var.service_name
-  location = var.region
-  ingress  = var.enable_vpc_sc ? "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING" : "INGRESS_TRAFFIC_ALL"
+  name                = var.service_name
+  location            = var.region
+  ingress             = var.enable_vpc_sc ? "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING" : "INGRESS_TRAFFIC_ALL"
+  deletion_protection = false
 
   template {
     service_account = var.executor_service_account_email
