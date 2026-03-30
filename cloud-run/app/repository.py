@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -580,8 +581,8 @@ class Repository:
                 "error_code": error_code,
                 "error_message": error_message,
                 "hint": hint,
-                "counts": counts or {},
-                "details": details or {},
+                "counts": json.dumps(counts or {}),
+                "details": json.dumps(details or {}),
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
