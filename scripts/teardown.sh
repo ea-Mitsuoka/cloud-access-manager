@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# === 原因分析用：デバッグモードを有効化 ===
+set -x
+
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="$ROOT_DIR/terraform"
 VARS_FILE="$ROOT_DIR/environment.auto.tfvars"
@@ -9,33 +12,39 @@ echo "=== Initiating Safe Teardown ==="
 
 cd "$TF_DIR"
 
-echo
 echo "[1/2] Dynamically removing protected resources (BigQuery) and APIs from Terraform state..."
 
-# 現在のStateリストを取得
+# Stateリストの取得
 state_list=$(terraform state list)
 
-# 1. BigQuery関連の全リソース（データセットとテーブル）を抽出してrm
 echo ">> Protecting BigQuery resources..."
-for resource in $(echo "$state_list" | grep -E "^module\.bigquery\." || true); do
-  echo "Removing from state: $resource"
-  terraform state rm "$resource" >/dev/null 2>&1
-done
+bq_resources=$(echo "$state_list" | grep -E "^module\.bigquery\." || true)
+if [[ -n "$bq_resources" ]]; then
+  while IFS= read -r resource; do
+    echo "Removing from state: $resource"
+    # エラー出力を隠さず、そのまま実行させる
+    terraform state rm "$resource"
+  done <<< "$bq_resources"
+fi
 
-# 2. Google Cloud API の有効化設定を抽出してrm
 echo ">> Protecting Google Cloud API settings..."
-for resource in $(echo "$state_list" | grep -E "^google_project_service\.services" || true); do
-  echo "Removing from state: $resource"
-  terraform state rm "$resource" >/dev/null 2>&1
-done
+api_resources=$(echo "$state_list" | grep -E "^google_project_service\.services" || true)
+if [[ -n "$api_resources" ]]; then
+  while IFS= read -r resource; do
+    echo "Removing from state: $resource"
+    # エラー出力を隠さず、そのまま実行させる
+    terraform state rm "$resource"
+  done <<< "$api_resources"
+fi
 
 echo "✅ Protected resources successfully removed from state."
 
+# デバッグモードを解除（destroyのログが長くなりすぎるのを防ぐため）
+set +x
+
 echo
 echo "[2/2] Destroying the remaining environment..."
-# 保護対象はStateから消えているため、Cloud Run等のみが安全に破壊される
 terraform destroy -auto-approve -var-file="$VARS_FILE"
 
 echo
 echo "=== Teardown Finished Successfully ==="
-echo "💡 Note: BigQuery data and essential Google Cloud APIs were preserved."
