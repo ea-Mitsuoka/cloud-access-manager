@@ -98,6 +98,7 @@ fi
 require_cmd gcloud
 require_cmd terraform
 require_cmd bash
+require_cmd docker
 
 # shellcheck disable=SC1090
 set -a
@@ -194,30 +195,52 @@ if ! ask_yes_no "Proceed with bootstrap + deploy workflow?" y; then
 fi
 
 echo
-echo "[1/7] Syncing generated config files..."
+echo "[1/8] Syncing generated config files..."
 bash "$ROOT_DIR/scripts/sync-config.sh" "$CONFIG_FILE"
 
 echo
-echo "[2/7] Bootstrapping tfstate bucket..."
+echo "[2/8] Bootstrapping tfstate bucket..."
 bash "$ROOT_DIR/scripts/bootstrap-tfstate.sh" "$CONFIG_FILE"
 
 echo
-echo "[3/7] Terraform init..."
+echo "[3/8] Preparing Docker Image (Artifact Registry)..."
+# イメージURLからリポジトリ名（iam-access-repo）を自動抽出
+AR_REPO_NAME=$(echo "$CLOUD_RUN_IMAGE" | cut -d/ -f3)
+
+if ! gcloud artifacts repositories describe "$AR_REPO_NAME" --project="$TOOL_PROJECT_ID" --location="$REGION" >/dev/null 2>&1; then
+  echo "Creating Artifact Registry repository: $AR_REPO_NAME"
+  gcloud artifacts repositories create "$AR_REPO_NAME" \
+    --repository-format=docker \
+    --location="$REGION" \
+    --project="$TOOL_PROJECT_ID" \
+    --description="Created by bootstrap script"
+fi
+
+echo "Configuring Docker auth..."
+gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+echo "Building and pushing Docker image: $CLOUD_RUN_IMAGE"
+docker build -t "$CLOUD_RUN_IMAGE" "$ROOT_DIR/cloud-run"
+docker push "$CLOUD_RUN_IMAGE"
+
+echo
+echo "[4/8] Terraform init..."
+
 cd "$ROOT_DIR/terraform"
 terraform init -backend-config="$ROOT_DIR/backend.hcl"
 
 echo
-echo "[4/7] Terraform plan..."
+echo "[5/8] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
 
 if [[ "$SKIP_APPLY" == "true" ]]; then
   echo
-  echo "[5/7] Apply skipped by --skip-apply."
+  echo "[6/8] Apply skipped by --skip-apply."
   exit 0
 fi
 
 echo
-echo "[5/7] Terraform apply..."
+echo "[6/8] Terraform apply..."
 if [[ "$AUTO_APPROVE" == "true" ]]; then
   terraform apply -auto-approve -var-file="$ROOT_DIR/environment.auto.tfvars"
 else
@@ -227,7 +250,7 @@ fi
 cd "$ROOT_DIR"
 
 echo
-echo "[6/7] Applying BigQuery SQL definitions..."
+echo "[7/8] Applying BigQuery SQL definitions..."
 require_cmd bq
 
 sql_dir="$ROOT_DIR/build/sql"
@@ -259,7 +282,7 @@ else
 fi
 
 echo
-echo "[7/7] Initial Data Collection & Seeding"
+echo "[8/8] Initial Data Collection & Seeding"
 if ask_yes_no "Run initial data collection jobs and seed existing permissions? This may take a few minutes." y; then
   echo "Triggering data collection jobs via Cloud Scheduler (Async)..."
   bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" || true
