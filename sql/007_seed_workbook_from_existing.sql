@@ -4,11 +4,12 @@
 -- 1) principal catalog from current IAM snapshot
 MERGE `your_project.your_dataset.principal_catalog` T
 USING (
-  SELECT DISTINCT
+  SELECT
     principal_email,
-    principal_type
+    MAX(principal_type) AS principal_type
   FROM `your_project.your_dataset.iam_policy_permissions`
   WHERE principal_email IS NOT NULL AND principal_email != ''
+  GROUP BY principal_email
 ) S
 ON T.principal_email = S.principal_email
 WHEN MATCHED THEN
