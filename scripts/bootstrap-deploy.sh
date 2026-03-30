@@ -51,7 +51,8 @@ ask_yes_no() {
       read -r -p "$prompt [y/N]: " ans
       ans="${ans:-N}"
     fi
-    case "${ans,,}" in
+    ans_lower=$(echo "$ans" | tr "[:upper:]" "[:lower:]")
+    case "$ans_lower" in
       y|yes) return 0 ;;
       n|no) return 1 ;;
       *) echo "Please answer y or n." ;;
@@ -275,7 +276,8 @@ if ask_yes_no "Run initial data collection jobs and seed existing permissions? T
   
   while [[ $elapsed -lt $MAX_WAIT ]]; do
     # 収集データが1件でも入ったか確認
-    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '')
+    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '
+')
     
     if [[ "$row_count" =~ ^[0-9]+$ ]] && [[ "$row_count" -gt 0 ]]; then
       echo "✅ Data collection detected ($row_count rows). Proceeding to seed..."
@@ -290,7 +292,8 @@ if ask_yes_no "Run initial data collection jobs and seed existing permissions? T
 
   if [[ "$seed_ready" == "true" ]]; then
     # 冪等性（Idempotency）の担保: Historyテーブルが空の場合のみSeedを実行する
-    seed_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_permission_bindings_history\`" 2>/dev/null | tail -n 1 | tr -d '')
+    seed_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_permission_bindings_history\`" 2>/dev/null | tail -n 1 | tr -d '
+')
     
     if [[ "$seed_count" =~ ^[0-9]+$ ]] && [[ "$seed_count" -eq 0 ]]; then
       echo "Executing: 007_seed_workbook_from_existing.sql"
@@ -310,7 +313,7 @@ else
 fi
 
 echo
-echo "=== Bootstrap & Deploy Complete ===
+echo "=== Bootstrap & Deploy Complete ==="
 cd "$ROOT_DIR/terraform"
 if terraform output cloud_run_url >/dev/null 2>&1; then
   cloud_run_url="$(terraform output -raw cloud_run_url)"
