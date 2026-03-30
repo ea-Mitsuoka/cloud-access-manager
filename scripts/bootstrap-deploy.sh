@@ -274,7 +274,7 @@ echo "Configuring Docker auth..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 echo "Building and pushing Docker image: $CLOUD_RUN_IMAGE"
-docker build -t "$CLOUD_RUN_IMAGE" "$ROOT_DIR/cloud-run"
+docker build --platform linux/amd64 -t "$CLOUD_RUN_IMAGE" "$ROOT_DIR/cloud-run"
 docker push "$CLOUD_RUN_IMAGE"
 
 echo
