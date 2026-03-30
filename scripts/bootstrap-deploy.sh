@@ -284,6 +284,56 @@ cd "$ROOT_DIR/terraform"
 terraform init -backend-config="$ROOT_DIR/backend.hcl"
 
 echo
+echo "[4.5/8] Importing existing BigQuery & API resources into Terraform state..."
+cd "$ROOT_DIR/terraform"
+
+import_resource() {
+  local tf_resource="$1"
+  local gcp_id="$2"
+  if ! terraform state list | grep -F -q "$tf_resource"; then
+    echo "Attempting to import $tf_resource..."
+    terraform import -var-file="$ROOT_DIR/environment.auto.tfvars" "$tf_resource" "$gcp_id" >/dev/null 2>&1 || echo " 👉 Not found in GCP. Will be created."
+  fi
+}
+
+# 1. BigQueryのImport
+BQ_DATASET_GCP_ID="projects/$TOOL_PROJECT_ID/datasets/$BQ_DATASET_ID"
+import_resource "module.bigquery.google_bigquery_dataset.iam" "$BQ_DATASET_GCP_ID"
+
+bq_tables=(
+  "iam_access_change_log"
+  "iam_access_requests"
+  "iam_pipeline_job_reports"
+  "iam_policy_bindings_raw_history"
+  "iam_policy_permissions"
+  "iam_reconciliation_issues"
+)
+for table in "${bq_tables[@]}"; do
+  import_resource "module.bigquery.google_bigquery_table.$table" "$BQ_DATASET_GCP_ID/tables/$table"
+done
+
+# 2. APIリソースのImport
+apis=(
+  "aiplatform.googleapis.com"
+  "artifactregistry.googleapis.com"
+  "bigquery.googleapis.com"
+  "cloudasset.googleapis.com"
+  "cloudbuild.googleapis.com"
+  "cloudidentity.googleapis.com"
+  "cloudresourcemanager.googleapis.com"
+  "cloudscheduler.googleapis.com"
+  "iam.googleapis.com"
+  "iamcredentials.googleapis.com"
+  "run.googleapis.com"
+  "secretmanager.googleapis.com"
+)
+for api in "${apis[@]}"; do
+  import_resource "google_project_service.services["$api"]" "$TOOL_PROJECT_ID/$api"
+done
+
+cd "$ROOT_DIR"
+
+echo
 echo "[5/8] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
 

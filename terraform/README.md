@@ -49,38 +49,36 @@
    terraform apply -var-file=../environment.auto.tfvars
    ```
 
-## 環境の安全な削除 (Terraform Destroy)
+## 環境の安全な削除 (Safe Teardown & Rebuild)
 
-不要になったインフラを削除する場合、以下の手順と仕様を理解して安全に実行してください。
+不要になったインフラ（コンピュートリソース）を削除する場合、監査ログや基本API設定などの「ステートフルなリソース」を保護するための専用スクリプトを使用してください。
 
-1. **安全な部分削除（推奨）:**
+### 1. 安全な削除 (推奨)
 
-   ```bash
-   cd terraform
-   terraform state rm 'google_project_service.services["aiplatform.googleapis.com"]'
-   terraform state rm 'google_project_service.services["artifactregistry.googleapis.com"]'
-   terraform state rm 'google_project_service.services["bigquery.googleapis.com"]'
-   terraform state rm 'google_project_service.services["cloudasset.googleapis.com"]'
-   terraform state rm 'google_project_service.services["cloudbuild.googleapis.com"]'
-   terraform state rm 'google_project_service.services["cloudidentity.googleapis.com"]'
-   terraform state rm 'google_project_service.services["cloudresourcemanager.googleapis.com"]'
-   terraform state rm 'google_project_service.services["cloudscheduler.googleapis.com"]'
-   terraform state rm 'google_project_service.services["iam.googleapis.com"]'
-   terraform state rm 'google_project_service.services["iamcredentials.googleapis.com"]'
-   terraform state rm 'google_project_service.services["run.googleapis.com"]'
-   terraform state rm 'google_project_service.services["secretmanager.googleapis.com"]'
-   terraform destroy -var-file=../environment.auto.tfvars
-   ```
+```bash
+bash scripts/teardown.sh
+```
 
-   Cloud RunやSchedulerなどのコンピュートリソースのみが削除され、保護されたリソース（BigQuery、API有効化状態）でエラーとなり停止します。これが正常な挙動です。
+このスクリプトは以下の処理を全自動で行います。
 
-1. **完全削除:**
-   監査ログテーブル等も完全に削除したい場合は、対象モジュール (`modules/bigquery/main.tf` や `main.tf` のAPI設定等) の `prevent_destroy = true` を外してから再実行してください。
+1. `terraform state rm` を使用して、BigQueryデータセット/テーブル（監査ログ）および有効化済みのGCP API群をTerraformのState管理下から安全に退避させます。
+1. その後 `terraform destroy` を実行し、Cloud Run、Scheduler、IAM権限などの「ステートレスなコンピュートリソース」のみを綺麗に削除します。
 
-**注意点:**
+※ `.tf` ファイルの `prevent_destroy = true` はコード上に維持されたまま、安全にスクラップ＆ビルドが可能です。
 
-- **APIは絶対に無効化されません**（`disable_on_destroy = false` が設定されているため、GCP上の既存システムには影響しません）。
-- 監査ログ（BigQueryテーブル）はデフォルトで保護されています。
+### 2. 環境の再構築 (自己修復)
+
+削除後に再度環境を構築する場合は、通常のデプロイスクリプトを実行します。
+
+```bash
+bash scripts/bootstrap-deploy.sh
+```
+
+デプロイ時、GCP上に残存しているBigQueryリソースやAPI設定を自動検知し、`terraform import` コマンドでTerraformのStateに引き戻してから `apply` を実行します。これにより、過去の監査データを失うことなく、完全な冪等性を持ってシステムが復元されます。
+
+### 3. 完全削除 (非推奨)
+
+プロジェクトそのものを破棄するレベルで、監査ログ（BigQuery）も含めてすべてを完全に削除したい場合は、対象モジュール (`modules/bigquery/main.tf` 等) の `prevent_destroy = true` をコード上から手動で削除し、手動で `terraform destroy` を実行してください。
 
 ## 注意事項
 
@@ -97,8 +95,8 @@
 - `terraform output management_scope` で選択されている管理スコープを確認できます。
 - `terraform output effective_managed_project_id` で現在の管理対象プロジェクトを確認できます。
 - `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `group_collection_scheduler_job` など)。
-- 有効化されたAPIは `lifecycle.prevent_destroy = true` と `disable_on_destroy = false` で保護されているため、`destroy` を実行しても無効化されません。
-- **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。これらのテーブルを意図的に削除する必要がある場合は、まずこのライフサイクル設定をコードから削除する必要があります。
+- 有効化されたAPIは `disable_on_destroy = false` が設定されていることに加え、`teardown.sh` でStateから保護されるため、意図せず無効化されることはありません。
+- **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。通常の運用や環境の再構築時は、必ず提供されている `scripts/teardown.sh` と `scripts/bootstrap-deploy.sh` を使用してライフサイクルを管理してください。
 - **重要:** GASからのOIDC認証連携を利用する場合、`var.gas_trigger_owner_email` に指定したユーザー（GASトリガーのオーナー）に対して、Terraformが自動的にサービスアカウントトークン作成者ロール（`roles/iam.serviceAccountTokenCreator`）を付与します。これにより、GASスクリプト内から安全にCloud Run呼び出し用のOIDCトークンを動的に生成できるようになります。
 - コンテナイメージは別途ビルド/プッシュし、`cloud_run_image` 変数で渡す必要があります。
 - 詳細なロール一覧や運用コマンドについては、`docs/operations-runbook.md` を参照してください。
