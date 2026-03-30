@@ -154,26 +154,8 @@ resource "google_bigquery_table" "iam_pipeline_job_reports" {
     { name = "error_code", type = "STRING", mode = "NULLABLE" },
     { name = "error_message", type = "STRING", mode = "NULLABLE" },
     { name = "hint", type = "STRING", mode = "NULLABLE" },
-    {
-      name = "counts",
-      type = "RECORD",
-      mode = "NULLABLE",
-      fields = [
-        { name = "processed", type = "INT64", mode = "NULLABLE" },
-        { name = "added", type = "INT64", mode = "NULLABLE" },
-        { name = "removed", type = "INT64", mode = "NULLABLE" },
-        { name = "failed", type = "INT64", mode = "NULLABLE" }
-      ]
-    },
-    {
-      name = "details",
-      type = "RECORD",
-      mode = "NULLABLE",
-      fields = [
-        { name = "info", type = "STRING", mode = "NULLABLE" },
-        { name = "raw_response", type = "STRING", mode = "NULLABLE" }
-      ]
-    },
+    { name = "counts", type = "JSON", mode = "NULLABLE" },
+    { name = "details", type = "JSON", mode = "NULLABLE" },
     { name = "occurred_at", type = "TIMESTAMP", mode = "REQUIRED" },
   ])
 }
