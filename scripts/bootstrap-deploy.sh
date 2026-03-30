@@ -328,11 +328,8 @@ else
       
       # 複雑なView定義で固まらないよう、一時ファイル経由でクエリを実行
       # また、実行状況がわかるように stdout を逐次表示する
-      if ! bq query \
-            --project_id="$TOOL_PROJECT_ID" \
-            --use_legacy_sql=false \
-            --display_report_line=true \
-            "$(cat "$sql_file")"; then
+      # 標準入力から流し込む形式に戻しつつ、余計なフラグを削除して安定性を優先
+      if ! bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$sql_file"; then
         echo "❌ Error executing $sql_filename. Please check BigQuery console for details." >&2
         exit 1
       fi
