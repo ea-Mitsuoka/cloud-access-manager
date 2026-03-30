@@ -323,13 +323,22 @@ else
   for sql_filename in "${sql_execution_order[@]}"; do
     sql_file="$sql_dir/$sql_filename"
     if [[ -f "$sql_file" ]]; then
-      echo "Executing: $sql_file"
-      if ! bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$sql_file"; then
-        echo "Error executing $sql_file. Please check BigQuery permissions and SQL syntax." >&2
+      echo "--------------------------------------------------------"
+      echo "📄 Executing SQL: $sql_filename"
+      
+      # 複雑なView定義で固まらないよう、一時ファイル経由でクエリを実行
+      # また、実行状況がわかるように stdout を逐次表示する
+      if ! bq query \
+            --project_id="$TOOL_PROJECT_ID" \
+            --use_legacy_sql=false \
+            --display_report_line=true \
+            "$(cat "$sql_file")"; then
+        echo "❌ Error executing $sql_filename. Please check BigQuery console for details." >&2
         exit 1
       fi
+      echo "✅ Successfully applied: $sql_filename"
     else
-        echo "Warning: SQL file not found, skipping: $sql_file"
+      echo "⚠️ Warning: SQL file not found, skipping: $sql_file"
     fi
   done
   echo "All SQL files applied successfully."
