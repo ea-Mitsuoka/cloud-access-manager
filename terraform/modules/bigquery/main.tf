@@ -183,10 +183,11 @@ resource "google_bigquery_table" "iam_policy_permissions" {
   dataset_id = google_bigquery_dataset.iam.dataset_id
   table_id   = "iam_policy_permissions"
 
+  deletion_protection = false
+
   lifecycle {
     prevent_destroy = false
   }
-
   time_partitioning {
     type  = "DAY"
     field = "assessment_timestamp"

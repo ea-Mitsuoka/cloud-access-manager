@@ -18,7 +18,7 @@ echo "[1/2] Dynamically removing protected resources (BigQuery) and APIs from Te
 state_list=$(terraform state list)
 
 echo ">> Protecting BigQuery resources..."
-bq_resources=$(echo "$state_list" | grep -E "^module\.bigquery\." || true)
+bq_resources=$(echo "$state_list" | grep -E "^module\.bigquery\." | grep -v "iam_policy_permissions" || true)
 if [[ -n "$bq_resources" ]]; then
   while IFS= read -r resource; do
     echo "Removing from state: $resource"
