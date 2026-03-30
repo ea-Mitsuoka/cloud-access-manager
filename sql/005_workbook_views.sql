@@ -3,7 +3,7 @@
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_principal` AS
 SELECT
-  principal_email AS `プリンシパル（メールアドレス）`,
+  principal_email AS `プリンシパルEmail`,
   principal_name AS `プリンシパル名`,
   principal_type AS `種別`,
   note AS `備考`
@@ -88,9 +88,9 @@ SELECT
   p.principal_email AS `プリンシパル`,
   p.principal_type AS `種別`,
   p.iam_role AS `IAMロール`,
-  p.iam_condition AS `IAM Condition`,
+  p.iam_condition AS `IAM_Condition`,
   p.ticket_ref AS `申請チケット番号`,
-  p.request_reason AS `申請理由・用途`,
+  p.request_reason AS `申請理由_用途`,
   COALESCE(sm.status_ja, p.status_ja) AS `ステータス`,
   p.approved_at AS `承認日`,
   p.next_review_at AS `次回レビュー日`,
