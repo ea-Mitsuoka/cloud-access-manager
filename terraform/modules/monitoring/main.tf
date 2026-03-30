@@ -1,7 +1,7 @@
 resource "google_monitoring_notification_channel" "alert_email" {
   count        = trimspace(var.alert_notification_email) != "" ? 1 : 0
   project      = var.tool_project_id
-  display_name = "IAM Access Manager - Alert Email"
+  display_name = "Cloud Access Manager - Alert Email"
   type         = "email"
   labels = {
     email_address = var.alert_notification_email
@@ -11,7 +11,7 @@ resource "google_monitoring_notification_channel" "alert_email" {
 resource "google_monitoring_notification_channel" "alert_webhook" {
   count        = trimspace(var.alert_notification_webhook_url) != "" ? 1 : 0
   project      = var.tool_project_id
-  display_name = "IAM Access Manager - Alert Webhook"
+  display_name = "Cloud Access Manager - Alert Webhook"
   type         = "webhook_tokenauth"
   labels = {
     url = var.alert_notification_webhook_url
@@ -22,7 +22,7 @@ resource "google_monitoring_alert_policy" "cloud_run_errors" {
   # どちらか1つでも設定されていればアラートポリシーを作成
   count        = (trimspace(var.alert_notification_email) != "" || trimspace(var.alert_notification_webhook_url) != "") ? 1 : 0
   project      = var.tool_project_id
-  display_name = "IAM Access Manager: Error Detected"
+  display_name = "Cloud Access Manager: Error Detected"
   combiner     = "OR"
   conditions {
     display_name = "Cloud Run App Errors"
@@ -40,7 +40,7 @@ resource "google_monitoring_alert_policy" "cloud_run_errors" {
 resource "google_monitoring_alert_policy" "break_glass_alert" {
   count        = (trimspace(var.alert_notification_email) != "" || trimspace(var.alert_notification_webhook_url) != "") ? 1 : 0
   project      = var.tool_project_id
-  display_name = "IAM Access Manager: Break-glass (Emergency) Access Detected"
+  display_name = "Cloud Access Manager: Break-glass (Emergency) Access Detected"
   combiner     = "OR"
   conditions {
     display_name = "Break-glass Execution Logs"
@@ -57,7 +57,7 @@ resource "google_monitoring_alert_policy" "break_glass_alert" {
 resource "google_monitoring_alert_policy" "reconciliation_alert" {
   count        = (trimspace(var.alert_notification_email) != "" || trimspace(var.alert_notification_webhook_url) != "") ? 1 : 0
   project      = var.tool_project_id
-  display_name = "IAM Access Manager: Reconciliation Issue Detected"
+  display_name = "Cloud Access Manager: Reconciliation Issue Detected"
   combiner     = "OR"
   conditions {
     display_name = "Reconciliation Issue Logs"

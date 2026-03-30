@@ -1,6 +1,6 @@
 # Terraform
 
-このディレクトリには、IAM Access ManagerのインフラをプロビジョニングするためのTerraformコードが含まれています。
+このディレクトリには、Cloud Access ManagerのインフラをプロビジョニングするためのTerraformコードが含まれています。
 
 ## モジュール構造
 

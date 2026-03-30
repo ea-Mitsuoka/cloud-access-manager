@@ -484,7 +484,7 @@ bq query --use_legacy_sql=false
 
 ### 11.4 緊急アクセスアラート `[BREAK-GLASS]` を受信した場合のアクション
 
-- **症状:** `IAM Access Manager: Break-glass (Emergency) Access Detected` という緊急アラートが届いた。
+- **症状:** `Cloud Access Manager: Break-glass (Emergency) Access Detected` という緊急アラートが届いた。
 - **原因:** ユーザーがフォームの申請種別で「緊急」を選択し、システムが人間の承認プロセスをスキップして即時に強力な権限をプロビジョニングしました。
 - **対応:**
   1. 直ちに申請者へ連絡を取り、緊急アクセスを行った正当な理由（本番環境の障害対応など）を確認してください。
