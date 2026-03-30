@@ -87,4 +87,4 @@ bash scripts/bootstrap-deploy.sh
 | 👤 **システムを利用する人** (申請者) | [ユーザーガイド](docs/user-guide.md) |
 | 🛠️ **システムを運用する人** (SRE・インフラ) | [運用マニュアル(Runbook)](docs/operations-runbook.md) |
 | 💻 **システムを開発する人** (開発者) | [ローカル開発ガイド](DEVELOPING.md)<br>[要件定義書](docs/requirements.md) |
-| 📊 **データエンジニア・監査担当** | [BigQuery仕様](docs/bigquery_tables.md)<br>[データリネージ](docs/data_lineage_and_mapping.md) |
+| 📊 **データエンジニア・監査担当** | [BigQuery仕様](docs/bigquery_tables.md)<br>[データリネージ](docs/data_lineage_and_mapping.md)<br>[IAM権限の整合性管理とインシデント対応フロー](docs/iam-reconciliation-and-incident-flow.md) |
