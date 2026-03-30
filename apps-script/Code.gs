@@ -42,6 +42,7 @@ function onOpen() {
     .createMenu('棚卸し')
     .addItem('申請反映ステータス更新', 'menuRefreshRequestReviewStatus_')
         .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
+    .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
     .addSeparator()
     .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
@@ -208,9 +209,14 @@ function onEdit(e) {
       muteHttpExceptions: true
     }));
     try {
-      UrlFetchApp.fetchAll(executeRequests);
+      const responses = UrlFetchApp.fetchAll(executeRequests);
+      responses.forEach((res, i) => {
+        if (res.getResponseCode() >= 300) {
+          console.error(`Execute API failed for request ${requestIdsToExecute[i]} (${res.getResponseCode()}): ${res.getContentText()}`);
+        }
+      });
     } catch (e) {
-      console.error("Execute API error: " + e);
+      console.error("Execute API error (Network): " + e);
     }
   }
 
