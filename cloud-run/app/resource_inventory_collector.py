@@ -158,7 +158,7 @@ class ResourceInventoryCollector:
 
         if resource_type == "Project":
             attrs = (
-                MessageToDict(resource.additional_attributes)
+                dict(resource.additional_attributes)
                 if resource.additional_attributes
                 else {}
             )
