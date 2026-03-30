@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from google.cloud import asset_v1
-from google.protobuf.json_format import MessageToDict
 
 
 class ResourceInventoryCollector:
