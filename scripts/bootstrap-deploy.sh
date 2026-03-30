@@ -331,8 +331,6 @@ for api in "${apis[@]}"; do
   import_resource "google_project_service.services["$api"]" "$TOOL_PROJECT_ID/$api"
 done
 
-cd "$ROOT_DIR"
-
 echo
 echo "[5/8] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
