@@ -449,6 +449,20 @@ cd "$ROOT_DIR/terraform"
 if terraform output cloud_run_url >/dev/null 2>&1; then
   cloud_run_url="$(terraform output -raw cloud_run_url)"
   echo "Cloud Run URL: $cloud_run_url"
-  echo "Please ensure this URL is set in your Google Apps Script properties (key: CLOUD_RUN_EXECUTE_URL)."
+
+  # apps-script/script-properties.json の CLOUD_RUN_EXECUTE_URL を自動上書き
+  json_file="$ROOT_DIR/apps-script/script-properties.json"
+  if [[ -f "$json_file" ]]; then
+    execute_url="${cloud_run_url}/execute"
+    tmp_json=$(mktemp)
+    # URL内のスラッシュと衝突しないようセパレータに「~」を使用
+    sed "s~\"CLOUD_RUN_EXECUTE_URL\"[[:space:]]*:[[:space:]]*\".*\"~\"CLOUD_RUN_EXECUTE_URL\": \"${execute_url}\"~" "$json_file" > "$tmp_json"
+    mv "$tmp_json" "$json_file"
+    echo "✅ Automatically updated CLOUD_RUN_EXECUTE_URL in apps-script/script-properties.json"
+    echo "👉 You can now safely copy properties from: cat apps-script/script-properties.json"
+  else
+    echo "⚠️ apps-script/script-properties.json not found."
+    echo "Please ensure this URL is set in your Google Apps Script properties (key: CLOUD_RUN_EXECUTE_URL)."
+  fi
 fi
 cd "$ROOT_DIR"
