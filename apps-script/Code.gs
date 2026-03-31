@@ -328,7 +328,7 @@ function getRequestSnapshot_(props, requestId) {
       requester_email,
       approver_email,
       status
-    FROM `${props.projectId}.${props.datasetId}.iam_access_requests`
+    FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\`
     WHERE request_id = @request_id
     LIMIT 1
   `;
@@ -787,20 +787,20 @@ function queryLatestRequestStatusMap_(props, requestIds) {
         principal_email,
         resource_name,
         role
-      FROM `${props.projectId}.${props.datasetId}.iam_access_requests`
+      FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\`
       WHERE request_id IN UNNEST(@request_ids)
     ),
     latest_exec AS (
       SELECT
         request_id,
         ARRAY_AGG(STRUCT(result, executed_at) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS ex
-      FROM `${props.projectId}.${props.datasetId}.iam_access_change_log`
+      FROM \`${props.projectId}.${props.datasetId}.iam_access_change_log\`
       WHERE request_id IN UNNEST(@request_ids)
       GROUP BY request_id
     ),
     actual AS (
       SELECT principal_email, resource_name, role
-      FROM `${props.projectId}.${props.datasetId}.iam_policy_permissions`
+      FROM \`${props.projectId}.${props.datasetId}.iam_policy_permissions\`
     )
     SELECT
       req.request_id AS request_id,
