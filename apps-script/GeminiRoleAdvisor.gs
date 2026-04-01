@@ -10,7 +10,7 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('RoleAdvisor')
-    .setTitle('IAMロール提案アシスタント')
+    .setTitle('Gemini IAMロール提案アシスタント')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
