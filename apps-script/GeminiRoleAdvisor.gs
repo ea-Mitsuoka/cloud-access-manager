@@ -79,7 +79,7 @@ function buildPrompt_(goal, resource, principal) {
   return [
     'あなたはGoogle CloudのIAMレビュアーです。',
     '利用者がやりたいことに対して、最小権限で推奨ロール候補を提案してください。',
-    '結果はJSONのみで出力してください。',
+    '結果は、手短にビジネスライクな文章で、JSONのみで出力してください。',
     '',
     '必須要件:',
     '- できるだけ基本ロール（Owner/Editor）を避ける',
