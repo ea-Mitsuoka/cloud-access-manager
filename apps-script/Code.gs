@@ -1045,3 +1045,84 @@ function generatePrefilledUrl_(prefillData) {
     return null;
   }
 }
+
+function menuRetryFailedExecutions_() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getRequestReviewSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    ui.alert('再実行するデータがありません。');
+    return;
+  }
+
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const idx = indexMap_(header);
+  const reqIdCol = idx.request_id;
+  const statusCol = idx.status;
+  const execResultCol = idx[COL_EXEC_RESULT];
+
+  if (!reqIdCol || !statusCol || !execResultCol) {
+    ui.alert('必要なカラムが見つかりません。先に「申請反映ステータス更新」メニューを実行してください。');
+    return;
+  }
+
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const targetIds = [];
+
+  // 「承認済」かつ「実行結果がSUCCESS/SKIPPED以外」のものを探す
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const requestId = String(row[reqIdCol - 1] || '').trim();
+    const statusRaw = String(row[statusCol - 1] || '').trim();
+    const execResult = String(row[execResultCol - 1] || '').trim();
+
+    const normalizedStatus = normalizeStatus_(statusRaw);
+    if (normalizedStatus === STATUS_APPROVED && execResult !== 'SUCCESS' && execResult !== 'SKIPPED') {
+      if (requestId) {
+        targetIds.push(requestId);
+      }
+    }
+  }
+
+  if (targetIds.length === 0) {
+    ui.alert('再実行が必要な承認済リクエスト（未実行・失敗）は見つかりませんでした。');
+    return;
+  }
+
+  const response = ui.alert('再実行の確認', `${targetIds.length}件の未反映リクエストを再実行しますか？`, ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) return;
+
+  const props = getProps_();
+  const token = getOidcToken_(props);
+  const baseUrl = props.cloudRunUrl.replace(/\/execute\/?$/, '');
+
+  // 対象となるリクエストの実行API呼び出しを並列で準備
+  const executeRequests = targetIds.map(id => ({
+    url: `${baseUrl}/execute`,
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ request_id: id }),
+    headers: { Authorization: `Bearer ${token}` },
+    muteHttpExceptions: true
+  }));
+
+  try {
+    const responses = UrlFetchApp.fetchAll(executeRequests);
+    let successCount = 0;
+    responses.forEach((res, i) => {
+      if (res.getResponseCode() < 300) {
+        successCount++;
+      } else {
+        console.error(`Execute API failed for request ${targetIds[i]} (${res.getResponseCode()}): ${res.getContentText()}`);
+      }
+    });
+
+    // 実行後、ステータスを自動更新する
+    refreshRequestReviewStatusForRequestIds_(targetIds);
+    ui.alert('再実行完了', `${targetIds.length}件中 ${successCount}件の再実行リクエストを送信し、ステータスを更新しました。`, ui.ButtonSet.OK);
+
+  } catch (e) {
+    console.error("Retry execution error: " + e);
+    ui.alert(`再実行中にエラーが発生しました: ${e.message}`);
+  }
+}
