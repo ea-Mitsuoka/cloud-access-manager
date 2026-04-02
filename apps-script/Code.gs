@@ -138,7 +138,7 @@ ${suggestion.reviewer_note || suggestion.summary || ''}`;
   }
 }
 
-function onEdit(e) {
+function handleEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
   if (sheet.getName() !== REQUEST_SHEET_NAME) return;
