@@ -413,12 +413,27 @@ function appendReviewSheet_(request, aiSuggestion) {
   if (idx.expires_at) rowData[idx.expires_at - 1] = request.expires_at ? new Date(request.expires_at).toLocaleString() : '恒久';
   if (idx.requester_email) rowData[idx.requester_email - 1] = request.requester_email;
   if (idx.approver_email) rowData[idx.approver_email - 1] = request.approver_email;
-  if (idx.status) rowData[idx.status - 1] = request.status;
+  if (idx.status) {
+    // ドロップダウンでエラー（赤い警告）にならないよう、初期ステータスを日本語にします
+    rowData[idx.status - 1] = request.status === STATUS_PENDING ? '申請中' : request.status;
+  }
   if (idx.requested_at) rowData[idx.requested_at - 1] = request.requested_at;
   if (idx.ticket_ref) rowData[idx.ticket_ref - 1] = request.ticket_ref;
   if (idx[COL_AI_SUGGEST]) rowData[idx[COL_AI_SUGGEST] - 1] = aiSuggestion || '';
 
   sheet.appendRow(rowData);
+
+  // statusカラム全体（2行目以降）にドロップダウンリスト（データの入力規則）を自動設定
+  if (idx.status) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      const rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['申請中', '承認済', '却下', '取消'], true)
+        .setAllowInvalid(false) // リスト以外の無効な入力をブロック
+        .build();
+      sheet.getRange(2, idx.status, lastRow - 1, 1).setDataValidation(rule);
+    }
+  }
 }
 
 function updateSheetStatus_(requestId, newStatusJa) {
