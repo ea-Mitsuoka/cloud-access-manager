@@ -601,7 +601,7 @@ function refreshIamMatrixPivotFromHistory() {
 
   const header = history.getRange(1, 1, 1, lastCol).getValues()[0];
   const idx = indexMap_(header);
-  const required = ['リソース名', 'リソースID', 'プリンシパル', '種別', 'IAMロール', 'ステータス'];
+  const required = ['リソース名', 'プリンシパル', 'IAMロール', 'ステータス'];
   required.forEach((name) => {
     if (!idx[name]) {
       throw new Error(`required column not found in ${HISTORY_SHEET_NAME}: ${name}`);
@@ -613,18 +613,60 @@ function refreshIamMatrixPivotFromHistory() {
     matrix = ss.insertSheet(MATRIX_SHEET_NAME);
   } else {
     matrix.clear();
+    const bands = matrix.getBandings();
+    bands.forEach(b => b.remove());
+    matrix.clearFormats(); // 既存の書式もクリア
   }
-
   const sourceRange = history.getRange(1, 1, lastRow, lastCol);
   matrix.getRange(1, 1).setValue('IAM権限設定履歴ベースのピボット（Spreadsheet標準機能）');
+  
+  // 標準のピボットテーブルとして作成
   const pivot = matrix.getRange(3, 1).createPivotTable(sourceRange);
 
-  pivot.addRowGroup(idx['リソース名']);
-  pivot.addRowGroup(idx['リソースID']);
-  pivot.addRowGroup(idx['プリンシパル']);
-  pivot.addRowGroup(idx['種別']);
-  pivot.addColumnGroup(idx['IAMロール']);
+  // 行グループを追加し、不要な小計（の合計）を非表示にする
+  pivot.addRowGroup(idx['プリンシパル']).showTotals(false);
+  pivot.addRowGroup(idx['リソースID']).showTotals(false);
+  
+  // 列グループを追加し、小計を非表示にする
+  pivot.addColumnGroup(idx['IAMロール']).showTotals(false);
+  
+  // 値グループを追加
   pivot.addPivotValue(idx['ステータス'], SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
+
+  // --- ピボットの機能を保ちつつ、見た目を整えるハック ---
+  
+  // 1. シート全体の表示形式をカスタムし、1以上の数値(COUNTA結果)を「○」に、それ以外を空白に見せる
+  // 構成: 正の数; 負の数; ゼロ; テキスト
+  matrix.getRange(1, 1, matrix.getMaxRows(), matrix.getMaxColumns()).setNumberFormat('"○";"";"";@');
+
+  // 2. 書式設定を反映させるために少し待つ
+  SpreadsheetApp.flush();
+
+  // 3. ヘッダー行などの簡易的な装飾（ピボットの枠組みが変わってもある程度維持されるように列単位などで設定）
+  const maxCol = matrix.getLastColumn() > 2 ? matrix.getLastColumn() : 10;
+  
+  // ロールが並ぶヘッダー部分(3行目、4行目周辺)を緑色に
+  matrix.getRange(3, 3, 2, maxCol).setBackground('#4b746c').setFontColor('white').setFontStyle('italic');
+  
+  // 左上のプリンシパル等のヘッダー部分をグレーに
+  matrix.getRange(3, 1, 2, 2).setBackground('#f3f3f3').setFontColor('black').setFontStyle('italic');
+  
+  // 全体を中央揃えにしつつ、A列・B列は左揃え
+  matrix.getRange(1, 1, matrix.getMaxRows(), matrix.getMaxColumns()).setHorizontalAlignment('center').setVerticalAlignment('middle');
+  matrix.getRange(1, 1, matrix.getMaxRows(), 2).setHorizontalAlignment('left');
+
+  // 列幅の調整
+  matrix.setColumnWidth(1, 250);
+  matrix.setColumnWidth(2, 200);
+
+  // 追加
+  // 4. 交互の背景色（標準のバンディング機能を利用）
+  const lastPivotRow = matrix.getLastRow();
+  if (lastPivotRow >= 5) {
+    const dataRange = matrix.getRange(5, 1, lastPivotRow - 2, maxCol);
+    // ヘッダー(false)・フッター(false)で適用することでエラーを回避
+    dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  }
 }
 
 function menuRefreshIamMatrixPivot_() {
