@@ -353,7 +353,7 @@ function insertRequestHistoryEvent_(props, event) {
     acted_by: String(event.acted_by || 'unknown'),
     actor_source: String(event.actor_source || 'UNKNOWN'),
     event_at: new Date().toISOString(),
-    details: event.details_json ? event.details_json : "{}"
+    details: event.details_json ? JSON.parse(event.details_json) : {}
   };
   callCloudRunApi_(props, '/api/history', 'post', payload);
 }
