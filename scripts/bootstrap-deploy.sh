@@ -276,10 +276,18 @@ fi
 echo "Configuring Docker auth..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
-# ユニークなタグを生成してイメージURLを組み立てる
-IMAGE_TAG="$(git rev-parse --short HEAD 2>/dev/null || echo "manual")-$(date +%Y%m%d%H%M%S)"
+# cloud-runディレクトリのコンテンツからハッシュを計算してタグを生成
+if command -v shasum >/dev/null 2>&1; then
+  HASH_CMD="shasum -a 256"
+else
+  HASH_CMD="sha256sum"
+fi
+# 隠しファイルやpycacheを除外してハッシュを計算
+CONTENT_HASH=$(find "$ROOT_DIR/cloud-run" -type f -not -path "*/\.*" -not -path "*/__pycache__/*" | sort | xargs $HASH_CMD | $HASH_CMD | cut -d' ' -f1 | cut -c1-8)
+IMAGE_TAG="hash-${CONTENT_HASH}"
+
 BASE_IMAGE_URL="${CLOUD_RUN_IMAGE%%:*}"
-DEPLOY_IMAGE_URL="${BASE_IMAGE_URL}:${IMAGE_TAG}"
+DEPLOY_IMAGE_URL="${BASE_IMAGE_URL}:${IMAGE_TAG}" 
 
 echo "Building and pushing Docker image: $DEPLOY_IMAGE_URL"
 docker build --platform linux/amd64 -t "$DEPLOY_IMAGE_URL" -t "$BASE_IMAGE_URL:latest" "$ROOT_DIR/cloud-run"
