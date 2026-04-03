@@ -295,7 +295,7 @@ docker push "$DEPLOY_IMAGE_URL"
 docker push "$BASE_IMAGE_URL:latest"
 
 # Terraform用の変数ファイルを新しいイメージURLで上書き
-TFVARS_FILE="$ROOT_DIR/terraform/environment.auto.tfvars"
+TFVARS_FILE="$ROOT_DIR/environment.auto.tfvars"
 if grep -q "^cloud_run_image" "$TFVARS_FILE"; then
   tmp_file=$(mktemp)
   sed "s~^cloud_run_image.*~cloud_run_image = \"${DEPLOY_IMAGE_URL}\"~" "$TFVARS_FILE" > "$tmp_file"
