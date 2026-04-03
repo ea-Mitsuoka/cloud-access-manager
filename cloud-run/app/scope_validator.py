@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 
 from googleapiclient import discovery
@@ -32,10 +33,13 @@ class ScopeValidator:
         """
         self._config = config
         self._org_cache: dict[str, str | None] = {}
+        self._local = threading.local()
 
     @property
     def _crm(self):
-        return discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
+        if not hasattr(self._local, "crm"):
+            self._local.crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
+        return self._local.crm
 
     def validate_resource_name(self, resource_name: str) -> str | None:
         """

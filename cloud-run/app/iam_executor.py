@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from typing import Any
 
@@ -19,15 +20,17 @@ class IamExecutor:
 
     def __init__(self) -> None:
         """IamExecutorを初期化します。"""
-        pass
+        self._local = threading.local()
 
     @property
     def _crm(self):
-        return discovery.build(
-            "cloudresourcemanager",
-            "v3",
-            cache_discovery=False,
-        )
+        if not hasattr(self._local, "crm"):
+            self._local.crm = discovery.build(
+                "cloudresourcemanager",
+                "v3",
+                cache_discovery=False,
+            )
+        return self._local.crm
 
     def execute(self, req: AccessRequest) -> ExecutionResult:
         """
