@@ -587,7 +587,7 @@ class Repository:
                 "error_message": error_message,
                 "hint": hint,
                 "counts": json.dumps(counts or {}),
-                "details": json.dumps(result.details or {}),
+                "details": json.dumps(details or {}),
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
