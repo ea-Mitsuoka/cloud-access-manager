@@ -287,7 +287,7 @@ CONTENT_HASH=$(find "$ROOT_DIR/cloud-run" -type f -not -path "*/\.*" -not -path 
 IMAGE_TAG="hash-${CONTENT_HASH}"
 
 BASE_IMAGE_URL="${CLOUD_RUN_IMAGE%%:*}"
-DEPLOY_IMAGE_URL="${BASE_IMAGE_URL}:${IMAGE_TAG}" 
+DEPLOY_IMAGE_URL="${BASE_IMAGE_URL}:${IMAGE_TAG}"
 
 echo "Building and pushing Docker image: $DEPLOY_IMAGE_URL"
 docker build --platform linux/amd64 -t "$DEPLOY_IMAGE_URL" -t "$BASE_IMAGE_URL:latest" "$ROOT_DIR/cloud-run"
