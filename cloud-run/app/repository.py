@@ -358,7 +358,6 @@ class Repository:
         if "details" in row and isinstance(row["details"], dict):
             row["details"] = json.dumps(row["details"], ensure_ascii=False)
 
-
         table = f"{self._project_id}.{self._dataset_id}.iam_access_request_history"
         errors = self._client.insert_rows_json(table, [row])
         if errors:
