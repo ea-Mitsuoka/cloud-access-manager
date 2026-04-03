@@ -160,7 +160,7 @@ class Repository:
                 "error_message": result.error_message,
                 "executed_by": executed_by,
                 "executed_at": datetime.now(timezone.utc).isoformat(),
-                "details": result.details or {},
+                "details": json.dumps(result.details or {}, ensure_ascii=False),
             }
         ]
         errors = self._client.insert_rows_json(self.change_log_table, rows)
@@ -354,6 +354,9 @@ class Repository:
 
     def insert_request_history_event(self, row: dict[str, Any]) -> None:
         """アクセスリクエストの履歴イベントをStreaming Insertで記録します。"""
+        if "details" in row and isinstance(row["details"], dict):
+            row["details"] = json.dumps(row["details"], ensure_ascii=False)
+
 
         table = f"{self._project_id}.{self._dataset_id}.iam_access_request_history"
         errors = self._client.insert_rows_json(table, [row])
@@ -581,8 +584,8 @@ class Repository:
                 "error_code": error_code,
                 "error_message": error_message,
                 "hint": hint,
-                "counts": counts or {},
-                "details": details or {},
+                "counts": json.dumps(counts or {}, ensure_ascii=False),
+                "details": json.dumps(details or {}, ensure_ascii=False),
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
