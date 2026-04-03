@@ -392,6 +392,10 @@ fi
 echo
 echo "[8/8] Initial Data Collection & Seeding"
 if ask_yes_no "Run initial data collection jobs and seed existing permissions? This may take a few minutes." y; then
+  
+  echo "Waiting 30 seconds for IAM permissions to propagate before triggering jobs..."
+  sleep 30
+
   echo "Triggering data collection jobs via Cloud Scheduler (Async)..."
   bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" || true
   bash "$ROOT_DIR/scripts/collect-google-groups.sh" || true
@@ -404,16 +408,23 @@ if ask_yes_no "Run initial data collection jobs and seed existing permissions? T
   WAIT_INTERVAL=10
   elapsed=0
   seed_ready=false
+  last_trigger_time=0
   
   while [[ $elapsed -lt $MAX_WAIT ]]; do
     # 収集データが1件でも入ったか確認
-    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '
-')
+    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '\r')
     
     if [[ "$row_count" =~ ^[0-9]+$ ]] && [[ "$row_count" -gt 0 ]]; then
       echo "✅ Data collection detected ($row_count rows). Proceeding to seed..."
       seed_ready=true
       break
+    fi
+
+    # 💡【改善箇所】60秒経過してもデータが入っていなければ、初弾が権限エラーで死んだと見なして再キックする
+    if [[ $((elapsed - last_trigger_time)) -ge 60 && $elapsed -gt 0 ]]; then
+      echo "⏳ Still waiting... Re-triggering IAM policy collection job just in case of initial IAM permission delay."
+      bash "$ROOT_DIR/scripts/collect-iam-policies.sh" || true
+      last_trigger_time=$elapsed
     fi
     
     echo "⏳ Waiting... (${elapsed}s / ${MAX_WAIT}s)"
