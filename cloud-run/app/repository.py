@@ -447,9 +447,7 @@ class Repository:
                     "acted_by": actor_email,
                     "actor_source": actor_source,
                     "event_at": now_str,
-                    "details": json.dumps(
-                        {"note": "Bulk status update"}, ensure_ascii=False
-                    ),
+                    "details": {"note": "Bulk status update"},
                 }
             )
 
