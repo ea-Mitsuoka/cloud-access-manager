@@ -161,7 +161,7 @@ class Repository:
                 "error_message": result.error_message,
                 "executed_by": executed_by,
                 "executed_at": datetime.now(timezone.utc).isoformat(),
-                "details": json.dumps(result.details or {}),
+                "details": result.details or {},
             }
         ]
         errors = self._client.insert_rows_json(self.change_log_table, rows)
@@ -356,9 +356,12 @@ class Repository:
     def insert_request_history_event(self, row: dict[str, Any]) -> None:
         """アクセスリクエストの履歴イベントをStreaming Insertで記録します。"""
 
-        # BigQueryのJSONカラムに挿入するため、辞書をJSON文字列に変換
-        if "details" in row and isinstance(row["details"], dict):
-            row["details"] = json.dumps(row["details"])
+        # もし文字列で来てしまっていたら、辞書オブジェクトに戻す
+        if "details" in row and isinstance(row["details"], str):
+            try:
+                row["details"] = json.loads(row["details"])
+            except:
+                pass
 
         table = f"{self._project_id}.{self._dataset_id}.iam_access_request_history"
         errors = self._client.insert_rows_json(table, [row])
@@ -449,7 +452,7 @@ class Repository:
                     "acted_by": actor_email,
                     "actor_source": actor_source,
                     "event_at": now_str,
-                    "details": json.dumps({"note": "Bulk status update"}),
+                    "details": {"note": "Bulk status update"},
                 }
             )
 
@@ -586,8 +589,8 @@ class Repository:
                 "error_code": error_code,
                 "error_message": error_message,
                 "hint": hint,
-                "counts": json.dumps(counts or {}),
-                "details": json.dumps(details or {}),
+                "counts": counts or {},
+                "details": details or {},
                 "occurred_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
