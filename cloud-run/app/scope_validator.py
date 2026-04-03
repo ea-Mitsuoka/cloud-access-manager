@@ -31,8 +31,11 @@ class ScopeValidator:
             config (ScopeConfig): 管理スコープの設定。
         """
         self._config = config
-        self._crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
         self._org_cache: dict[str, str | None] = {}
+
+    @property
+    def _crm(self):
+        return discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
 
     def validate_resource_name(self, resource_name: str) -> str | None:
         """

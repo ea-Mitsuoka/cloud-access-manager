@@ -19,7 +19,11 @@ class IamExecutor:
 
     def __init__(self) -> None:
         """IamExecutorを初期化します。"""
-        self._crm = discovery.build(
+        pass
+
+    @property
+    def _crm(self):
+        return discovery.build(
             "cloudresourcemanager",
             "v3",
             cache_discovery=False,

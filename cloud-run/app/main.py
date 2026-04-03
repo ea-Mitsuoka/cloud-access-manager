@@ -36,7 +36,13 @@ WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").s
 SCHEDULER_INVOKER_EMAIL = os.environ.get("SCHEDULER_INVOKER_EMAIL", "").strip()
 
 repo = Repository(project_id=PROJECT_ID, dataset_id=DATASET_ID)
-
+iam_executor = IamExecutor()
+scope_validator = ScopeValidator(
+    ScopeConfig(
+        target_project_id=TARGET_PROJECT_ID,
+        target_org_id=TARGET_ORG_ID,
+    )
+)
 resource_collector = ResourceInventoryCollector(
     target_project_id=TARGET_PROJECT_ID,
     target_org_id=TARGET_ORG_ID,
@@ -101,12 +107,6 @@ def execute_request():
             }
         )
 
-    scope_validator = ScopeValidator(
-        ScopeConfig(
-            target_project_id=TARGET_PROJECT_ID,
-            target_org_id=TARGET_ORG_ID,
-        )
-    )
     scope_error = scope_validator.validate_resource_name(req.resource_name)
     if scope_error:
         result = ExecutionResult(
@@ -157,7 +157,6 @@ def execute_request():
         )
 
     try:
-        iam_executor = IamExecutor()
         result = iam_executor.execute(req)
     except Exception as exc:  # pragma: no cover
         logging.error(
