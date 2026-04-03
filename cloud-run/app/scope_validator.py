@@ -38,7 +38,9 @@ class ScopeValidator:
     @property
     def _crm(self):
         if not hasattr(self._local, "crm"):
-            self._local.crm = discovery.build("cloudresourcemanager", "v3", cache_discovery=False)
+            self._local.crm = discovery.build(
+                "cloudresourcemanager", "v3", cache_discovery=False
+            )
         return self._local.crm
 
     def validate_resource_name(self, resource_name: str) -> str | None:
