@@ -276,9 +276,25 @@ fi
 echo "Configuring Docker auth..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
-echo "Building and pushing Docker image: $CLOUD_RUN_IMAGE"
-docker build --platform linux/amd64 -t "$CLOUD_RUN_IMAGE" "$ROOT_DIR/cloud-run"
-docker push "$CLOUD_RUN_IMAGE"
+# ユニークなタグを生成してイメージURLを組み立てる
+IMAGE_TAG="$(git rev-parse --short HEAD 2>/dev/null || echo "manual")-$(date +%Y%m%d%H%M%S)"
+BASE_IMAGE_URL="${CLOUD_RUN_IMAGE%%:*}"
+DEPLOY_IMAGE_URL="${BASE_IMAGE_URL}:${IMAGE_TAG}"
+
+echo "Building and pushing Docker image: $DEPLOY_IMAGE_URL"
+docker build --platform linux/amd64 -t "$DEPLOY_IMAGE_URL" -t "$BASE_IMAGE_URL:latest" "$ROOT_DIR/cloud-run"
+docker push "$DEPLOY_IMAGE_URL"
+docker push "$BASE_IMAGE_URL:latest"
+
+# Terraform用の変数ファイルを新しいイメージURLで上書き
+TFVARS_FILE="$ROOT_DIR/terraform/environment.auto.tfvars"
+if grep -q "^cloud_run_image" "$TFVARS_FILE"; then
+  tmp_file=$(mktemp)
+  sed "s~^cloud_run_image.*~cloud_run_image = \"${DEPLOY_IMAGE_URL}\"~" "$TFVARS_FILE" > "$tmp_file"
+  mv "$tmp_file" "$TFVARS_FILE"
+else
+  echo "cloud_run_image = \"${DEPLOY_IMAGE_URL}\"" >> "$TFVARS_FILE"
+fi
 
 echo
 echo "[4/8] Terraform init..."
