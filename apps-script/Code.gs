@@ -733,7 +733,7 @@ function refreshIamMatrixPivotFromHistory() {
     // Connected Sheets (BigQueryデータコネクタ) 用の専用ピボット生成
     // --------------------------------------------------------
     const dataSource = history.asDataSourceSheet().getDataSource();
-    const pivot = matrix.getRange('A3').insertDataSourcePivotTable(dataSource);
+    const pivot = matrix.getRange('A3').createDataSourcePivotTable(dataSource);
     
     pivot.addRowGroup('プリンシパル').showTotals(false);
     pivot.addRowGroup('リソースID').showTotals(false);
