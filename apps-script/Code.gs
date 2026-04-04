@@ -138,6 +138,98 @@ ${suggestion.reviewer_note || suggestion.summary || ''}`;
   }
 }
 
+
+/**
+ * Webアプリ(ポータル)からの申請を受け付けるエントリーポイント
+ */
+function submitAccessRequest(formData) {
+  const props = getProps_();
+  
+  // サーバーサイド・バリデーション (セキュリティ強化)
+  const role = String(formData.role || '').trim();
+  if (role && !role.startsWith('roles/')) {
+    throw new Error('セキュリティ違反: 「roles/」から始まる正式なロール名を指定してください。');
+  }
+
+  const rawRequestType = formData.requestType;
+  const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
+  const reason = (isEmergency ? '[緊急] ' : '') + String(formData.reason || '').trim();
+
+  let expiresAt = null;
+  const expiresRaw = formData.expiresAt;
+  if (expiresRaw && expiresRaw !== '恒久' && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
+    const d = new Date(expiresRaw);
+    if (!isNaN(d.getTime())) {
+      d.setHours(23, 59, 59, 999);
+      expiresAt = d.toISOString();
+    }
+  }
+
+  const requesterEmail = String(formData.requester || getActorEmail_()).trim();
+
+  const request = {
+    request_id: Utilities.getUuid(),
+    request_type: normalizeRequestType_(rawRequestType),
+    principal_email: String(formData.principal).trim(),
+    resource_name: normalizeResourceName_(String(formData.resource)),
+    role: role,
+    reason: reason,
+    expires_at: expiresAt,
+    requester_email: requesterEmail,
+    approver_email: String(formData.approver).trim(),
+    status: STATUS_PENDING,
+    requested_at: new Date().toISOString(),
+    ticket_ref: ''
+  };
+
+  validateRequest_(request);
+  insertRequestToBigQuery_(props, request);
+  insertRequestHistoryEvent_(props, {
+    request_id: request.request_id,
+    event_type: EVENT_REQUESTED,
+    old_status: '',
+    new_status: request.status,
+    reason_snapshot: request.reason,
+    request_type: request.request_type,
+    principal_email: request.principal_email,
+    resource_name: request.resource_name,
+    role: request.role,
+    requester_email: request.requester_email,
+    approver_email: request.approver_email,
+    acted_by: requesterEmail,
+    actor_source: 'WEB_APP',
+    details_json: JSON.stringify({ source: 'web_app' })
+  });
+
+  const aiSuggestion = formData.aiSuggestion || '';
+  appendReviewSheet_(request, aiSuggestion);
+
+  if (isEmergency) {
+    updateStatusInBigQuery_(props, request.request_id, STATUS_APPROVED);
+    insertRequestHistoryEvent_(props, {
+      request_id: request.request_id,
+      event_type: EVENT_STATUS_CHANGED,
+      old_status: STATUS_PENDING,
+      new_status: STATUS_APPROVED,
+      reason_snapshot: request.reason,
+      request_type: request.request_type,
+      principal_email: request.principal_email,
+      resource_name: request.resource_name,
+      role: request.role,
+      requester_email: request.requester_email,
+      approver_email: request.approver_email,
+      acted_by: 'SYSTEM_AUTO_APPROVE',
+      actor_source: 'SYSTEM',
+      details_json: JSON.stringify({ note: 'Break-glass auto approval' })
+    });
+    callCloudRunExecute_(props, request.request_id);
+    updateSheetStatus_(request.request_id, '承認済');
+    refreshRequestReviewStatusForRequestIds_([request.request_id]);
+  }
+
+  return { success: true, request_id: request.request_id };
+}
+
 function handleEdit(e) {
   const range = e.range;
   const sheet = range.getSheet();
@@ -1010,39 +1102,19 @@ function sendNotificationEmails_(emailsToSend) {
 
 function generatePrefilledUrl_(prefillData) {
   try {
-    const formUrl = SpreadsheetApp.getActiveSpreadsheet().getFormUrl();
-    if (!formUrl) return null;
-    const form = FormApp.openByUrl(formUrl);
-    const items = form.getItems();
-    const formResponse = form.createResponse();
+    const webAppUrl = ScriptApp.getService().getUrl();
+    if (!webAppUrl) return '(SaaSポータルのWebアプリURLを取得できませんでした)';
     
-    items.forEach(item => {
-      const title = item.getTitle();
-      let val = prefillData[title];
-      if (!val && title === FIELD_PROJECT) val = prefillData[FIELD_RESOURCE];
-      if (!val && title === FIELD_REASON_ALT) val = prefillData[FIELD_REASON];
-      
-      if (!val) return;
-      
-      try {
-        const type = item.getType();
-        if (type === FormApp.ItemType.TEXT) {
-          formResponse.withItemResponse(item.asTextItem().createResponse(String(val)));
-        } else if (type === FormApp.ItemType.PARAGRAPH_TEXT) {
-          formResponse.withItemResponse(item.asParagraphTextItem().createResponse(String(val)));
-        } else if (type === FormApp.ItemType.MULTIPLE_CHOICE) {
-          formResponse.withItemResponse(item.asMultipleChoiceItem().createResponse(String(val)));
-        } else if (type === FormApp.ItemType.LIST) {
-          formResponse.withItemResponse(item.asListItem().createResponse(String(val)));
-        }
-      } catch (e) {
-        console.warn(`Failed to pre-fill item ${title}: ` + e);
+    const params = [];
+    for (const key in prefillData) {
+      if (prefillData[key]) {
+        params.push(encodeURIComponent(key) + '=' + encodeURIComponent(prefillData[key]));
       }
-    });
-    return formResponse.toPrefilledUrl();
+    }
+    return webAppUrl + (params.length > 0 ? '?' + params.join('&') : '');
   } catch (e) {
     console.error("generatePrefilledUrl_ error: " + e);
-    return null;
+    return '(SaaSポータルのWebアプリURLを取得できませんでした)';
   }
 }
 

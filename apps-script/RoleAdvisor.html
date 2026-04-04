@@ -3,133 +3,322 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gemini IAMロール提案アシスタント</title>
+  <title>Cloud Access Manager 申請ポータル</title>
   <style>
-    body { font-family: sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; color: #333; }
-    h1 { margin-bottom: 8px; font-size: 24px; }
-    .card { border: 1px solid #ddd; border-radius: 10px; padding: 20px; margin: 16px 0; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    label { display: block; margin-bottom: 12px; font-weight: bold; }
-    textarea, input { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; }
-    button { padding: 12px 20px; border: 0; border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: bold; transition: background-color 0.2s; }
-    button:hover { background-color: #1557b0; }
-    .primary { background: #1a73e8; color: #fff; }
-    .muted { color: #666; font-size: 13px; font-weight: normal; }
-
-    /* 結果表示エリアのスタイル */
-    #result-container { display: none; } /* 初期状態は非表示 */
-    .result-content { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #1a73e8; }
-    .result-content h4 { margin: 16px 0 8px 0; color: #1a73e8; font-size: 16px; }
+    :root {
+      --primary: #1a73e8; --primary-hover: #1557b0; --bg: #f8f9fa;
+      --border: #dadce0; --text: #202124; --text-muted: #5f6368; --error: #d93025;
+    }
+    body { font-family: 'Google Sans', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--bg); color: var(--text); }
+    .header { background: #fff; padding: 16px 24px; border-bottom: 1px solid var(--border); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1); display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 500; color: var(--text); }
+    .container { display: flex; flex-wrap: wrap; max-width: 1200px; margin: 24px auto; gap: 24px; padding: 0 16px; }
+    .panel { background: #fff; border-radius: 8px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.05); flex: 1; min-width: 320px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 14px; transition: border 0.2s; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+    .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .error-msg { color: var(--error); font-size: 12px; margin-top: 4px; display: none; }
+    button { padding: 10px 24px; border: none; border-radius: 4px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s; }
+    button.primary { background: var(--primary); color: #fff; }
+    button.primary:hover { background: var(--primary-hover); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); }
+    button.primary:disabled { background: #8ab4f8; cursor: not-allowed; }
+    button.secondary { background: #fff; color: var(--primary); border: 1px solid var(--border); }
+    button.secondary:hover { background: #f1f3f4; }
+    .ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--primary); }
+    .ai-header svg { width: 24px; height: 24px; fill: currentColor; }
+    .result-content { background: #e8f0fe; padding: 16px; border-radius: 8px; margin-top: 16px; font-size: 14px;}
+    .result-content h4 { margin: 16px 0 8px; color: var(--primary); font-size: 14px; }
     .result-content h4:first-child { margin-top: 0; }
-    .result-content p { margin: 0 0 12px 0; line-height: 1.5; }
-    .result-content ul { margin: 0 0 12px 0; padding-left: 20px; }
-    .result-content li { margin-bottom: 8px; line-height: 1.5; }
-    .role-badge { display: inline-block; background: #e8f0fe; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-    .loading-text { font-style: italic; color: #666; }
+    .result-content ul { margin: 0; padding-left: 20px; }
+    .result-content li { margin-bottom: 8px; }
+    .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
+    .apply-btn { margin-left: 12px; padding: 4px 12px; font-size: 12px; }
+    .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); flex-direction: column; align-items: center; justify-content: center; z-index: 1000; display: none; }
+    .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <h1>Gemini IAMロール提案アシスタント</h1>
-  <p class="muted">Googleフォーム送信前に、やりたいことから推奨ロール候補を確認できます。</p>
-
-  <div class="card">
-    <label>やりたいこと（必須）
-      <textarea id="goal" rows="4" placeholder="例: BigQueryで特定データセットの参照クエリを実行したい"></textarea>
-    </label>
-    <label>対象リソース（任意）
-      <input id="resource" placeholder="例: projects/xxx/datasets/yyy" />
-    </label>
-    <label>対象プリンシパル（任意）
-      <input id="principal" placeholder="例: dev-team@example.com" />
-    </label>
-    <div style="margin-top: 16px;">
-      <button class="primary" id="submitBtn" onclick="runSuggest()">Geminiで提案を取得</button>
+  <div class="header">
+    <h1>Cloud Access Manager 申請ポータル</h1>
+    <div style="font-size:14px; color:var(--text-muted);">👤 <?= requesterEmail ?></div>
+  </div>
+  <div class="container">
+    <div class="panel" style="flex: 3;">
+      <h2 style="margin-top:0; font-size: 18px; color: var(--primary);">IAM権限 申請フォーム</h2>
+      <form id="accessForm" onsubmit="submitForm(event)">
+        <div class="form-group">
+          <label>申請種別 <span style="color:var(--error);">*</span></label>
+          <select id="requestType" required>
+            <option value="新規付与" selected>新規付与</option>
+            <option value="変更">変更</option>
+            <option value="削除">削除</option>
+            <option value="緊急付与">緊急付与（※承認不要・即時実行・要事後監査）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>対象プリンシパル <span style="color:var(--error);">*</span></label>
+          <input type="email" id="principal" placeholder="例: user@example.com" required />
+          <div class="hint">権限を付与されるユーザー、グループ、またはSAのメールアドレス</div>
+        </div>
+        <div class="form-group">
+          <label>対象リソース <span style="color:var(--error);">*</span></label>
+          <input type="text" id="resource" placeholder="例: projects/my-project-id" required />
+          <div class="hint">対象のプロジェクトIDやフォルダID</div>
+        </div>
+        <div class="form-group">
+          <label>付与・変更ロール <span style="color:var(--error);">*</span></label>
+          <input type="text" id="role" placeholder="例: roles/bigquery.dataViewer" required oninput="validateRole()" />
+          <div id="roleError" class="error-msg">「roles/」から始まる正式なロール名を入力してください。</div>
+          <div id="roleAiSuggestion" class="error-msg" style="font-weight:bold; font-size:13px; margin-top:8px;"></div>
+          <div class="hint">どのロールを付与するか分からない場合は、右側のAIアシスタントをご利用ください。</div>
+        </div>
+        <div class="form-group">
+          <label>利用期限 <span style="color:var(--error);">*</span></label>
+          <div style="display:flex; gap:12px;">
+            <select id="expiresType" onchange="toggleDate()" style="width:150px;" required>
+              <option value="temp" selected>期間限定</option>
+              <option value="perm">恒久</option>
+            </select>
+            <input type="date" id="expiresDate" required style="flex:1;" />
+          </div>
+          <div class="hint">期間限定を強く推奨します。指定した日付の23:59に自動的に権限が剥奪されます。</div>
+        </div>
+        <div class="form-group">
+          <label>申請理由・利用目的 <span style="color:var(--error);">*</span></label>
+          <textarea id="reason" rows="3" placeholder="例: 〇〇プロジェクトのログ調査のため、2月末まで閲覧権限が必要" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>承認者メール <span style="color:var(--error);">*</span></label>
+          <input type="email" id="approver" placeholder="例: manager@example.com" required />
+          <div class="hint">この申請をレビューし、承認する権限を持つ上長等のメールアドレス</div>
+        </div>
+        <div style="margin-top: 32px; text-align:right;">
+          <button type="submit" id="submitBtn" class="primary">申請を送信する</button>
+        </div>
+      </form>
+    </div>
+    <div class="panel" style="flex: 2; background: #fbfcff;">
+      <div class="ai-header">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg>
+        <h2 style="margin:0; font-size: 16px;">Gemini ロール提案アシスタント</h2>
+      </div>
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">やりたいことを自然言語で入力すると、AIがセキュリティベストプラクティスに基づいた「最小権限のロール名」を提案します。</p>
+      <div class="form-group">
+        <textarea id="aiGoal" rows="3" placeholder="例: BigQueryで特定データセットの参照クエリを実行したい"></textarea>
+      </div>
+      <button type="button" id="aiBtn" class="secondary" onclick="runSuggest()" style="width:100%;">AIに推論させる</button>
+      <div id="aiResultContainer" style="display:none;">
+        <div id="aiResult" class="result-content"></div>
+      </div>
+      <input type="hidden" id="hiddenAiSuggestion" value="" />
     </div>
   </div>
-
-  <div class="card" id="result-container">
-    <h3>提案結果</h3>
-    <div id="result" class="result-content">ここに結果が表示されます。</div>
-    <p class="muted" style="margin-top: 16px;">💡 フォームには「付与・変更ロール」へ <strong>推奨ロール</strong> を、「申請理由・利用目的」へ <strong>要約</strong> や <strong>注意点</strong> などを転記してください。</p>
+  <div id="overlay" class="overlay">
+    <div class="spinner"></div>
+    <div style="margin-top:16px; font-weight:500;">バックエンドへ送信中...</div>
   </div>
 
+  <script id="initial-data" type="application/json">
+    <?!= JSON.stringify(initialData || {}) ?>
+  </script>
+
   <script>
-    // XSS対策用のエスケープ関数
+    window.onload = () => {
+      let initialData = {};
+      try {
+        const dataText = document.getElementById('initial-data').textContent;
+        if (dataText.trim()) {
+          initialData = JSON.parse(dataText);
+        }
+      } catch (e) {
+        console.warn("Failed to parse initial data", e);
+      }
+      toggleDate();
+      
+      // 却下メール等からのURLパラメータを復元 (Pre-filled URL機能の再構築)
+      if (initialData['申請種別']) document.getElementById('requestType').value = initialData['申請種別'];
+      if (initialData['対象プリンシパル']) document.getElementById('principal').value = initialData['対象プリンシパル'];
+      if (initialData['対象リソース'] || initialData['対象プロジェクト']) document.getElementById('resource').value = initialData['対象リソース'] || initialData['対象プロジェクト'];
+      if (initialData['付与・変更ロール']) document.getElementById('role').value = initialData['付与・変更ロール'];
+      if (initialData['申請理由・利用目的'] || initialData['利用目的']) document.getElementById('reason').value = initialData['申請理由・利用目的'] || initialData['利用目的'];
+      if (initialData['承認者メール（または承認グループ）']) document.getElementById('approver').value = initialData['承認者メール（または承認グループ）'];
+      
+      if (document.getElementById('role').value) {
+        validateRole();
+      }
+    };
+
     function escapeHtml(str) {
       if (!str) return '';
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function toggleDate() {
+      const type = document.getElementById('expiresType').value;
+      const dateInput = document.getElementById('expiresDate');
+      if (type === 'perm') {
+        dateInput.style.display = 'none';
+        dateInput.required = false;
+        dateInput.value = '';
+      } else {
+        dateInput.style.display = 'block';
+        dateInput.required = true;
+      }
+    }
+
+    function validateRole() {
+      const roleInput = document.getElementById('role');
+      const errorMsg = document.getElementById('roleError');
+      const val = roleInput.value.trim();
+      if (val !== '' && !val.startsWith('roles/')) {
+        errorMsg.style.display = 'block';
+        roleInput.setCustomValidity('「roles/」から始まる正式なロール名を入力してください。');
+        return false;
+      } else {
+        errorMsg.style.display = 'none';
+        roleInput.setCustomValidity('');
+        return true;
+      }
+    }
+
+    function applySuggestion(role, summary) {
+      document.getElementById('role').value = role;
+      validateRole();
+      const reasonEl = document.getElementById('reason');
+      if (!reasonEl.value.includes(summary)) {
+        reasonEl.value = summary + '\n' + reasonEl.value;
+      }
     }
 
     function runSuggest() {
-      const goal = document.getElementById('goal').value.trim();
+      const goal = document.getElementById('aiGoal').value.trim();
       const resource = document.getElementById('resource').value.trim();
       const principal = document.getElementById('principal').value.trim();
 
-      const resultContainer = document.getElementById('result-container');
-      const resultEl = document.getElementById('result');
-      const submitBtn = document.getElementById('submitBtn');
+      if (!goal) { alert('「やりたいこと」を入力してください。'); return; }
 
-      if (!goal) {
-        alert('「やりたいこと（必須）」を入力してください。');
+      const btn = document.getElementById('aiBtn');
+      const container = document.getElementById('aiResultContainer');
+      const resultEl = document.getElementById('aiResult');
+
+      btn.disabled = true;
+      btn.textContent = '✨ Geminiが推論中...';
+      container.style.display = 'block';
+      resultEl.innerHTML = '<div style="text-align:center; padding: 10px;">推論中...</div>';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          let html = '';
+          let textForSheet = '';
+          if (res.summary) html += `<h4>💡 要約</h4><p>${escapeHtml(res.summary)}</p>`;
+          if (res.recommended_roles && res.recommended_roles.length > 0) {
+            html += `<h4>🔑 推奨ロール候補</h4><ul>`;
+            const rolesForSheet = [];
+            res.recommended_roles.forEach(r => {
+              const safeRole = escapeHtml(r.role);
+              const safeSummary = escapeHtml(res.summary);
+              html += `<li>
+                <div class="role-badge">
+                  ${safeRole}
+                  <button type="button" class="secondary apply-btn" onclick="applySuggestion('${safeRole}', '${safeSummary}')">反映する</button>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted);"><b>理由:</b> ${escapeHtml(r.reason)} <br><b>スコープ:</b> ${escapeHtml(r.scope_hint)}</div>
+              </li>`;
+              rolesForSheet.push(r.role);
+            });
+            html += `</ul>`;
+            textForSheet += `【推奨ロール】\n${rolesForSheet.join(', ')}\n\n`;
+          }
+          if (res.cautions && res.cautions.length > 0) {
+            html += `<h4>⚠️ 注意点・確認事項</h4><ul>`;
+            res.cautions.forEach(c => { html += `<li style="font-size:12px; color:var(--text-muted);">${escapeHtml(c)}</li>`; });
+            html += `</ul>`;
+          }
+          if (res.reviewer_note) textForSheet += `【レビューア向けメモ】\n${res.reviewer_note}`;
+
+          resultEl.innerHTML = html;
+          document.getElementById('hiddenAiSuggestion').value = textForSheet;
+          btn.disabled = false;
+          btn.textContent = 'Geminiに再相談する';
+        })
+        .withFailureHandler(err => {
+          resultEl.innerHTML = `<span style="color:var(--error);">エラーが発生しました: ${escapeHtml(err.message)}</span>`;
+          btn.disabled = false;
+          btn.textContent = 'AIに推論させる';
+        })
+        .suggestIamRoles({ goal, resource, principal });
+    }
+
+    function submitForm(e) {
+      e.preventDefault();
+      if (!validateRole()) {
+        alert('ロール名を修正してください。');
         return;
       }
 
-      // ローディング状態のUI表示
-      resultContainer.style.display = 'block';
-      resultEl.innerHTML = '<span class="loading-text">✨ Geminiが最適な権限を推論中...（数秒かかります）</span>';
-      submitBtn.disabled = true;
-      submitBtn.textContent = '取得中...';
+      const btn = document.getElementById('submitBtn');
+      const overlay = document.getElementById('overlay');
+      const aiSugEl = document.getElementById('roleAiSuggestion');
+      
+      btn.disabled = true;
+      overlay.style.display = 'flex';
+      if (aiSugEl) aiSugEl.style.display = 'none';
 
+      const formData = {
+        requestType: document.getElementById('requestType').value,
+        principal: document.getElementById('principal').value.trim(),
+        resource: document.getElementById('resource').value.trim(),
+        role: document.getElementById('role').value.trim(),
+        expiresAt: document.getElementById('expiresType').value === 'perm' ? '恒久' : document.getElementById('expiresDate').value,
+        reason: document.getElementById('reason').value.trim(),
+        approver: document.getElementById('approver').value.trim(),
+        requester: '<?= requesterEmail ?>',
+        aiSuggestion: document.getElementById('hiddenAiSuggestion').value
+      };
+
+      // 1. Geminiにロール名のタイポ検証を依頼する
       google.script.run
-        .withSuccessHandler((res) => {
-          // JSONデータを綺麗なHTMLに変換して組み立てる
-          let html = '';
-
-          if (res.summary) {
-            html += `<h4>💡 要約</h4><p>${escapeHtml(res.summary)}</p>`;
+        .withSuccessHandler(function(validationRes) {
+          if (validationRes && validationRes.is_valid === false && validationRes.suggested_role) {
+            // タイポ検知: 送信を中断し、赤字で提案を表示
+            overlay.style.display = 'none';
+            btn.disabled = false;
+            aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(validationRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline; font-size:14px;">${escapeHtml(validationRes.suggested_role)}</a> ですか？（クリックで修正）`;
+            aiSugEl.style.display = 'block';
+            return;
           }
-
-          if (res.recommended_roles && res.recommended_roles.length > 0) {
-            html += `<h4>🔑 推奨ロール候補</h4><ul>`;
-            res.recommended_roles.forEach(r => {
-              html += `<li>
-                <span class="role-badge">${escapeHtml(r.role)}</span><br>
-                <span class="muted"><b>理由:</b> ${escapeHtml(r.reason)} <br><b>スコープ:</b> ${escapeHtml(r.scope_hint)}</span>
-              </li>`;
-            });
-            html += `</ul>`;
-          }
-
-          if (res.cautions && res.cautions.length > 0) {
-            html += `<h4>⚠️ 注意点・確認事項</h4><ul>`;
-            res.cautions.forEach(c => {
-              html += `<li>${escapeHtml(c)}</li>`;
-            });
-            html += `</ul>`;
-          }
-
-          if (res.reviewer_note) {
-            html += `<h4>📝 レビューア向けメモ</h4><p>${escapeHtml(res.reviewer_note)}</p>`;
-          }
-
-          // 組み立てたHTMLを画面に流し込む
-          resultEl.innerHTML = html;
-
-          // ボタンの状態を元に戻す
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Geminiで提案を取得';
+          // 問題なし（または検証通過）の場合は送信実行
+          executeSubmit(formData, btn, overlay, e);
         })
-        .withFailureHandler((err) => {
-          // エラー時の表示
-          resultEl.innerHTML = `<span style="color: #d93025; font-weight: bold;">エラーが発生しました:</span><br>${escapeHtml(err && err.message ? err.message : err)}`;
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Geminiで提案を取得';
+        .withFailureHandler(function(err) {
+          // AI検証自体がエラーになった場合は、申請者の業務を止めないようフォールバックとしてそのまま送信する
+          console.warn("AI Validation failed, proceeding with submit: " + err.message);
+          executeSubmit(formData, btn, overlay, e);
         })
-        .suggestIamRoles({ goal, resource, principal });
+        .validateRoleWithAi(formData.role, formData.reason, formData.resource);
+    }
+
+    function executeSubmit(formData, btn, overlay, e) {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          overlay.style.display = 'none';
+          alert('✅ 申請が完了しました！\nリクエストID: ' + res.request_id);
+          e.target.reset();
+          document.getElementById('hiddenAiSuggestion').value = '';
+          document.getElementById('aiResultContainer').style.display = 'none';
+          document.getElementById('aiGoal').value = '';
+          toggleDate();
+          btn.disabled = false;
+        })
+        .withFailureHandler(function(err) {
+          overlay.style.display = 'none';
+          alert('❌ 申請中にエラーが発生しました:\n' + (err.message || '不明なエラー'));
+          btn.disabled = false;
+        })
+        .submitAccessRequest(formData);
     }
   </script>
 </body>
