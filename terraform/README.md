@@ -22,15 +22,20 @@
 ### GCSバックエンドを利用する場合（推奨）
 
 1. `backend.hcl` にGCSバケット名などを設定します。
+
    ```hcl
    bucket = "your-tfstate-bucket-name"
    ```
+
 1. スクリプトを実行してセットアップします。
+
    ```bash
    bash ../scripts/sync-config.sh
    bash ../scripts/bootstrap-tfstate.sh
    ```
+
 1. Terraformを初期化・実行します。
+
    ```bash
    cd terraform
    terraform init -backend-config=../backend.hcl
@@ -42,6 +47,7 @@
 
 1. `terraform/backend.tf` ファイル内の `backend "gcs" {}` ブロックをコメントアウトします。
 1. Terraformを初期化・実行します。
+
    ```bash
    cd terraform
    terraform init
