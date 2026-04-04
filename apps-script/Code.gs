@@ -511,7 +511,10 @@ function appendReviewSheet_(request, aiSuggestion) {
   }
   if (idx.requested_at) rowData[idx.requested_at - 1] = request.requested_at;
   if (idx.ticket_ref) rowData[idx.ticket_ref - 1] = request.ticket_ref;
-  if (idx[COL_AI_SUGGEST]) rowData[idx[COL_AI_SUGGEST] - 1] = aiSuggestion || '';
+  if (idx[COL_AI_SUGGEST]) rowData[idx[COL_AI_SUGGEST] - 1] = aiSuggestion || '（事前AI推論なし・ロール存在確認済）';
+  if (idx[COL_EXEC_RESULT]) rowData[idx[COL_EXEC_RESULT] - 1] = '未実行';
+  if (idx[COL_FINAL_REFLECT]) rowData[idx[COL_FINAL_REFLECT] - 1] = '未確認';
+  if (idx[COL_LAST_CHECKED]) rowData[idx[COL_LAST_CHECKED] - 1] = '-';
 
   sheet.appendRow(rowData);
 
