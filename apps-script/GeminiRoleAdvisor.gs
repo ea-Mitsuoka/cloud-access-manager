@@ -1,9 +1,10 @@
 /**
- * Gemini role advisor for requesters (pre-submit helper).
+ * Cloud Access Manager 申請ポータル (Web App) および AIアシスタントバックエンド。
  *
- * Deploy as Web App and link URL from Google Form description.
- * Script Properties required:
- * - GEMINI_API_KEY
+ * Webアプリとしてデプロイし、発行されたURLをユーザー（申請者）へ展開してください。
+ * * 必要なスクリプトプロパティ:
+ * - BQ_PROJECT_ID (Vertex AI の呼び出し先プロジェクトとして使用)
+ * * ※実行ユーザーには Vertex AI ユーザー (roles/aiplatform.user) 権限が必要です。
  */
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
