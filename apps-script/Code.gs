@@ -698,25 +698,16 @@ function getActorEmail_() {
  */
 function refreshIamMatrixPivotFromHistory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const history = ss.getSheetByName(HISTORY_SHEET_NAME);
+  
+  // 1. Connected Sheetsで追加されたシートを探す (フォールバックとして古い名前も探す)
+  let history = ss.getSheetByName('v_sheet_iam_permission_history');
   if (!history) {
-    throw new Error(`sheet not found: ${HISTORY_SHEET_NAME}`);
+    history = ss.getSheetByName(HISTORY_SHEET_NAME);
   }
 
-  const lastRow = history.getLastRow();
-  const lastCol = history.getLastColumn();
-  if (lastRow < 2 || lastCol < 1) {
-    throw new Error(`${HISTORY_SHEET_NAME} has no data rows`);
+  if (!history) {
+    throw new Error('履歴シートが見つかりません。先にデータコネクタで v_sheet_iam_permission_history を追加してください。');
   }
-
-  const header = history.getRange(1, 1, 1, lastCol).getValues()[0];
-  const idx = indexMap_(header);
-  const required = ['リソース名', 'プリンシパル', 'IAMロール', 'ステータス'];
-  required.forEach((name) => {
-    if (!idx[name]) {
-      throw new Error(`required column not found in ${HISTORY_SHEET_NAME}: ${name}`);
-    }
-  });
 
   let matrix = ss.getSheetByName(MATRIX_SHEET_NAME);
   if (!matrix) {
@@ -727,40 +718,74 @@ function refreshIamMatrixPivotFromHistory() {
     bands.forEach(b => b.remove());
     matrix.clearFormats(); // 既存の書式もクリア
   }
-  const sourceRange = history.getRange(1, 1, lastRow, lastCol);
-  matrix.getRange(1, 1).setValue('IAM権限設定履歴ベースのピボット（Spreadsheet標準機能）');
   
-  // 標準のピボットテーブルとして作成
-  const pivot = matrix.getRange(3, 1).createPivotTable(sourceRange);
+  matrix.getRange(1, 1).setValue('IAM権限設定履歴ベースのピボット（Connected Sheets連動）');
+  
+  let isConnectedSheet = false;
+  try {
+    isConnectedSheet = (history.asDataSourceSheet() != null);
+  } catch (e) {
+    isConnectedSheet = false;
+  }
 
-  // 行グループを追加し、不要な小計（の合計）を非表示にする
-  pivot.addRowGroup(idx['プリンシパル']).showTotals(false);
-  pivot.addRowGroup(idx['リソースID']).showTotals(false);
-  
-  // 列グループを追加し、小計を非表示にする
-  pivot.addColumnGroup(idx['IAMロール']).showTotals(false);
-  
-  // 値グループを追加
-  pivot.addPivotValue(idx['ステータス'], SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
+  if (isConnectedSheet) {
+    // --------------------------------------------------------
+    // Connected Sheets (BigQueryデータコネクタ) 用の専用ピボット生成
+    // --------------------------------------------------------
+    const dataSource = history.asDataSourceSheet().getDataSource();
+    const pivot = matrix.insertDataSourcePivotTable(dataSource, matrix.getRange('A3'));
+    
+    pivot.addRowGroup('プリンシパル').showTotals(false);
+    pivot.addRowGroup('リソースID').showTotals(false);
+    pivot.addColumnGroup('IAMロール').showTotals(false);
+    pivot.addPivotValue('ステータス', SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
+    
+    // BigQueryの集計処理(クエリ)が完了するまで最大60秒待機（これがないと直後の書式設定が空振りします）
+    try {
+      pivot.waitForAllDataExecutionsCompletion(60);
+    } catch (e) {
+      console.warn("Connected Sheetsのピボット集計がタイムアウトしました:", e);
+    }
+  } else {
+    // --------------------------------------------------------
+    // 通常のシート（旧アーキテクチャ）用のピボット生成
+    // --------------------------------------------------------
+    const lastRow = history.getLastRow();
+    const lastCol = history.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) {
+      throw new Error('履歴シートにデータ行がありません');
+    }
+
+    const header = history.getRange(1, 1, 1, lastCol).getValues()[0];
+    const idx = indexMap_(header);
+    
+    const sourceRange = history.getRange(1, 1, lastRow, lastCol);
+    const pivot = matrix.getRange(3, 1).createPivotTable(sourceRange);
+
+    pivot.addRowGroup(idx['プリンシパル']).showTotals(false);
+    pivot.addRowGroup(idx['リソースID']).showTotals(false);
+    pivot.addColumnGroup(idx['IAMロール']).showTotals(false);
+    pivot.addPivotValue(idx['ステータス'], SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
+  }
 
   // --- ピボットの機能を保ちつつ、見た目を整えるハック ---
-  
-  // 1. 書式設定を反映させるために少し待ち、純粋なピボットテーブルのサイズを取得する
   SpreadsheetApp.flush();
+  
+  // UI反映のラグを考慮して少し待機
+  Utilities.sleep(2000);
+  
   const maxCol = matrix.getLastColumn();
   const lastPivotRow = matrix.getLastRow();
 
   if (maxCol > 2) {
-    // 2. シートのピボット範囲の表示形式をカスタムし、1以上の数値を「○」に見せる
+    // 1以上の数値を「○」に見せるフォーマット
     matrix.getRange(1, 1, lastPivotRow, maxCol).setNumberFormat('"○";"";"";@');
-    // 3. ヘッダー行などの簡易的な装飾
-    // ロールが並ぶヘッダー部分(3行目、4行目周辺)を緑色に（列数は maxCol - 2 に修正）
-    matrix.getRange(3, 3, 2, maxCol - 2).setBackground('#4b746c').setFontColor('white').setFontStyle('italic');
     
-    // 左上のプリンシパル等のヘッダー部分をグレーに
+    // ヘッダー行などの簡易的な装飾
+    matrix.getRange(3, 3, 2, maxCol - 2).setBackground('#4b746c').setFontColor('white').setFontStyle('italic');
     matrix.getRange(3, 1, 2, 2).setBackground('#f3f3f3').setFontColor('black').setFontStyle('italic');
     
-    // 全体を中央揃えにしつつ、A列・B列は左揃え
+    // 中央揃え
     matrix.getRange(1, 1, lastPivotRow, maxCol).setHorizontalAlignment('center').setVerticalAlignment('middle');
     matrix.getRange(1, 1, lastPivotRow, 2).setHorizontalAlignment('left');
 
@@ -768,9 +793,8 @@ function refreshIamMatrixPivotFromHistory() {
     matrix.setColumnWidth(1, 250);
     matrix.setColumnWidth(2, 200);
 
-    // 4. 交互の背景色（標準のバンディング機能を利用）
+    // 交互の背景色
     if (lastPivotRow >= 5) {
-      // データ行は5行目から開始。行数は lastPivotRow - 4 に修正
       const dataRange = matrix.getRange(5, 1, lastPivotRow - 4, maxCol);
       dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
     }
