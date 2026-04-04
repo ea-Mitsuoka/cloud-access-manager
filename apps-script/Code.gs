@@ -732,6 +732,7 @@ function refreshIamMatrixPivotFromHistory() {
     // --------------------------------------------------------
     // Connected Sheets (BigQueryデータコネクタ) 用の専用ピボット生成
     // --------------------------------------------------------
+    SpreadsheetApp.enableBigQueryExecution();
     const dataSource = history.asDataSourceSheet().getDataSource();
     const pivot = matrix.getRange('A3').createDataSourcePivotTable(dataSource);
     
