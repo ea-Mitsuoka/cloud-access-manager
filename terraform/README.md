@@ -46,6 +46,7 @@
 ### ローカルバックエンドを利用する場合（テスト用）
 
 1. `terraform/backend.tf` ファイル内の `backend "gcs" {}` ブロックをコメントアウトします。
+
 1. Terraformを初期化・実行します。
 
    ```bash
