@@ -8,49 +8,52 @@ Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承
 
 ```mermaid
 graph TD
-    subgraph "User Interaction"
-        A[User] <-->|AIリアルタイム推論| B("SaaS Portal (Web App)");
-        B --> C("Google Sheet: requests_review (Approver)");
+    subgraph UserInteraction ["User Interaction"]
+        A[User] <-->|AIリアルタイム推論| B("SaaS Portal (Web App)")
+        B --> C("Google Sheet: requests_review (Approver)")
     end
 
-    subgraph "Data Processing & Automation"
-        B -- "Submit" --> D["Google Apps Script"];
-        C -- "Approve / Reject" --> D;
-        D -- "Validate" --> AI("Vertex AI (Gemini)");
-        D -- "HTTP API" --> CR["Cloud Run (iam-access-executor)"];
-        
-        CR --> E["BigQuery: iam_access_requests"];
-        CR --> E2["BigQuery: iam_access_request_history"];
+    subgraph DataProcessing ["Data Processing & Automation"]
+        B -- "Submit" --> D["Google Apps Script"]
+        C -- "Approve / Reject" --> D
+        D -- "Validate" --> AI("Vertex AI (Gemini)")
 
-        subgraph "Cloud Run Service"
-            CR;
-            F("Cloud Scheduler") --> CR;
+        subgraph CloudRunService ["Cloud Run Service"]
+            CR["Cloud Run (iam-access-executor)"]
+            F("Cloud Scheduler") --> CR
         end
 
-        CR -- "IAM API" --> G1["Google Cloud IAM"];
-        CR -- "Cloud Asset API" --> G2["Google Cloud Asset Inventory"];
-        CR -- "Cloud Identity API" --> G3["Google Cloud Identity"];
+        D -- "HTTP API" --> CR
 
-        CR --> H["BigQuery: iam_access_change_log"];
-        CR --> I["BigQuery: iam_policy_bindings_raw_history"];
-        CR --> J["BigQuery: google_groups"];
-        CR --> K["BigQuery: google_group_membership_history"];
-        CR --> R["BigQuery: gcp_resource_inventory_history"];
-        CR --> L["BigQuery: iam_reconciliation_issues"];
-        CR --> M["BigQuery: iam_pipeline_job_reports"];
-        CR --> N["BigQuery: iam_permission_bindings_history"];
+        CR --> E["BigQuery: iam_access_requests"]
+        CR --> E2["BigQuery: iam_access_request_history"]
+
+        CR -- "IAM API" --> G1["Google Cloud IAM"]
+        CR -- "Cloud Asset API" --> G2["Google Cloud Asset Inventory"]
+        CR -- "Cloud Identity API" --> G3["Google Cloud Identity"]
+
+        CR --> H["BigQuery: iam_access_change_log"]
+        CR --> I["BigQuery: iam_policy_bindings_raw_history"]
+        CR --> J["BigQuery: google_groups"]
+        CR --> K["BigQuery: google_group_membership_history"]
+        CR --> R["BigQuery: gcp_resource_inventory_history"]
+        CR --> L["BigQuery: iam_reconciliation_issues"]
+        CR --> M["BigQuery: iam_pipeline_job_reports"]
+        CR --> N["BigQuery: iam_permission_bindings_history"]
     end
 
-    subgraph "Data Visualization"
-        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report");
-        E -- "used by" --> P;
-        H -- "used by" --> P;
-        J -- "used by" --> P;
-        K -- "used by" --> P;
-        R -- "used by" --> P;
-        L -- "used by" --> P;
-        N -- "used by" --> P;
+    subgraph DataVisualization ["Data Visualization"]
+        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report")
     end
+
+    %% クロスサブグラフのリンクは外側に記述する
+    E -- "used by" --> P
+    H -- "used by" --> P
+    J -- "used by" --> P
+    K -- "used by" --> P
+    R -- "used by" --> P
+    L -- "used by" --> P
+    N -- "used by" --> P
 
     style CR fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#FFFFFF
     style F fill:#FBBC04,stroke:#e0b200,stroke-width:2px
