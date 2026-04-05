@@ -698,106 +698,107 @@ function getActorEmail_() {
  */
 function refreshIamMatrixPivotFromHistory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const props = getProps_();
   
-  // 1. Connected Sheetsで追加されたシートを探す (フォールバックとして古い名前も探す)
-  let history = ss.getSheetByName('v_sheet_iam_permission_history');
-  if (!history) {
-    history = ss.getSheetByName(HISTORY_SHEET_NAME);
+  // 1. BigQueryから最新の帳票データを直接取得
+  const sql = "SELECT * FROM `" + props.projectId + "." + props.datasetId + ".v_sheet_iam_permission_history`";
+  const req = { query: sql, useLegacySql: false, location: props.location };
+  
+  let bqResult = BigQuery.Jobs.query(req, props.projectId);
+  let jobId = bqResult.jobReference && bqResult.jobReference.jobId;
+  
+  while (!bqResult.jobComplete && jobId) {
+    Utilities.sleep(500);
+    bqResult = BigQuery.Jobs.getQueryResults(props.projectId, jobId, { location: props.location });
+  }
+  if (bqResult.status && bqResult.status.errorResult) {
+    throw new Error('BigQuery query failed: ' + JSON.stringify(bqResult.status.errorResult));
   }
 
-  if (!history) {
-    throw new Error('履歴シートが見つかりません。先にデータコネクタで v_sheet_iam_permission_history を追加してください。');
+  const headers = ((bqResult.schema || {}).fields || []).map(f => f.name);
+  const rows = bqResult.rows || [];
+  if (rows.length === 0) {
+     throw new Error('履歴データがありません。');
   }
+  
+  // データのクレンジング処理
+  const idx = indexMap_(headers);
+  const roleColIdx = idx['IAMロール'] ? idx['IAMロール'] - 1 : -1;
+  const resourceColIdx = idx['リソースID'] ? idx['リソースID'] - 1 : -1;
+
+  const values = [headers];
+  rows.forEach(row => {
+    let rowData = (row.f || []).map(cell => cell.v);
+    
+    // 1) ロール名から 'roles/' を除去して列幅を節約
+    if (roleColIdx >= 0 && rowData[roleColIdx]) {
+      rowData[roleColIdx] = String(rowData[roleColIdx]).replace(/^roles\//, '');
+    }
+    // 2) リソースIDがNULL/空白の場合は明示的に文字を入れる
+    if (resourceColIdx >= 0 && !rowData[resourceColIdx]) {
+      rowData[resourceColIdx] = props.projectId;
+    }
+    values.push(rowData);
+  });
+
+  const TMP_SHEET_NAME = '_tmp_matrix_source';
+  let tmpSheet = ss.getSheetByName(TMP_SHEET_NAME);
+  if (!tmpSheet) {
+    tmpSheet = ss.insertSheet(TMP_SHEET_NAME);
+    tmpSheet.hideSheet();
+  } else {
+    tmpSheet.clear();
+  }
+
+  tmpSheet.getRange(1, 1, values.length, values[0].length).setValues(values);
 
   let matrix = ss.getSheetByName(MATRIX_SHEET_NAME);
   if (!matrix) {
     matrix = ss.insertSheet(MATRIX_SHEET_NAME);
   } else {
     matrix.clear();
-    const bands = matrix.getBandings();
-    bands.forEach(b => b.remove());
-    matrix.clearFormats(); // 既存の書式もクリア
+    matrix.getBandings().forEach(b => b.remove());
+    matrix.clearFormats();
   }
   
-  matrix.getRange(1, 1).setValue('IAM権限設定履歴ベースのピボット（Connected Sheets連動）');
+  matrix.getRange(1, 1).setValue('IAM権限設定履歴ベースのピボット（BigQuery直接取得・超安定版）');
   
-  let isConnectedSheet = false;
-  try {
-    isConnectedSheet = (history.asDataSourceSheet() != null);
-  } catch (e) {
-    isConnectedSheet = false;
-  }
+  const sourceRange = tmpSheet.getDataRange();
+  const pivot = matrix.getRange(3, 1).createPivotTable(sourceRange);
 
-  if (isConnectedSheet) {
-    // --------------------------------------------------------
-    // Connected Sheets (BigQueryデータコネクタ) 用の専用ピボット生成
-    // --------------------------------------------------------
-    SpreadsheetApp.enableBigQueryExecution();
-    const dataSource = history.asDataSourceSheet().getDataSource();
-    const pivot = matrix.getRange('A3').createDataSourcePivotTable(dataSource);
-    
-    pivot.addRowGroup('プリンシパル').showTotals(false);
-    pivot.addRowGroup('リソースID').showTotals(false);
-    pivot.addColumnGroup('IAMロール').showTotals(false);
-    pivot.addPivotValue('ステータス', SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
-    
-    // BigQueryの集計処理(クエリ)が完了するまで最大60秒待機（これがないと直後の書式設定が空振りします）
-    try {
-      pivot.waitForAllDataExecutionsCompletion(60);
-    } catch (e) {
-      console.warn("Connected Sheetsのピボット集計がタイムアウトしました:", e);
-    }
-  } else {
-    // --------------------------------------------------------
-    // 通常のシート（旧アーキテクチャ）用のピボット生成
-    // --------------------------------------------------------
-    const lastRow = history.getLastRow();
-    const lastCol = history.getLastColumn();
-    if (lastRow < 2 || lastCol < 1) {
-      throw new Error('履歴シートにデータ行がありません');
-    }
+  pivot.addRowGroup(idx['プリンシパル']).showTotals(false);
+  pivot.addRowGroup(idx['リソースID']).showTotals(false);
+  pivot.addColumnGroup(idx['IAMロール']).showTotals(false);
+  
+  // ★ステータス列が空だとカウント0になるため、必ず値がある「プリンシパル」列をカウント対象に変更
+  pivot.addPivotValue(idx['プリンシパル'], SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
 
-    const header = history.getRange(1, 1, 1, lastCol).getValues()[0];
-    const idx = indexMap_(header);
-    
-    const sourceRange = history.getRange(1, 1, lastRow, lastCol);
-    const pivot = matrix.getRange(3, 1).createPivotTable(sourceRange);
-
-    pivot.addRowGroup(idx['プリンシパル']).showTotals(false);
-    pivot.addRowGroup(idx['リソースID']).showTotals(false);
-    pivot.addColumnGroup(idx['IAMロール']).showTotals(false);
-    pivot.addPivotValue(idx['ステータス'], SpreadsheetApp.PivotTableSummarizeFunction.COUNTA);
-  }
-
-  // --- ピボットの機能を保ちつつ、見た目を整えるハック ---
   SpreadsheetApp.flush();
-  
-  // UI反映のラグを考慮して少し待機
-  Utilities.sleep(2000);
   
   const maxCol = matrix.getLastColumn();
   const lastPivotRow = matrix.getLastRow();
 
   if (maxCol > 2) {
-    // 1以上の数値を「○」に見せるフォーマット
     matrix.getRange(1, 1, lastPivotRow, maxCol).setNumberFormat('"○";"";"";@');
     
-    // ヘッダー行などの簡易的な装飾
-    matrix.getRange(3, 3, 2, maxCol - 2).setBackground('#4b746c').setFontColor('white').setFontStyle('italic');
-    matrix.getRange(3, 1, 2, 2).setBackground('#f3f3f3').setFontColor('black').setFontStyle('italic');
+    // ヘッダーの装飾と折り返し設定
+    const headerRange = matrix.getRange(3, 3, 2, maxCol - 2);
+    headerRange.setBackground('#4b746c').setFontColor('white').setFontStyle('italic').setWrap(true);
     
-    // 中央揃え
+    matrix.getRange(3, 1, 2, 2).setBackground('#f3f3f3').setFontColor('black').setFontStyle('italic');
     matrix.getRange(1, 1, lastPivotRow, maxCol).setHorizontalAlignment('center').setVerticalAlignment('middle');
     matrix.getRange(1, 1, lastPivotRow, 2).setHorizontalAlignment('left');
-
-    // 列幅の調整
+    
+    // 列幅の調整（C列以降を固定幅に）
     matrix.setColumnWidth(1, 250);
     matrix.setColumnWidth(2, 200);
+    for (let c = 3; c <= maxCol; c++) {
+      matrix.setColumnWidth(c, 130);
+    }
 
-    // 交互の背景色
     if (lastPivotRow >= 5) {
-      const dataRange = matrix.getRange(5, 1, lastPivotRow - 4, maxCol);
-      dataRange.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+      const dataRangeBanding = matrix.getRange(5, 1, lastPivotRow - 4, maxCol);
+      dataRangeBanding.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
     }
   }
 }
