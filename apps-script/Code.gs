@@ -783,17 +783,20 @@ function refreshIamMatrixPivotFromHistory() {
     
     // ヘッダーの装飾と折り返し設定
     const headerRange = matrix.getRange(3, 3, 2, maxCol - 2);
-    headerRange.setBackground('#4b746c').setFontColor('white').setFontStyle('italic').setWrap(true);
+    headerRange.setBackground('#4b746c').setFontColor('white').setFontStyle('italic');
+    // 3行目は横書きのまま、4行目（ロール名）のみ縦書き（90度回転）にする
+    matrix.getRange(4, 3, 1, maxCol - 2).setTextRotation(90);
     
     matrix.getRange(3, 1, 2, 2).setBackground('#f3f3f3').setFontColor('black').setFontStyle('italic');
     matrix.getRange(1, 1, lastPivotRow, maxCol).setHorizontalAlignment('center').setVerticalAlignment('middle');
     matrix.getRange(1, 1, lastPivotRow, 2).setHorizontalAlignment('left');
+    matrix.getRange(3, 3).setHorizontalAlignment('left');
     
-    // 列幅の調整（C列以降を固定幅に）
-    matrix.setColumnWidth(1, 250);
-    matrix.setColumnWidth(2, 200);
+    // 列幅の調整
+    matrix.setColumnWidth(1, 400);
+    matrix.setColumnWidth(2, 160);
     for (let c = 3; c <= maxCol; c++) {
-      matrix.setColumnWidth(c, 130);
+      matrix.setColumnWidth(c, 35);
     }
 
     if (lastPivotRow >= 5) {
