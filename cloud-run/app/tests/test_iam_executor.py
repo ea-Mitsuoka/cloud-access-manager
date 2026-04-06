@@ -52,12 +52,6 @@ def test_get_policy_project(mock_discovery):
     )
 
 
-
-
-
-
-
-
 @patch("app.iam_executor.discovery")
 def test_get_policy_unsupported(mock_discovery):
     """サポートされていないリソースタイプの場合に_get_policyがValueErrorを送出するかのテスト。
@@ -87,12 +81,6 @@ def test_set_policy_project(mock_discovery):
     mock_service.projects().setIamPolicy.assert_called_with(
         resource="projects/my-project", body={"policy": policy}
     )
-
-
-
-
-
-
 
 
 @patch("app.iam_executor.discovery")

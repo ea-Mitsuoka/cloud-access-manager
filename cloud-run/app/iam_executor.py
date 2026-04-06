@@ -153,7 +153,9 @@ class IamExecutor:
         """
         if resource_name.startswith("projects/"):
             return "projects", resource_name.split("/", 1)[1]
-        raise ValueError(f"unsupported resource_name format (only projects are allowed): {resource_name}")
+        raise ValueError(
+            f"unsupported resource_name format (only projects are allowed): {resource_name}"
+        )
 
     def _get_policy(self, resource: str) -> dict[str, Any]:
         """

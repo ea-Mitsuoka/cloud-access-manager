@@ -89,20 +89,3 @@ def test_org_mode_invalid_project(org_validator):
 def test_org_mode_unresolved_project(org_validator):
     """組織モード：解決できないプロジェクトのテスト。"""
     assert org_validator.validate_resource_name("projects/proj-unresolved") is not None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
