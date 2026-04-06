@@ -78,11 +78,12 @@ SELECT
   req.ticket_ref,
   req.request_reason,
   CASE
-    WHEN req.status = 'APPROVED' AND ex.ex.result = 'SUCCESS' THEN '有効'
-    WHEN req.status = 'APPROVED' AND ex.ex.result IN ('FAILED', 'SKIPPED') THEN 'プロビジョニング中'
     WHEN req.status = 'APPROVED' THEN '承認済'
     WHEN req.status = 'REJECTED' THEN '却下'
-    WHEN req.status = 'CANCELLED' THEN '無効化／削除済'
+    WHEN req.status = 'CANCELLED' THEN '取消'
+    WHEN req.status = 'REVOKED' THEN '削除済'
+    WHEN req.status = 'REVOKED_ALREADY_GONE' THEN '削除済(手動)'
+    WHEN req.status = 'REVOKE_FAILED' THEN '剥奪失敗'
     ELSE '申請中'
   END AS status_ja,
   req.approved_at,

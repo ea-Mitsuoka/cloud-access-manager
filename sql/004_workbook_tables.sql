@@ -77,15 +77,13 @@ CLUSTER BY resource_id, principal_email, iam_role;
 -- Initial status master rows (idempotent via MERGE).
 MERGE `your_project.your_dataset.iam_status_master` T
 USING (
-  SELECT '申請中' AS status_ja, 'PENDING' AS status_code, '利用者がアクセスを申請した状態' AS description, 10 AS sort_order UNION ALL
-  SELECT '承認済', 'APPROVED', '承認は出たがまだプロビジョニング前', 60 UNION ALL
-  SELECT '却下', 'REJECTED', '明確に拒否された状態', 50 UNION ALL
-  SELECT '取消', 'CANCELLED', '申請者によってキャンセル', 55 UNION ALL
-  SELECT 'プロビジョニング中', 'PROVISIONING', '付与処理中', 70 UNION ALL
-  SELECT '有効', 'ACTIVE', '実際にアクセス可能な状態', 80 UNION ALL
-  SELECT '無効化／削除済', 'REVOKED', 'アクセス取り消し完了', 120 UNION ALL
-  SELECT '期限切れ', 'EXPIRED', 'TTL到達で自動無効化', 130 UNION ALL
-  SELECT '実行失敗', 'REVOKE_FAILED', '剥奪失敗', 140
+  SELECT '申請中' AS status_ja, 'PENDING' AS status_code, '申請直後の承認待ち状態' AS description, 10 AS sort_order UNION ALL
+  SELECT '承認済' AS status_ja, 'APPROVED' AS status_code, '承認され権限が付与された状態' AS description, 20 AS sort_order UNION ALL
+  SELECT '却下' AS status_ja, 'REJECTED' AS status_code, '承認者により拒否された状態' AS description, 30 AS sort_order UNION ALL
+  SELECT '取消' AS status_ja, 'CANCELLED' AS status_code, '申請者により取り消された状態' AS description, 40 AS sort_order UNION ALL
+  SELECT '削除済' AS status_ja, 'REVOKED' AS status_code, '期間満了等で自動剥奪された状態' AS description, 50 AS sort_order UNION ALL
+  SELECT '削除済(手動)' AS status_ja, 'REVOKED_ALREADY_GONE' AS status_code, '剥奪前にGCPから手動削除されていた状態' AS description, 60 AS sort_order UNION ALL
+  SELECT '剥奪失敗' AS status_ja, 'REVOKE_FAILED' AS status_code, '自動剥奪に失敗した状態' AS description, 70 AS sort_order
 ) S
 ON T.status_ja = S.status_ja
 WHEN MATCHED THEN

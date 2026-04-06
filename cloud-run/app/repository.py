@@ -667,7 +667,7 @@ class Repository:
               WHEN COALESCE(request_type, 'GRANT') != 'REVOKE' THEN
                 CASE
                   WHEN status = 'APPROVED' AND exists_now = FALSE AND approved_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'APPROVED_NOT_APPLIED'
-                  WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE', 'EXPIRED') AND exists_now = TRUE AND updated_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'REJECTED_BUT_EXISTS'
+                  WHEN status IN ('REJECTED', 'CANCELLED', 'REVOKED', 'REVOKED_ALREADY_GONE') AND exists_now = TRUE AND updated_at < TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR) THEN 'REJECTED_BUT_EXISTS'
                   WHEN status = 'APPROVED' AND expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP() AND exists_now = TRUE THEN 'EXPIRED_BUT_EXISTS'
                   WHEN (status IS NULL OR status = 'PENDING') AND exists_now = TRUE THEN 'UNMANAGED_BINDING'
                   ELSE NULL
