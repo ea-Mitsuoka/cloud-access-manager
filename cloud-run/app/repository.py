@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -428,6 +429,20 @@ class Repository:
 
             if not snap or snap.get("status") == new_status:
                 continue
+
+            # 承認者のみが APPROVED/REJECTED にステータス変更できる認可制御
+            approver = snap.get("approver_email")
+            if (
+                new_status in ("APPROVED", "REJECTED")
+                and actor_source != "SYSTEM_BATCH"
+            ):
+                if approver and actor_email.lower() != str(approver).lower():
+                    logging.warning(
+                        f"Unauthorized status update attempt: User {actor_email} "
+                        f"tried to update request {req_id} to {new_status}, "
+                        f"but approver is {approver}."
+                    )
+                    continue
 
             history_id = str(uuid.uuid4())
             history_rows.append(
