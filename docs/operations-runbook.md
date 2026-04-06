@@ -402,6 +402,7 @@ gcloud scheduler jobs describe iam-policy-collection-daily --location "$(grep '^
 gcloud scheduler jobs describe iam-reconciliation-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-revoke-expired-permissions-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
 gcloud scheduler jobs describe iam-bindings-history-update-daily --location "$(grep '^REGION=' ../saas.env | cut -d= -f2)" --project "$(grep '^TOOL_PROJECT_ID=' ../saas.env | cut -d= -f2)"
+gcloud scheduler jobs describe iam-role-discovery-daily --location "$(grep \'^REGION=\' ../saas.env | cut -d= -f2)" --project "$(grep \'^TOOL_PROJECT_ID=\' ../saas.env | cut -d= -f2)"
 ```
 
 ### 8.7 障害時の一次切り分け
@@ -574,3 +575,19 @@ gcloud artifacts repositories set-cleanup-policies iam-access-repo --project="YO
 
 **2. BigQuery の長期保存（自動適用）**
 監査ログは永遠に追記されていきますが、90日以上更新されないデータは自動的に「長期保存ストレージ」として料金が半額になるため、明示的なデータ削除（パージ）処理は不要です。
+
+## 14. IAMロールマスタの運用（Human-in-the-Loop）
+
+本システムは、未知のIAMロールを検知すると毎朝のバッチ (`iam-role-discovery-daily`) でGemini APIを呼び出し、日本語訳を自動生成して `iam_role_master` に登録します。 [cite: 702, 713]
+
+運用担当者は定期的に（例：月1回）以下の手順でAIの翻訳結果をレビューし、必要に応じて修正してください。この「人間によるレビューと修正」を前提とした運用設計（Human-in-the-Loop）により、運用の省力化と翻訳精度の両立を実現しています。 [cite: 522]
+
+1. BigQueryコンソールを開き、`iam_role_master` テーブルを確認します。 [cite: 523]
+1. `is_auto_translated = TRUE` となっているレコードが、AIによって自動翻訳されたまま未確認のロールです。
+1. 翻訳内容（`role_name_ja`）に違和感がある場合、または公式な名称に固定したい場合は、以下のSQLで手動修正してください。 [cite: 530]
+
+```sql
+UPDATE `YOUR_PROJECT.YOUR_DATASET.iam_role_master`
+SET role_name_ja = '正しい日本語名', is_auto_translated = FALSE, updated_at = CURRENT_TIMESTAMP()
+WHERE role_id = 'roles/target.role';
+```

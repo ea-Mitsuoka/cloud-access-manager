@@ -809,3 +809,73 @@ def _permission_hint(job_type: str) -> str:
             "executor SA and verify cloudidentity.googleapis.com is enabled."
         )
     return "Verify IAM permissions for this collection job."
+
+
+@app.post("/jobs/discover-iam-roles")
+def discover_iam_roles():
+    """未知のIAMロールを検知し、Geminiで日本語訳を生成してマスタに登録するジョブ。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
+    job_type = "IAM_ROLE_DISCOVERY"
+
+    try:
+        unknown_roles = repo.get_unknown_roles()
+        inserted_count = 0
+        if unknown_roles:
+            from .role_translator import translate_roles_with_gemini
+
+            translated_map = translate_roles_with_gemini(PROJECT_ID, unknown_roles)
+
+            roles_to_insert = []
+            for role in unknown_roles:
+                ja_name = translated_map.get(role)
+                roles_to_insert.append(
+                    {
+                        "role_id": role,
+                        "role_name_ja": ja_name,
+                        "is_auto_translated": True if ja_name else False,
+                    }
+                )
+            inserted_count = repo.insert_role_master(roles_to_insert)
+
+        repo.insert_pipeline_job_report(
+            execution_id=execution_id,
+            job_type=job_type,
+            result="SUCCESS",
+            error_code=None,
+            error_message=None,
+            hint=None,
+            counts={
+                "discovered_roles": len(unknown_roles),
+                "inserted_roles": inserted_count,
+            },
+            details={"note": "Roles auto-translated by Gemini"},
+        )
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": "SUCCESS",
+                "inserted": inserted_count,
+            }
+        )
+    except Exception as exc:
+        report = _build_collection_error_report(
+            job_type=job_type, execution_id=execution_id, exc=exc
+        )
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
+        repo.insert_pipeline_job_report(**report_for_db)
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )

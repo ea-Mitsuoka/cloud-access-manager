@@ -88,6 +88,7 @@ SELECT
   p.principal_email AS `プリンシパル`,
   p.principal_type AS `種別`,
   p.iam_role AS `IAMロール`,
+  COALESCE(rm.role_name_ja, REGEXP_REPLACE(p.iam_role, r'^roles/', '')) AS `表示用ロール名`,
   p.iam_condition AS `IAM_Condition`,
   p.ticket_ref AS `申請チケット番号`,
   p.request_reason AS `申請理由_用途`,
@@ -106,6 +107,8 @@ LEFT JOIN `your_project.your_dataset.iam_access_requests` AS r
   ON p.request_id = r.request_id
 LEFT JOIN `your_project.your_dataset.iam_status_master` AS sm
   ON r.status = sm.status_code
+LEFT JOIN `your_project.your_dataset.iam_role_master` AS rm
+  ON p.iam_role = rm.role_id
 LEFT JOIN LatestChangeLog AS lcl
   ON p.request_id = lcl.request_id
 WHERE p.execution_id = (SELECT execution_id FROM LatestSnapshot);

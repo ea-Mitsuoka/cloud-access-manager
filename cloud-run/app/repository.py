@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 import json
 import logging
 from datetime import datetime, timezone
@@ -395,7 +396,6 @@ class Repository:
         if not updates:
             return []
 
-        import uuid
         from datetime import datetime, timezone
         from google.cloud import bigquery
 
@@ -838,3 +838,38 @@ class Repository:
         )
         job.result()
         return job.num_dml_affected_rows or 0
+
+    @property
+    def role_master_table(self) -> str:
+        """IAMロールマスタテーブルの完全なテーブルID。"""
+        return f"{self._project_id}.{self._dataset_id}.iam_role_master"
+
+    def get_unknown_roles(self) -> list[str]:
+        """マスタに存在しない未知のIAMロールIDのリストを取得します。"""
+        sql = f"""
+        SELECT DISTINCT role
+        FROM `{self.iam_policy_permissions_table}`
+        WHERE role NOT IN (SELECT role_id FROM `{self.role_master_table}`)
+        """
+        rows = self._client.query(sql).result()
+        return [row["role"] for row in rows if row["role"]]
+
+    def insert_role_master(self, roles: list[dict[str, Any]]) -> int:
+        """IAMロールマスタに新しいロールを追加します。"""
+        if not roles:
+            return 0
+        now = datetime.now(timezone.utc).isoformat()
+        payload = []
+        for r in roles:
+            payload.append(
+                {
+                    "role_id": r["role_id"],
+                    "role_name_ja": r.get("role_name_ja"),
+                    "is_auto_translated": r.get("is_auto_translated", False),
+                    "updated_at": now,
+                }
+            )
+        errors = self._client.insert_rows_json(self.role_master_table, payload)
+        if errors:
+            raise RuntimeError(f"failed to insert role master: {errors}")
+        return len(payload)

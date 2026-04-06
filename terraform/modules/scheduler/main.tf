@@ -159,3 +159,31 @@ resource "google_cloud_scheduler_job" "iam_policy_collection_daily" {
     }
   }
 }
+
+resource "google_cloud_scheduler_job" "iam_role_discovery_daily" {
+  name             = "iam-role-discovery-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  # 既存インフラの変数を汚さないよう、不整合検知(04:00)の後の 04:30 AM をハードコード指定
+  schedule         = "30 4 * * *"
+  time_zone        = var.scheduler_time_zone
+  attempt_deadline = "900s"
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    uri         = "${var.cloud_run_uri}/jobs/discover-iam-roles"
+    http_method = "POST"
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    body = base64encode("{}")
+
+    oidc_token {
+      service_account_email = var.scheduler_invoker_service_account_email
+      audience              = var.cloud_run_uri
+    }
+  }
+}

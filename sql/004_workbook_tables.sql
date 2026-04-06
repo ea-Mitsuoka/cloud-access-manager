@@ -96,3 +96,11 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
   INSERT (status_ja, status_code, description, sort_order, is_active)
   VALUES (S.status_ja, S.status_code, S.description, S.sort_order, TRUE);
+
+CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_role_master` (
+  role_id STRING NOT NULL,
+  role_name_ja STRING,
+  is_auto_translated BOOL DEFAULT FALSE,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
+)
+CLUSTER BY role_id;
