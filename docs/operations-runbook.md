@@ -95,21 +95,21 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccou
 
 # organization_idを使う場合のみ
 if [[ -n "$ORG_ID" ]]; then
-  gcloud organizations add-iam-policy-binding "$ORG_ID" 
-    --member "serviceAccount:$EXECUTOR_SA" 
-    --role roles/resourcemanager.projectIamAdmin
-  gcloud organizations add-iam-policy-binding "$ORG_ID" 
-    --member "serviceAccount:$EXECUTOR_SA" 
+  gcloud organizations add-iam-policy-binding "$ORG_ID" \
+    --member "serviceAccount:$EXECUTOR_SA" \
     --role roles/browser
-  gcloud organizations add-iam-policy-binding "$ORG_ID" 
-    --member "serviceAccount:$EXECUTOR_SA" 
+  gcloud organizations add-iam-policy-binding "$ORG_ID" \
+    --member "serviceAccount:$EXECUTOR_SA" \
+    --role roles/resourcemanager.projectIamAdmin
+  gcloud organizations add-iam-policy-binding "$ORG_ID" \
+    --member "serviceAccount:$EXECUTOR_SA" \
     --role roles/cloudasset.viewer
 else
-  gcloud projects add-iam-policy-binding "$MANAGED_PROJECT_ID" 
-    --member "serviceAccount:$EXECUTOR_SA" 
+  gcloud projects add-iam-policy-binding "$MANAGED_PROJECT_ID" \
+    --member "serviceAccount:$EXECUTOR_SA" \
     --role roles/resourcemanager.projectIamAdmin
-  gcloud projects add-iam-policy-binding "$MANAGED_PROJECT_ID" 
-    --member "serviceAccount:$EXECUTOR_SA" 
+  gcloud projects add-iam-policy-binding "$MANAGED_PROJECT_ID" \
+    --member "serviceAccount:$EXECUTOR_SA" \
     --role roles/cloudasset.viewer
 fi
 ```
@@ -125,8 +125,8 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 1. **CI用のサービスアカウント作成:**
 
    ```bash
-   gcloud iam service-accounts create iam-access-ci-sa
-     --project="${TOOL_PROJECT_ID}"
+   gcloud iam service-accounts create iam-access-ci-sa \
+     --project="${TOOL_PROJECT_ID}" \
      --display-name="IAM Access CI/CD"
    ```
 
@@ -134,21 +134,21 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
 
    ```bash
    # プールの作成
-   gcloud iam workload-identity-pools create "github-pool"
-     --project="${TOOL_PROJECT_ID}"
-     --location="global"
+   gcloud iam workload-identity-pools create "github-pool" \
+     --project="${TOOL_PROJECT_ID}" \
+     --location="global" \
      --display-name="GitHub Actions Pool"
 
    # プールのIDを取得
    WORKLOAD_IDENTITY_POOL_ID=$(gcloud iam workload-identity-pools describe "github-pool" --project="${TOOL_PROJECT_ID}" --location="global" --format="value(name)")
 
    # プロバイダの作成
-   gcloud iam workload-identity-pools providers create-oidc "github-provider"
-     --project="${TOOL_PROJECT_ID}"
-     --location="global"
-     --workload-identity-pool="github-pool"
-     --display-name="GitHub Actions Provider"
-     --issuer-uri="https://token.actions.githubusercontent.com"
+   gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+     --project="${TOOL_PROJECT_ID}" \
+     --location="global" \
+     --workload-identity-pool="github-pool" \
+     --display-name="GitHub Actions Provider" \
+     --issuer-uri="https://token.actions.githubusercontent.com" \
      --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
    ```
 
@@ -159,9 +159,9 @@ CIジョブがGoogle Cloudリソースを操作するために、パスワード
    REPO="your-github-organization/your-repository-name" # 例: "google-cloud-japan/cloud-access-manager"
    CI_SA_EMAIL="iam-access-ci-sa@${TOOL_PROJECT_ID}.iam.gserviceaccount.com"
 
-   gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}"
-     --project="${TOOL_PROJECT_ID}"
-     --role="roles/iam.workloadIdentityUser"
+   gcloud iam service-accounts add-iam-policy-binding "${CI_SA_EMAIL}" \
+     --project="${TOOL_PROJECT_ID}" \
+     --role="roles/iam.workloadIdentityUser" \
      --member="principalSet://iam.googleapis.com/${WORKLOAD_IDENTITY_POOL_ID}/subject/repo/${REPO}:ref:refs/heads/main"
    ```
 
@@ -190,9 +190,9 @@ CIパイプラインは、`iam-access-repo` という名前のArtifact Registry�
 > TerraformによるCloud Runのデプロイには、事前にビルドされたDockerイメージのURLが必要です。もしArtifact Registryの作成をTerraformに含めると、「イメージをプッシュする先がない」と「Cloud Runをデプロイするイメージがない」という鶏と卵のデッドロックに陥るため、意図的にTerraformの管理外としています。
 
 ```bash
-gcloud artifacts repositories create iam-access-repo
-  --repository-format=docker
-  --location=${REGION}
+gcloud artifacts repositories create iam-access-repo \
+  --repository-format=docker \
+  --location=${REGION} \
   --project=${TOOL_PROJECT_ID}
 ```
 
@@ -324,8 +324,8 @@ gsutil versioning set on gs://${TFSTATE_BUCKET}
 ```bash
 TOOL_PROJECT_ID="$(grep '^TOOL_PROJECT_ID=' saas.env | cut -d= -f2)"
 
-gcloud iam service-accounts create iam-access-executor
-  --project "$TOOL_PROJECT_ID"
+gcloud iam service-accounts create iam-access-executor \
+  --project "$TOOL_PROJECT_ID" \
   --display-name "IAM Access Executor"
 ```
 
