@@ -1230,3 +1230,86 @@ function menuRetryFailedExecutions_() {
     ui.alert(`再実行中にエラーが発生しました: ${e.message}`);
   }
 }
+
+
+// =========================================================================
+// BigQueryから直接データを取得し、指定シートに展開する汎用関数
+// =========================================================================
+function refreshSheetFromBigQuery_(sheetName, viewName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const props = getProps_();
+  
+  // BigQueryから直接取得
+  const sql = "SELECT * FROM `" + props.projectId + "." + props.datasetId + "." + viewName + "`";
+  const req = { query: sql, useLegacySql: false, location: props.location };
+  
+  let bqResult = BigQuery.Jobs.query(req, props.projectId);
+  let jobId = bqResult.jobReference && bqResult.jobReference.jobId;
+  
+  while (!bqResult.jobComplete && jobId) {
+    Utilities.sleep(500);
+    bqResult = BigQuery.Jobs.getQueryResults(props.projectId, jobId, { location: props.location });
+  }
+  if (bqResult.status && bqResult.status.errorResult) {
+    throw new Error(`BigQuery query failed for ${viewName}: ` + JSON.stringify(bqResult.status.errorResult));
+  }
+
+  // シートの準備
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  } else {
+    sheet.clear();
+    sheet.getBandings().forEach(b => b.remove());
+  }
+
+  // データが0件でも、スキーマ情報からヘッダー（カラム名）は取得する
+  const headers = ((bqResult.schema || {}).fields || []).map(f => f.name);
+  const values = [headers];
+
+  const rows = bqResult.rows || [];
+  if (rows.length === 0) {
+    const emptyRow = new Array(headers.length).fill('');
+    emptyRow[0] = 'データがありません';
+    values.push(emptyRow);
+  } else {
+    rows.forEach(row => {
+      values.push((row.f || []).map(cell => cell.v));
+    });
+  }
+
+  // 一括書き込みと簡易フォーマット
+  sheet.getRange(1, 1, values.length, values[0].length).setValues(values);
+  sheet.getRange(1, 1, 1, headers.length).setBackground('#f3f3f3').setFontWeight('bold');
+  sheet.getRange(1, 1, 1, headers.length).setBackground('#4b746c').setFontColor('white').setFontWeight('normal');
+  
+  // フィルターが存在しなければ追加
+  if (!sheet.getFilter()) {
+    sheet.getDataRange().createFilter();
+  }
+  SpreadsheetApp.flush();
+}
+
+// -------------------------------------------------------------------------
+// 各シートの更新用関数（カスタムメニュー等から呼び出し可能）
+// -------------------------------------------------------------------------
+function refreshGroupsSheet() {
+  // ※ビュー名は実際のBigQuery環境に合わせて適宜修正してください
+  refreshSheetFromBigQuery_('グループ', 'v_sheet_group');
+}
+
+function refreshGroupMembersSheet() {
+  refreshSheetFromBigQuery_('グループメンバー', 'v_sheet_group_members');
+}
+
+function refreshResourcesSheet() {
+  refreshSheetFromBigQuery_('リソース', 'v_sheet_resource');
+}
+
+// 3つのマスターシートを一括更新する関数
+function refreshAllMasterData() {
+  refreshGroupsSheet();
+  refreshGroupMembersSheet();
+  refreshResourcesSheet();
+  SpreadsheetApp.getUi().alert("✅ マスターデータ（グループ・メンバー・リソース）の最新化が完了しました。");
+}
