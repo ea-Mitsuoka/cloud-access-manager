@@ -54,6 +54,9 @@ class ScopeValidator:
             str | None: リソースがスコープ外の場合、エラーメッセージを返します。
                         スコープ内の場合はNoneを返します。
         """
+        if not resource_name.startswith("projects/"):
+            return "resource_name must start with projects/ (folder/org IAM changes are disabled by design)"
+
         if self._config.target_org_id == "":
             # Project-only mode: only allow the target project
             if resource_name != f"projects/{self._config.target_project_id}":
@@ -65,20 +68,10 @@ class ScopeValidator:
             return None
 
         # Organization mode
-        if resource_name.startswith("projects/"):
-            project_id = resource_name.split("/", 1)[1].strip()
-            if not project_id:
-                return "resource_name must contain project id"
-            org_id = self._get_project_org_id(project_id)
-        elif resource_name.startswith("folders/"):
-            org_id = self._get_folder_org_id(resource_name)
-        elif resource_name.startswith("organizations/"):
-            org_id = resource_name.split("/", 1)[1].strip()
-        else:
-            return (
-                "resource_name must start with projects/, folders/, or "
-                "organizations/"
-            )
+        project_id = resource_name.split("/", 1)[1].strip()
+        if not project_id:
+            return "resource_name must contain project id"
+        org_id = self._get_project_org_id(project_id)
 
         if org_id is None:
             return "failed to resolve organization for resource: {}".format(

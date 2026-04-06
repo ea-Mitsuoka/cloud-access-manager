@@ -91,31 +91,18 @@ def test_org_mode_unresolved_project(org_validator):
     assert org_validator.validate_resource_name("projects/proj-unresolved") is not None
 
 
-def test_org_mode_valid_folder(org_validator):
-    """組織モード：有効なフォルダのテスト。"""
-    assert org_validator.validate_resource_name("folders/folder-in-org") is None
 
 
-def test_org_mode_invalid_folder(org_validator):
-    """組織モード：無効なフォルダのテスト。"""
-    assert org_validator.validate_resource_name("folders/folder-out-of-org") is not None
 
 
-def test_org_mode_unresolved_folder(org_validator):
-    """組織モード：解決できないフォルダのテスト。"""
-    assert org_validator.validate_resource_name("folders/folder-unresolved") is not None
 
 
-def test_org_mode_valid_organization(org_validator):
-    """組織モード：有効な組織のテスト。"""
-    assert org_validator.validate_resource_name("organizations/11111") is None
 
 
-def test_org_mode_invalid_organization(org_validator):
-    """組織モード：無効な組織のテスト。"""
-    assert org_validator.validate_resource_name("organizations/22222") is not None
 
 
-def test_org_mode_unsupported_resource_type(org_validator):
-    """組織モード：サポートされていないリソースタイプのテスト。"""
-    assert org_validator.validate_resource_name("buckets/my-bucket") is not None
+
+
+
+
+

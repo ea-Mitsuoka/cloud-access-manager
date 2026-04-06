@@ -153,11 +153,7 @@ class IamExecutor:
         """
         if resource_name.startswith("projects/"):
             return "projects", resource_name.split("/", 1)[1]
-        if resource_name.startswith("folders/"):
-            return "folders", resource_name.split("/", 1)[1]
-        if resource_name.startswith("organizations/"):
-            return "organizations", resource_name.split("/", 1)[1]
-        raise ValueError(f"unsupported resource_name format: {resource_name}")
+        raise ValueError(f"unsupported resource_name format (only projects are allowed): {resource_name}")
 
     def _get_policy(self, resource: str) -> dict[str, Any]:
         """
@@ -180,16 +176,7 @@ class IamExecutor:
                 .getIamPolicy(resource=resource, body=body)
                 .execute()
             )
-        elif resource.startswith("folders/"):
-            return (
-                self._crm.folders().getIamPolicy(resource=resource, body=body).execute()
-            )
-        elif resource.startswith("organizations/"):
-            return (
-                self._crm.organizations()
-                .getIamPolicy(resource=resource, body=body)
-                .execute()
-            )
+
         else:
             raise ValueError(
                 "Unsupported resource type for getIamPolicy: {}".format(resource)
@@ -216,16 +203,7 @@ class IamExecutor:
                 .setIamPolicy(resource=resource, body=body)
                 .execute()
             )
-        elif resource.startswith("folders/"):
-            return (
-                self._crm.folders().setIamPolicy(resource=resource, body=body).execute()
-            )
-        elif resource.startswith("organizations/"):
-            return (
-                self._crm.organizations()
-                .setIamPolicy(resource=resource, body=body)
-                .execute()
-            )
+
         else:
             raise ValueError(
                 "Unsupported resource type for setIamPolicy: {}".format(resource)

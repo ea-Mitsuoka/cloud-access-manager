@@ -4,11 +4,11 @@
 
 本システムは、`saas.env`の`organization_id`の設定に応じて、2つの主要な運用モードで動作します。
 
-### 1.1 Organizationモード
+### 1.1 Organizationモード(組織配下全プロジェクトモード)
 
 - **設定:** `organization_id`にGCP組織のID（例: `123456789012`）を設定します。
 - **動作:** システムは組織全体を管理対象とします。フォルダ階層を含むリソースの棚卸しや、組織全体のIAMポリシーの変更、Googleグループの収集が可能です。
-- **権限:** 実行サービスアカウントには、組織レベルでの複数のIAMロール（`roles/resourcemanager.projectIamAdmin`, `roles/resourcemanager.folderAdmin`, `roles/cloudasset.viewer`など）の付与が必要です。
+- **権限:** 実行サービスアカウントには、組織レベルでの複数のIAMロール（ `roles/browser`, `roles/resourcemanager.projectIamAdmin`, `roles/cloudasset.viewer`など）の付与が必要です。
 
 ### 1.2 Project-onlyモード
 
@@ -40,8 +40,8 @@ ______________________________________________________________________
   - `roles/resourcemanager.projectIamAdmin` on `managed_project_id`（単一プロジェクトのみ）
   - `roles/cloudasset.viewer` on `managed_project_id`（Folder/Project収集）
 - `organization_id != ""` の場合:
+  - `roles/browser` on managed organization（配下のプロジェクト判別に必要）
   - `roles/resourcemanager.projectIamAdmin` on managed organization（配下プロジェクトを許可）
-  - `roles/browser` on managed organization（配下判定に必要）
   - `roles/cloudasset.viewer` on managed organization（Folder/Project収集）
 
 **Googleグループ収集の前提:**
@@ -67,7 +67,7 @@ ______________________________________________________________________
 **VPC-SC有効化に特有の権限 (組織レベルで必要):**
 
 - `roles/accesscontextmanager.policyAdmin`
-- `roles/resourcemanager.organizationAdmin`
+- `roles/resourcemanager.organizationViewer`
 
 ### 2.3 ロール付与コマンド例
 
@@ -87,7 +87,7 @@ gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "$TF_PRINCIPA
 
 # (VPC-SC有効化時のみ) Terraform実行主体に組織レベルの権限を付与
 # gcloud organizations add-iam-policy-binding "$ORG_ID" --member "$TF_PRINCIPAL" --role roles/accesscontextmanager.policyAdmin
-# gcloud organizations add-iam-policy-binding "$ORG_ID" --member "$TF_PRINCIPAL" --role roles/resourcemanager.organizationAdmin
+# gcloud organizations add-iam-policy-binding "$ORG_ID" --member "$TF_PRINCIPAL" --role roles/resourcemanager.organizationViewer
 
 # Cloud Run実行サービスアカウント
 gcloud projects add-iam-policy-binding "$TOOL_PROJECT_ID" --member "serviceAccount:$EXECUTOR_SA" --role roles/bigquery.jobUser
@@ -274,7 +274,7 @@ Terraform適用後、GCPコンソールの **[Monitoring] > [アラート]** に
 - **デフォルトは無効:** `enable_vpc_sc` はデフォルトで `false` のため、既存環境への影響はありません。
 - **必須権限:** VPC-SCは組織リソースのため、Terraform実行主体には**組織レベル**で以下のIAMロールが**両方とも必要**です。権限がない場合、`terraform apply`は失敗します。対話形式のデプロイスクリプト `scripts/bootstrap-deploy.sh` は、VPC-SC有効化の際にこの権限付与を支援します。
   - **Access Context Manager 管理者 (`roles/accesscontextmanager.policyAdmin`)**
-  - **組織管理者 (`roles/resourcemanager.organizationAdmin`)**
+  - **組織閲覧者 (`roles/resourcemanager.organizationViewer`)**
 
 **VPC-SCとGoogle Apps Script (GAS) の致命的な相性に関する重要事項:**
 もし `enable_vpc_sc` フラグを `true` にしてVPC-SCを有効化した場合、システムの心臓部であるGoogle Apps Script (GAS) からCloud RunのバックエンドAPI (`/api/requests`, `/execute` 等) へのOIDC通信は、VPC-SCの境界に弾かれて完全に遮断（403エラー）されます。

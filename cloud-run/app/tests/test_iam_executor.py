@@ -32,11 +32,6 @@ def test_parse_resource():
         "projects",
         "my-project",
     )
-    assert IamExecutor._parse_resource("folders/12345") == ("folders", "12345")
-    assert IamExecutor._parse_resource("organizations/67890") == (
-        "organizations",
-        "67890",
-    )
     with pytest.raises(ValueError, match="unsupported resource_name format"):
         IamExecutor._parse_resource("buckets/my-bucket")
 
@@ -57,36 +52,10 @@ def test_get_policy_project(mock_discovery):
     )
 
 
-@patch("app.iam_executor.discovery")
-def test_get_policy_folder(mock_discovery):
-    """_get_policyがフォルダに対して正しく呼び出されるかのテスト。
-
-    Args:
-        mock_discovery: discovery.buildのモック。
-    """
-    mock_service = MagicMock()
-    mock_discovery.build.return_value = mock_service
-    executor = IamExecutor()
-    executor._get_policy("folders/12345")
-    mock_service.folders().getIamPolicy.assert_called_with(
-        resource="folders/12345", body={"options": {"requestedPolicyVersion": 3}}
-    )
 
 
-@patch("app.iam_executor.discovery")
-def test_get_policy_organization(mock_discovery):
-    """_get_policyが組織に対して正しく呼び出されるかのテスト。
 
-    Args:
-        mock_discovery: discovery.buildのモック。
-    """
-    mock_service = MagicMock()
-    mock_discovery.build.return_value = mock_service
-    executor = IamExecutor()
-    executor._get_policy("organizations/67890")
-    mock_service.organizations().getIamPolicy.assert_called_with(
-        resource="organizations/67890", body={"options": {"requestedPolicyVersion": 3}}
-    )
+
 
 
 @patch("app.iam_executor.discovery")
@@ -120,38 +89,10 @@ def test_set_policy_project(mock_discovery):
     )
 
 
-@patch("app.iam_executor.discovery")
-def test_set_policy_folder(mock_discovery):
-    """_set_policyがフォルダに対して正しく呼び出されるかのテスト。
-
-    Args:
-        mock_discovery: discovery.buildのモック。
-    """
-    mock_service = MagicMock()
-    mock_discovery.build.return_value = mock_service
-    executor = IamExecutor()
-    policy = {"bindings": []}
-    executor._set_policy("folders/12345", policy)
-    mock_service.folders().setIamPolicy.assert_called_with(
-        resource="folders/12345", body={"policy": policy}
-    )
 
 
-@patch("app.iam_executor.discovery")
-def test_set_policy_organization(mock_discovery):
-    """_set_policyが組織に対して正しく呼び出されるかのテスト。
 
-    Args:
-        mock_discovery: discovery.buildのモック。
-    """
-    mock_service = MagicMock()
-    mock_discovery.build.return_value = mock_service
-    executor = IamExecutor()
-    policy = {"bindings": []}
-    executor._set_policy("organizations/67890", policy)
-    mock_service.organizations().setIamPolicy.assert_called_with(
-        resource="organizations/67890", body={"policy": policy}
-    )
+
 
 
 @patch("app.iam_executor.discovery")

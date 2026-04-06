@@ -21,7 +21,6 @@ locals {
   executor_organization_roles = [
     "roles/browser",
     "roles/cloudasset.viewer",
-    "roles/resourcemanager.folderAdmin",
     "roles/resourcemanager.projectIamAdmin",
   ]
 
