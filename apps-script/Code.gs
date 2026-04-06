@@ -11,8 +11,7 @@
  *    - GAS_INVOKER_SA_EMAIL
  *    - GEMINI_API_KEY (GeminiRoleAdvisor.gs を使う場合)
  * 3) Create installable triggers:
- *    - onFormSubmit (From spreadsheet, On form submit)
- *    - onEdit (From spreadsheet, On edit)
+ *    - refreshRequestReviewStatus_ (From spreadsheet, Time-driven)
  */
 
 const STATUS_APPROVED = 'APPROVED';
@@ -39,8 +38,10 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('棚卸し')
     .addItem('申請反映ステータス更新', 'menuRefreshRequestReviewStatus_')
-        .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
+    .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
     .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
+    .addSeparator()
+    .addItem('🔄 レビュー結果を一括送信', 'menuSubmitBulkReview_')
     .addSeparator()
     .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
@@ -50,75 +51,65 @@ function onOpen() {
 /**
  * Webアプリ(ポータル)からの申請を受け付けるエントリーポイント
  */
-function submitAccessRequest(formData) {
+function submitAccessRequest(payload) {
   const props = getProps_();
-  
-  // サーバーサイド・バリデーション (セキュリティ強化)
-  const role = String(formData.role || '').trim();
-  if (role && !role.startsWith('roles/')) {
-    throw new Error('セキュリティ違反: 「roles/」から始まる正式なロール名を指定してください。');
+  const requests = payload && payload.requests ? payload.requests : [payload];
+  if (!requests || requests.length === 0) {
+    return { success: true, count: 0 };
   }
 
-  const rawRequestType = formData.requestType;
-  const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
-  const reason = (isEmergency ? '[緊急] ' : '') + String(formData.reason || '').trim();
+  const requestGroupId = String((payload && payload.requestGroupId) || Utilities.getUuid());
+  const requestedAt = new Date().toISOString();
+  const bqRequests = [];
+  const historyEvents = [];
 
-  let expiresAt = null;
-  const expiresRaw = formData.expiresAt;
-  if (expiresRaw && expiresRaw !== '恒久' && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
-    const d = new Date(expiresRaw);
-    if (!isNaN(d.getTime())) {
-      d.setHours(23, 59, 59, 999);
-      expiresAt = d.toISOString();
+  requests.forEach(reqData => {
+    const role = String(reqData.role || '').trim();
+    if (role && !role.startsWith('roles/')) {
+      throw new Error('セキュリティ違反: 「roles/」から始まる正式なロール名を指定してください。');
     }
-  }
 
-  const requesterEmail = String(formData.requester || getActorEmail_()).trim();
+    const rawRequestType = String(reqData.requestType || '');
+    const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
+    const reason = (isEmergency ? '[緊急] ' : '') + String(reqData.reason || '').trim();
 
-  const request = {
-    request_id: Utilities.getUuid(),
-    request_type: normalizeRequestType_(rawRequestType),
-    principal_email: String(formData.principal).trim(),
-    resource_name: normalizeResourceName_(String(formData.resource)),
-    role: role,
-    reason: reason,
-    expires_at: expiresAt,
-    requester_email: requesterEmail,
-    approver_email: String(formData.approver).trim(),
-    status: STATUS_PENDING,
-    requested_at: new Date().toISOString(),
-    ticket_ref: ''
-  };
+    let expiresAt = null;
+    const expiresRaw = String(reqData.expiresAt || '');
+    if (expiresRaw && expiresRaw !== '恒久' && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
+      const d = new Date(expiresRaw);
+      if (!isNaN(d.getTime())) {
+        d.setHours(23, 59, 59, 999);
+        expiresAt = d.toISOString();
+      }
+    }
 
-  validateRequest_(request);
-  insertRequestToBigQuery_(props, request);
-  insertRequestHistoryEvent_(props, {
-    request_id: request.request_id,
-    event_type: EVENT_REQUESTED,
-    old_status: '',
-    new_status: request.status,
-    reason_snapshot: request.reason,
-    request_type: request.request_type,
-    principal_email: request.principal_email,
-    resource_name: request.resource_name,
-    role: request.role,
-    requester_email: request.requester_email,
-    approver_email: request.approver_email,
-    acted_by: requesterEmail,
-    actor_source: 'WEB_APP',
-    details_json: JSON.stringify({ source: 'web_app' })
-  });
-
-  const aiSuggestion = formData.aiSuggestion || '';
-  appendReviewSheet_(request, aiSuggestion);
-
-  if (isEmergency) {
-    updateStatusInBigQuery_(props, request.request_id, STATUS_APPROVED);
-    insertRequestHistoryEvent_(props, {
+    const requesterEmail = String(reqData.requester || getActorEmail_()).trim();
+    const request = {
+      request_group_id: String(reqData.requestGroupId || requestGroupId),
+      request_id: String(reqData.requestId || Utilities.getUuid()),
+      request_type: normalizeRequestType_(rawRequestType),
+      principal_email: String(reqData.principal || '').trim(),
+      resource_name: normalizeResourceName_(String(reqData.resource || '')),
+      role: role,
+      reason: reason,
+      expires_at: expiresAt,
+      requester_email: requesterEmail,
+      approver_email: String(reqData.approver || '').trim(),
+      status: STATUS_PENDING,
+      requested_at: requestedAt,
+      ticket_ref: '',
+      is_emergency: isEmergency,
+      ai_suggestion: String(reqData.aiSuggestion || '')
+    };
+    validateRequest_(request);
+    bqRequests.push(request);
+    historyEvents.push({
+      history_id: Utilities.getUuid(),
       request_id: request.request_id,
-      event_type: EVENT_STATUS_CHANGED,
-      old_status: STATUS_PENDING,
-      new_status: STATUS_APPROVED,
+      request_group_id: request.request_group_id,
+      event_type: EVENT_REQUESTED,
+      old_status: '',
+      new_status: request.status,
       reason_snapshot: request.reason,
       request_type: request.request_type,
       principal_email: request.principal_email,
@@ -126,143 +117,231 @@ function submitAccessRequest(formData) {
       role: request.role,
       requester_email: request.requester_email,
       approver_email: request.approver_email,
-      acted_by: 'SYSTEM_AUTO_APPROVE',
-      actor_source: 'SYSTEM',
-      details_json: JSON.stringify({ note: 'Break-glass auto approval' })
+      acted_by: requesterEmail,
+      actor_source: 'WEB_APP_BULK',
+      event_at: requestedAt,
+      details: { source: 'web_app_bulk' }
     });
-    callCloudRunExecute_(props, request.request_id);
-    updateSheetStatus_(request.request_id, '承認済');
-    refreshRequestReviewStatusForRequestIds_([request.request_id]);
+  });
+
+  callCloudRunApi_(props, '/api/requests/bulk', 'post', { requests: bqRequests });
+  callCloudRunApi_(props, '/api/history/bulk', 'post', { events: historyEvents });
+
+  bqRequests.forEach(req => appendReviewSheet_(req, req.ai_suggestion));
+
+  const emergencyIds = bqRequests.filter(req => req.is_emergency).map(req => req.request_id);
+  if (emergencyIds.length > 0) {
+    const updates = emergencyIds.map(id => ({ request_id: id, status: STATUS_APPROVED }));
+    callCloudRunApi_(props, '/api/requests/bulk-status', 'post', {
+      updates: updates,
+      actor_email: 'SYSTEM_AUTO_APPROVE'
+    });
+    emergencyIds.forEach(id => callCloudRunExecute_(props, id));
+    refreshRequestReviewStatusForRequestIds_(emergencyIds);
   }
 
-  return { success: true, request_id: request.request_id };
+  return {
+    success: true,
+    count: bqRequests.length,
+    request_group_id: requestGroupId
+  };
 }
 
 function handleEdit(e) {
-  const range = e.range;
-  const sheet = range.getSheet();
-  if (sheet.getName() !== REQUEST_SHEET_NAME) return;
+  // Legacy no-op: ステータス編集時の自動API実行は廃止し、
+  // メニュー「🔄 レビュー結果を一括送信」で明示実行する。
+  return;
+}
+
+function menuSubmitBulkReview_() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getRequestReviewSheet_();
+  ensureRequestReviewColumns_(sheet);
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    ui.alert('処理対象のレビュー行がありません。');
+    return;
+  }
 
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = header.indexOf('status') + 1;
-  const reqIdCol = header.indexOf('request_id');
-  if (reqIdCol < 0 || statusCol <= 0) return;
-
-  if (range.getColumn() > statusCol || range.getColumn() + range.getNumColumns() - 1 < statusCol) return;
-
-  const props = getProps_();
-  const startRow = range.getRow();
-  const numRows = range.getNumRows();
-  const rowData = sheet.getRange(startRow, 1, numRows, sheet.getLastColumn()).getValues();
   const idx = indexMap_(header);
-
-  // 1. スパム通知を防ぐため、変更対象のIDの現在のステータスをBigQueryから取得
-  const reqIdsToCheck = [];
-  for (let i = 0; i < numRows; i++) {
-    if (startRow + i === 1) continue;
-    const row = rowData[i];
-    const requestId = String(row[reqIdCol - 1] || '').trim();
-    if (requestId) reqIdsToCheck.push(requestId);
+  if (!idx.request_id || !idx.status) {
+    ui.alert('requests_review の必須カラム（request_id / status）が不足しています。');
+    return;
   }
 
-  let oldStatusMap = {};
-  if (reqIdsToCheck.length > 0) {
-    oldStatusMap = getRequestStatusesFromBQ_(props, reqIdsToCheck);
+  const rows = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const reviewRows = [];
+  rows.forEach((row, i) => {
+    const requestId = String(row[idx.request_id - 1] || '').trim();
+    const statusRaw = String(row[idx.status - 1] || '').trim();
+    if (!requestId || !statusRaw || statusRaw === '申請中') return;
+    reviewRows.push({
+      rowNumber: i + 2,
+      request_id: requestId,
+      status: normalizeStatus_(statusRaw),
+      rowData: row
+    });
+  });
+
+  if (reviewRows.length === 0) {
+    ui.alert('「申請中」以外に変更された行がありません。');
+    return;
   }
 
-  const updates = [];
-  const requestIdsToExecute = [];
-  const emailsToSend = [];
-
-  for (let i = 0; i < numRows; i++) {
-    if (startRow + i === 1) continue; // ヘッダーはスキップ
-    const row = rowData[i];
-    const requestId = String(row[reqIdCol] || '').trim();
-    const newStatusRaw = String(row[statusCol - 1] || '').trim();
-
-    if (requestId && newStatusRaw) {
-      const normalizedStatus = normalizeStatus_(newStatusRaw);
-      const oldStatus = oldStatusMap[requestId] || STATUS_PENDING;
-
-      if (normalizedStatus !== oldStatus) {
-        updates.push({ request_id: requestId, status: normalizedStatus });
-
-        if (normalizedStatus === STATUS_APPROVED) {
-          requestIdsToExecute.push(requestId);
-        }
-
-        if (normalizedStatus === STATUS_APPROVED || normalizedStatus === 'REJECTED') {
-           const requesterEmail = String(row[idx.requester_email - 1] || '');
-           if (requesterEmail) {
-             const prefillData = {
-               [FIELD_REQUEST_TYPE]: String(row[idx.request_type - 1] || ''),
-               [FIELD_PRINCIPAL]: String(row[idx.principal_email - 1] || ''),
-               [FIELD_RESOURCE]: String(row[idx.resource_name - 1] || ''),
-               [FIELD_ROLE]: String(row[idx.role - 1] || ''),
-               [FIELD_REASON]: String(row[idx.reason - 1] || ''),
-               [FIELD_APPROVER]: String(row[idx.approver_email - 1] || '')
-             };
-             emailsToSend.push({ type: normalizedStatus, prefillData: prefillData, requester: requesterEmail });
-           }
-        }
-      }
+  let rejectReason = '';
+  const hasRejected = reviewRows.some(item => item.status === 'REJECTED');
+  if (hasRejected) {
+    const prompt = ui.prompt(
+      '却下理由の入力',
+      '却下行が含まれています。監査のため却下理由を入力してください（全却下行に共通適用）。',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (prompt.getSelectedButton() !== ui.Button.OK) {
+      ui.alert('処理をキャンセルしました。');
+      return;
+    }
+    rejectReason = String(prompt.getResponseText() || '').trim();
+    if (!rejectReason) {
+      ui.alert('却下理由は必須です。');
+      return;
     }
   }
 
-  if (updates.length === 0) return;
+  const reviews = reviewRows.map(item => ({
+    request_id: item.request_id,
+    status: item.status,
+    reject_reason: item.status === 'REJECTED' ? rejectReason : ''
+  }));
 
+  const confirm = ui.alert(
+    '一括送信の確認',
+    `${reviews.length}件のレビュー結果を一括送信しますか？`,
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  const props = getProps_();
   const token = getOidcToken_(props);
   const baseUrl = props.cloudRunUrl.replace(/\/execute\/?$/, '');
   const actorEmail = getActorEmail_();
 
-  // 1. スナップショットなどの複雑な処理はすべてバックエンドに任せ、IDとステータスだけを送る
+  let result;
   try {
-    const bulkPayload = { updates: updates, actor_email: actorEmail };
-    const res = UrlFetchApp.fetch(`${baseUrl}/api/requests/bulk-status`, {
+    const res = UrlFetchApp.fetch(`${baseUrl}/api/v1/requests/bulk-review`, {
       method: 'post',
       contentType: 'application/json',
-      payload: JSON.stringify(bulkPayload),
+      payload: JSON.stringify({
+        reviews: reviews,
+        actor_email: actorEmail
+      }),
       headers: { Authorization: `Bearer ${token}` },
       muteHttpExceptions: true
     });
     if (res.getResponseCode() >= 400) {
-      console.error("Bulk update failed: " + res.getContentText());
-      return;
+      throw new Error(`Bulk review API failed (${res.getResponseCode()}): ${res.getContentText()}`);
     }
+    result = JSON.parse(res.getContentText() || '{}');
   } catch (e) {
-    console.error("Bulk API error: " + e);
-    return;
+    ui.alert(`一括送信に失敗しました: ${e.message}`);
+    throw e;
   }
 
-  // 2. 更新が成功したら、承認済みのものだけ並列で /execute を叩く
-  if (requestIdsToExecute.length > 0) {
-    const executeRequests = requestIdsToExecute.map(id => ({
-      url: `${baseUrl}/execute`,
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify({ request_id: id }),
-      headers: { Authorization: `Bearer ${token}` },
-      muteHttpExceptions: true
-    }));
-    try {
-      const responses = UrlFetchApp.fetchAll(executeRequests);
-      responses.forEach((res, i) => {
-        if (res.getResponseCode() >= 300) {
-          console.error(`Execute API failed for request ${requestIdsToExecute[i]} (${res.getResponseCode()}): ${res.getContentText()}`);
-        }
-      });
-    } catch (e) {
-      console.error("Execute API error (Network): " + e);
-    }
+  const succeeded = Array.isArray(result.succeeded) ? result.succeeded : [];
+  const failed = Array.isArray(result.failed) ? result.failed : [];
+  const successMap = {};
+  succeeded.forEach(item => {
+    const requestId = String(item.request_id || '').trim();
+    if (requestId) successMap[requestId] = item;
+  });
+  const failedMap = {};
+  failed.forEach(item => {
+    const requestId = String(item.request_id || '').trim();
+    if (requestId) failedMap[requestId] = item;
+  });
+
+  const failedIds = Object.keys(failedMap);
+  if (failedIds.length > 0 && idx[COL_EXEC_RESULT]) {
+    reviewRows.forEach(item => {
+      const failure = failedMap[item.request_id];
+      if (!failure) return;
+      const msg = `${failure.error_code || 'ERROR'}: ${failure.error_message || 'failed'}`;
+      sheet.getRange(item.rowNumber, idx[COL_EXEC_RESULT]).setValue(msg);
+      if (idx[COL_LAST_CHECKED]) {
+        sheet.getRange(item.rowNumber, idx[COL_LAST_CHECKED]).setValue(new Date().toLocaleString());
+      }
+    });
+    refreshRequestReviewStatusForRequestIds_(failedIds);
   }
 
-  const allIds = updates.map(u => u.request_id);
-  refreshRequestReviewStatusForRequestIds_(allIds);
+  const historySheet = getProcessedHistorySheet_(header);
+  const rowsToMove = reviewRows
+    .filter(item => Boolean(successMap[item.request_id]))
+    .map(item => item.rowNumber)
+    .sort((a, b) => b - a);
 
-  // 3. API実行などがすべて終わった後に通知メールを送信
+  rowsToMove.forEach(rowNumber => {
+    const rowData = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+    historySheet.appendRow(rowData);
+    sheet.deleteRow(rowNumber);
+  });
+
+  const emailsToSend = [];
+  succeeded.forEach(item => {
+    const requestId = String(item.request_id || '').trim();
+    const row = reviewRows.find(r => r.request_id === requestId);
+    if (!row) return;
+    const requesterEmail = idx.requester_email ? String(row.rowData[idx.requester_email - 1] || '') : '';
+    const normalizedStatus = String(item.status || '');
+    if (!requesterEmail || (normalizedStatus !== 'APPROVED' && normalizedStatus !== 'REJECTED')) return;
+    emailsToSend.push({
+      type: normalizedStatus,
+      requester: requesterEmail,
+      prefillData: {
+        [FIELD_REQUEST_TYPE]: idx.request_type ? String(row.rowData[idx.request_type - 1] || '') : '',
+        [FIELD_PRINCIPAL]: idx.principal_email ? String(row.rowData[idx.principal_email - 1] || '') : '',
+        [FIELD_RESOURCE]: idx.resource_name ? String(row.rowData[idx.resource_name - 1] || '') : '',
+        [FIELD_ROLE]: idx.role ? String(row.rowData[idx.role - 1] || '') : '',
+        [FIELD_REASON]: idx.reason ? String(row.rowData[idx.reason - 1] || '') : '',
+        [FIELD_APPROVER]: idx.approver_email ? String(row.rowData[idx.approver_email - 1] || '') : ''
+      }
+    });
+  });
   if (emailsToSend.length > 0) {
     sendNotificationEmails_(emailsToSend);
   }
+
+  const summary = [
+    `結果: ${result.result || 'UNKNOWN'}`,
+    `成功: ${succeeded.length}件`,
+    `失敗: ${failed.length}件`
+  ];
+  if (failed.length > 0) {
+    const top3 = failed
+      .slice(0, 3)
+      .map(item => `${item.request_id}: ${item.error_code || 'ERROR'}`);
+    summary.push(`失敗詳細(先頭): ${top3.join(', ')}`);
+  }
+  ui.alert(summary.join('\n'));
+}
+
+function getProcessedHistorySheet_(header) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('processed_history');
+  if (!sheet) {
+    sheet = ss.insertSheet('processed_history');
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(header);
+  } else {
+    const existingHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const missing = header.filter(name => !existingHeader.includes(name));
+    missing.forEach(name => {
+      sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
+    });
+  }
+  return sheet;
 }
 
 function callCloudRunApi_(props, path, method, payloadObj) {
@@ -294,6 +373,7 @@ function callCloudRunApi_(props, path, method, payloadObj) {
 function insertRequestToBigQuery_(props, request) {
   const payload = {
     request_id: request.request_id,
+    request_group_id: request.request_group_id || request.request_id,
     request_type: request.request_type,
     principal_email: request.principal_email,
     resource_name: request.resource_name,
@@ -340,6 +420,7 @@ function insertRequestHistoryEvent_(props, event) {
   const payload = {
     history_id: Utilities.getUuid(),
     request_id: String(event.request_id || ''),
+    request_group_id: String(event.request_group_id || ''),
     event_type: String(event.event_type || ''),
     old_status: String(event.old_status || ''),
     new_status: String(event.new_status || ''),
@@ -393,7 +474,7 @@ function appendReviewSheet_(request, aiSuggestion) {
   if (!sheet) {
     sheet = ss.insertSheet(REQUEST_SHEET_NAME);
     sheet.appendRow([
-      'request_id', 'request_type', 'principal_email', 'resource_name', 'role',
+      'request_group_id', 'request_id', 'request_type', 'principal_email', 'resource_name', 'role',
       'reason', 'expires_at', 'requester_email', 'approver_email', 'status', 'requested_at', 'ticket_ref', COL_AI_SUGGEST
     ]);
   }
@@ -404,6 +485,7 @@ function appendReviewSheet_(request, aiSuggestion) {
   const idx = indexMap_(header);
   let rowData = new Array(header.length).fill('');
   
+  if (idx.request_group_id) rowData[idx.request_group_id - 1] = request.request_group_id || request.request_id || '';
   if (idx.request_id) rowData[idx.request_id - 1] = request.request_id;
   if (idx.request_type) rowData[idx.request_type - 1] = request.request_type;
   if (idx.principal_email) rowData[idx.principal_email - 1] = request.principal_email;
@@ -846,7 +928,7 @@ function getRequestReviewSheet_() {
 
 function ensureRequestReviewColumns_(sheet) {
   const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const missing = ['expires_at', COL_AI_SUGGEST, COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
+  const missing = ['request_group_id', 'expires_at', COL_AI_SUGGEST, COL_EXEC_RESULT, COL_FINAL_REFLECT, COL_LAST_CHECKED].filter((name) => !header.includes(name));
   missing.forEach((name) => {
     sheet.getRange(1, sheet.getLastColumn() + 1).setValue(name);
   });

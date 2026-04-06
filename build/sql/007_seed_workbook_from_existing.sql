@@ -4,11 +4,12 @@
 -- 1) principal catalog from current IAM snapshot
 MERGE `ea-yukihidemitsuoka2.iam_access_mgmt.principal_catalog` T
 USING (
-  SELECT DISTINCT
+  SELECT
     principal_email,
-    principal_type
+    MAX(principal_type) AS principal_type
   FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions`
   WHERE principal_email IS NOT NULL AND principal_email != ''
+  GROUP BY principal_email
 ) S
 ON T.principal_email = S.principal_email
 WHEN MATCHED THEN
@@ -23,7 +24,6 @@ INSERT INTO `ea-yukihidemitsuoka2.iam_access_mgmt.iam_permission_bindings_histor
   recorded_at,
   resource_name,
   resource_id,
-  resource_full_path,
   principal_email,
   principal_type,
   iam_role,
@@ -71,19 +71,19 @@ SELECT
   CURRENT_TIMESTAMP() AS recorded_at,
   req.resource_name,
   req.resource_id,
-  req.resource_name AS resource_full_path,
   req.principal_email,
   req.principal_type,
   req.iam_role,
-  NULL AS iam_condition,
+  CAST(NULL AS STRING) AS iam_condition,
   req.ticket_ref,
   req.request_reason,
   CASE
-    WHEN req.status = 'APPROVED' AND ex.ex.result = 'SUCCESS' THEN '有効'
-    WHEN req.status = 'APPROVED' AND ex.ex.result IN ('FAILED', 'SKIPPED') THEN 'プロビジョニング中'
     WHEN req.status = 'APPROVED' THEN '承認済'
     WHEN req.status = 'REJECTED' THEN '却下'
-    WHEN req.status = 'CANCELLED' THEN '無効化／削除済'
+    WHEN req.status = 'CANCELLED' THEN '取消'
+    WHEN req.status = 'REVOKED' THEN '削除済'
+    WHEN req.status = 'REVOKED_ALREADY_GONE' THEN '削除済(手動)'
+    WHEN req.status = 'REVOKE_FAILED' THEN '剥奪失敗'
     ELSE '申請中'
   END AS status_ja,
   req.approved_at,

@@ -308,13 +308,14 @@ class Repository:
         ※直後のステータスUPDATE（緊急承認フロー等）を確実に成功させるため、
         BigQueryのストリーミングバッファ制限を回避します。
         """
+        request_group_id = row.get("request_group_id") or row.get("request_id")
         sql = f"""
         INSERT INTO `{self.requests_table}` (
-            request_id, request_type, principal_email, resource_name, role,
+            request_id, request_group_id, request_type, principal_email, resource_name, role,
             reason, expires_at, requester_email, approver_email, status,
             requested_at, ticket_ref, created_at, updated_at
         ) VALUES (
-            @request_id, @request_type, @principal_email, @resource_name, @role,
+            @request_id, @request_group_id, @request_type, @principal_email, @resource_name, @role,
             @reason, @expires_at, @requester_email, @approver_email, @status,
             @requested_at, @ticket_ref, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
         )
@@ -322,6 +323,9 @@ class Repository:
         params = [
             bigquery.ScalarQueryParameter(
                 "request_id", "STRING", row.get("request_id")
+            ),
+            bigquery.ScalarQueryParameter(
+                "request_group_id", "STRING", request_group_id
             ),
             bigquery.ScalarQueryParameter(
                 "request_type", "STRING", row.get("request_type")
@@ -355,6 +359,77 @@ class Repository:
             sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
         ).result()
 
+    def insert_access_requests_raw_bulk(self, rows: list[dict[str, Any]]) -> None:
+        """複数の新規アクセスリクエストをDMLで一括記録します。"""
+        if not rows:
+            return
+
+        values_clauses = []
+        params: list[bigquery.ScalarQueryParameter] = []
+        for i, row in enumerate(rows):
+            values_clauses.append(
+                f"(@request_id_{i}, @request_group_id_{i}, @request_type_{i}, "
+                f"@principal_email_{i}, @resource_name_{i}, @role_{i}, @reason_{i}, "
+                f"@expires_at_{i}, @requester_email_{i}, @approver_email_{i}, @status_{i}, "
+                f"@requested_at_{i}, @ticket_ref_{i}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
+            )
+            params.extend(
+                [
+                    bigquery.ScalarQueryParameter(
+                        f"request_id_{i}", "STRING", row.get("request_id")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"request_group_id_{i}",
+                        "STRING",
+                        row.get("request_group_id") or row.get("request_id"),
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"request_type_{i}", "STRING", row.get("request_type")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"principal_email_{i}", "STRING", row.get("principal_email")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"resource_name_{i}", "STRING", row.get("resource_name")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"role_{i}", "STRING", row.get("role")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"reason_{i}", "STRING", row.get("reason")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"expires_at_{i}", "TIMESTAMP", row.get("expires_at")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"requester_email_{i}", "STRING", row.get("requester_email")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"approver_email_{i}", "STRING", row.get("approver_email")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"status_{i}", "STRING", row.get("status")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"requested_at_{i}", "TIMESTAMP", row.get("requested_at")
+                    ),
+                    bigquery.ScalarQueryParameter(
+                        f"ticket_ref_{i}", "STRING", row.get("ticket_ref")
+                    ),
+                ]
+            )
+
+        sql = f"""
+        INSERT INTO `{self.requests_table}` (
+            request_id, request_group_id, request_type, principal_email, resource_name, role,
+            reason, expires_at, requester_email, approver_email, status,
+            requested_at, ticket_ref, created_at, updated_at
+        ) VALUES {", ".join(values_clauses)}
+        """
+        self._client.query(
+            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
+        ).result()
+
     def insert_request_history_event(self, row: dict[str, Any]) -> None:
         """アクセスリクエストの履歴イベントをStreaming Insertで記録します。"""
         if "details" in row and isinstance(row["details"], dict):
@@ -364,6 +439,23 @@ class Repository:
         errors = self._client.insert_rows_json(table, [row])
         if errors:
             raise RuntimeError(f"failed to insert request history: {errors}")
+
+    def insert_request_history_events_bulk(self, rows: list[dict[str, Any]]) -> None:
+        """アクセスリクエストの履歴イベントをStreaming Insertで一括記録します。"""
+        if not rows:
+            return
+
+        payload = []
+        for row in rows:
+            item = dict(row)
+            if "details" in item and isinstance(item["details"], dict):
+                item["details"] = json.dumps(item["details"], ensure_ascii=False)
+            payload.append(item)
+
+        table = f"{self._project_id}.{self._dataset_id}.iam_access_request_history"
+        errors = self._client.insert_rows_json(table, payload)
+        if errors:
+            raise RuntimeError(f"failed to insert bulk request history: {errors}")
 
     def update_request_status(self, request_id: str, status: str) -> None:
         """
@@ -393,17 +485,29 @@ class Repository:
         actor_email: str = "SYSTEM",
         actor_source: str = "SYSTEM_BATCH",
     ) -> list[str]:
+        result = self.bulk_update_request_status_and_history_detailed(
+            updates=updates,
+            actor_email=actor_email,
+            actor_source=actor_source,
+        )
+        return [row["request_id"] for row in result["updated"]]
+
+    def bulk_update_request_status_and_history_detailed(
+        self,
+        updates: list[dict[str, Any]],
+        actor_email: str = "SYSTEM",
+        actor_source: str = "SYSTEM_BATCH",
+    ) -> dict[str, list[dict[str, Any]]]:
+        """一括ステータス更新を実行し、更新・スキップ・失敗を明示的に返します。"""
         if not updates:
-            return []
+            return {"updated": [], "skipped": [], "errors": []}
 
-        from datetime import datetime, timezone
-        from google.cloud import bigquery
-
-        req_ids = [u.get("request_id") for u in updates if u.get("request_id")]
+        req_ids = [
+            str(u.get("request_id")).strip() for u in updates if u.get("request_id")
+        ]
         if not req_ids:
-            return []
+            return {"updated": [], "skipped": [], "errors": []}
 
-        # 1. バックエンド側で安全に現在のスナップショットを取得する（SQLインジェクション防止）
         query = f"SELECT * FROM `{self.requests_table}` WHERE request_id IN UNNEST(@req_ids)"
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -411,46 +515,125 @@ class Repository:
             ]
         )
         rows = self._client.query(query, job_config=job_config).result()
-        snapshots = {row["request_id"]: dict(row) for row in rows}
+        snapshots = {str(row["request_id"]): dict(row) for row in rows}
 
-        history_rows = []
+        updated: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        history_rows: list[dict[str, Any]] = []
         now_str = datetime.now(timezone.utc).isoformat()
-        processed_ids = []
 
-        # 2. 履歴データの構築と更新クエリの実行（CASE文と動的パラメータによる一括安全更新）
         cases = []
-        query_params = []
-        actual_update_req_ids = []
+        query_params: list[Any] = []
+        actual_update_req_ids: list[str] = []
 
         for idx, u in enumerate(updates):
-            req_id = u.get("request_id")
-            new_status = u.get("status")
-            snap = snapshots.get(req_id)
-
-            if not snap or snap.get("status") == new_status:
+            req_id = str(u.get("request_id") or "").strip()
+            new_status = str(u.get("status") or "").strip().upper()
+            reject_reason = str(u.get("reject_reason") or "").strip()
+            if not req_id:
+                errors.append(
+                    {
+                        "request_id": "",
+                        "status": new_status or "",
+                        "error_code": "INVALID_REQUEST_ID",
+                        "error_message": "request_id is required",
+                    }
+                )
+                continue
+            if not new_status:
+                errors.append(
+                    {
+                        "request_id": req_id,
+                        "status": "",
+                        "error_code": "INVALID_STATUS",
+                        "error_message": "status is required",
+                    }
+                )
                 continue
 
-            # 承認者のみが APPROVED/REJECTED にステータス変更できる認可制御
-            approver = snap.get("approver_email")
+            snap = snapshots.get(req_id)
+            if not snap:
+                errors.append(
+                    {
+                        "request_id": req_id,
+                        "status": new_status,
+                        "error_code": "NOT_FOUND",
+                        "error_message": f"request_id not found: {req_id}",
+                    }
+                )
+                continue
+
+            old_status = str(snap.get("status") or "")
+            if old_status == new_status:
+                skipped.append(
+                    {
+                        "request_id": req_id,
+                        "status": new_status,
+                        "reason": "NO_STATUS_CHANGE",
+                    }
+                )
+                continue
+
+            if new_status == "REJECTED" and not reject_reason:
+                errors.append(
+                    {
+                        "request_id": req_id,
+                        "status": new_status,
+                        "error_code": "MISSING_REJECT_REASON",
+                        "error_message": "reject_reason is required when status is REJECTED",
+                    }
+                )
+                continue
+
+            approver = str(snap.get("approver_email") or "")
             if (
                 new_status in ("APPROVED", "REJECTED")
                 and actor_source != "SYSTEM_BATCH"
             ):
-                if approver and actor_email.lower() != str(approver).lower():
+                if approver and actor_email.lower() != approver.lower():
                     logging.warning(
-                        f"Unauthorized status update attempt: User {actor_email} "
-                        f"tried to update request {req_id} to {new_status}, "
-                        f"but approver is {approver}."
+                        "Unauthorized status update attempt: user=%s request_id=%s approver=%s",
+                        actor_email,
+                        req_id,
+                        approver,
+                    )
+                    errors.append(
+                        {
+                            "request_id": req_id,
+                            "status": new_status,
+                            "error_code": "FORBIDDEN",
+                            "error_message": "only approver can set APPROVED/REJECTED",
+                        }
                     )
                     continue
 
-            history_id = str(uuid.uuid4())
+            req_param_name = f"req_id_{idx}"
+            status_param_name = f"new_status_{idx}"
+            cases.append(
+                f"WHEN request_id = @{req_param_name} THEN @{status_param_name}"
+            )
+            query_params.extend(
+                [
+                    bigquery.ScalarQueryParameter(req_param_name, "STRING", req_id),
+                    bigquery.ScalarQueryParameter(
+                        status_param_name, "STRING", new_status
+                    ),
+                ]
+            )
+            actual_update_req_ids.append(req_id)
+
+            details: dict[str, Any] = {"note": "Bulk status update"}
+            if reject_reason:
+                details["reject_reason"] = reject_reason
+
             history_rows.append(
                 {
-                    "history_id": history_id,
+                    "history_id": str(uuid.uuid4()),
                     "request_id": req_id,
+                    "request_group_id": snap.get("request_group_id"),
                     "event_type": "STATUS_CHANGED",
-                    "old_status": snap.get("status", ""),
+                    "old_status": old_status,
                     "new_status": new_status,
                     "reason_snapshot": snap.get("reason", ""),
                     "request_type": snap.get("request_type", ""),
@@ -462,31 +645,11 @@ class Repository:
                     "acted_by": actor_email,
                     "actor_source": actor_source,
                     "event_at": now_str,
-                    "details": json.dumps(
-                        {"note": "Bulk status update"}, ensure_ascii=False
-                    ),
+                    "details": json.dumps(details, ensure_ascii=False),
                 }
             )
+            updated.append({"request_id": req_id, "status": new_status})
 
-            # CASE WHEN 用の安全なパラメータを動的に構築
-            req_param_name = f"req_id_{idx}"
-            status_param_name = f"new_status_{idx}"
-            cases.append(
-                f"WHEN request_id = @{req_param_name} THEN @{status_param_name}"
-            )
-
-            query_params.extend(
-                [
-                    bigquery.ScalarQueryParameter(req_param_name, "STRING", req_id),
-                    bigquery.ScalarQueryParameter(
-                        status_param_name, "STRING", new_status
-                    ),
-                ]
-            )
-            processed_ids.append(history_id)
-            actual_update_req_ids.append(req_id)
-
-        # 構築したパラメータを用いて、1回のDML(UPDATE)で安全にバルク更新
         if cases:
             case_statement = " ".join(cases)
             query_params.append(
@@ -494,28 +657,34 @@ class Repository:
                     "all_req_ids", "STRING", actual_update_req_ids
                 )
             )
-
             update_query = f"""
                 UPDATE `{self.requests_table}`
                 SET
                     status = CASE {case_statement} ELSE status END,
                     updated_at = CURRENT_TIMESTAMP(),
-                    approved_at = CASE WHEN CASE {case_statement} ELSE status END = 'APPROVED' THEN CURRENT_TIMESTAMP() ELSE approved_at END
+                    approved_at = CASE
+                      WHEN CASE {case_statement} ELSE status END = 'APPROVED'
+                        THEN CURRENT_TIMESTAMP()
+                      WHEN CASE {case_statement} ELSE status END != 'APPROVED'
+                        THEN approved_at
+                      ELSE approved_at
+                    END
                 WHERE request_id IN UNNEST(@all_req_ids)
             """
-            u_config = bigquery.QueryJobConfig(query_parameters=query_params)
-            self._client.query(update_query, job_config=u_config).result()
+            self._client.query(
+                update_query,
+                job_config=bigquery.QueryJobConfig(query_parameters=query_params),
+            ).result()
 
-        # 3. 履歴の書き込み
         if history_rows:
-            errors = self._client.insert_rows_json(
+            errors_rows = self._client.insert_rows_json(
                 f"{self._project_id}.{self._dataset_id}.iam_access_request_history",
                 history_rows,
             )
-            if errors:
-                raise RuntimeError(f"failed to insert bulk history: {errors}")
+            if errors_rows:
+                raise RuntimeError(f"failed to insert bulk history: {errors_rows}")
 
-        return processed_ids
+        return {"updated": updated, "skipped": skipped, "errors": errors}
 
     def search_expired_approved_access_requests(
         self,
@@ -744,6 +913,7 @@ class Repository:
           next_review_at,
           approver,
           request_id,
+          request_group_id,
           note
         )
         SELECT
@@ -762,6 +932,7 @@ class Repository:
           CAST(req.expires_at AS DATE) AS next_review_at,
           req.approver_email AS approver,
           req.request_id,
+          req.request_group_id,
           'Snapshot from iam_policy_permissions' AS note
         FROM `{self.iam_policy_permissions_table}` AS p
         LEFT JOIN (

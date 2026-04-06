@@ -26,6 +26,7 @@ WITH latest_execution AS (
 )
 SELECT
   r.request_id,
+  r.request_group_id,
   r.request_type,
   r.principal_email,
   r.resource_name,
@@ -50,6 +51,7 @@ CREATE OR REPLACE VIEW `your_project.your_dataset.v_iam_request_approval_history
 SELECT
   history_id,
   request_id,
+  request_group_id,
   event_type,
   old_status,
   new_status,
@@ -74,6 +76,7 @@ SELECT
   p.principal_email,
   p.role,
   r.request_id,
+  r.request_group_id,
   r.status AS request_status,
   r.requested_at,
   r.approved_at,

@@ -34,6 +34,19 @@ def test_api_create_request(
     mock_repo.insert_access_request_raw.assert_called_once()
 
 
+def test_api_create_requests_bulk(
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
+    mock_repo.insert_access_requests_raw_bulk.return_value = None
+    response = client.post(
+        "/api/requests/bulk", json={"requests": [{"request_id": "r1"}]}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["result"] == "SUCCESS"
+    assert response.get_json()["inserted_count"] == 1
+    mock_repo.insert_access_requests_raw_bulk.assert_called_once()
+
+
 def test_api_update_request_status(
     client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
 ):
@@ -52,6 +65,45 @@ def test_api_create_history(
     assert response.status_code == 200
     assert response.get_json()["result"] == "SUCCESS"
     mock_repo.insert_request_history_event.assert_called_once()
+
+
+def test_api_create_history_bulk(
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
+    mock_repo.insert_request_history_events_bulk.return_value = None
+    response = client.post("/api/history/bulk", json={"events": [{"history_id": "h1"}]})
+    assert response.status_code == 200
+    assert response.get_json()["result"] == "SUCCESS"
+    assert response.get_json()["inserted_count"] == 1
+    mock_repo.insert_request_history_events_bulk.assert_called_once()
+
+
+def test_api_bulk_review_partial_success(
+    client: FlaskClient, mock_repo: MagicMock, mock_auth: MagicMock
+):
+    mock_repo.bulk_update_request_status_and_history_detailed.return_value = {
+        "updated": [{"request_id": "r1", "status": "APPROVED"}],
+        "skipped": [],
+        "errors": [],
+    }
+    with patch(
+        "app.main._execute_request_by_id",
+        return_value=(
+            {"request_id": "r1", "result": "FAILED", "error_message": "x"},
+            500,
+        ),
+    ):
+        response = client.post(
+            "/api/v1/requests/bulk-review",
+            json={
+                "reviews": [{"request_id": "r1", "status": "承認済"}],
+                "actor_email": "approver@example.com",
+            },
+        )
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["result"] == "FAILED"
+    assert len(body["failed"]) == 1
 
 
 def test_api_get_statuses(

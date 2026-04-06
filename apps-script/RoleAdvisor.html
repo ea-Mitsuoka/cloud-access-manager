@@ -35,6 +35,9 @@
     .result-content li { margin-bottom: 8px; }
     .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
     .apply-btn { margin-left: 12px; padding: 4px 12px; font-size: 12px; }
+    .cart-item { border: 1px solid var(--border); border-radius: 6px; background: #fff; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 8px; }
+    .cart-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .cart-sub { font-size: 12px; color: var(--text-muted); }
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); flex-direction: column; align-items: center; justify-content: center; z-index: 1000; display: none; }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -48,7 +51,7 @@
   <div class="container">
     <div class="panel" style="flex: 3;">
       <h2 style="margin-top:0; font-size: 18px; color: var(--primary);">IAM権限 申請フォーム</h2>
-      <form id="accessForm" onsubmit="submitForm(event)">
+      <form id="accessForm" onsubmit="addToCart(event)">
         <div class="form-group">
           <label>申請種別 <span style="color:var(--error);">*</span></label>
           <select id="requestType" required>
@@ -96,9 +99,18 @@
           <div class="hint">この申請をレビューし、承認する権限を持つ上長等のメールアドレス</div>
         </div>
         <div style="margin-top: 32px; text-align:right;">
-          <button type="submit" id="submitBtn" class="primary">申請を送信する</button>
+          <button type="button" id="addCartBtn" class="secondary" onclick="addToCart()">🛒 カートに追加</button>
         </div>
       </form>
+    </div>
+    <div class="panel" style="flex: 2; display: none; border-color: #c7e0d5; background: #f6fbf8;" id="cartPanel">
+      <h2 style="margin-top:0; font-size: 16px; color: #137333;">一括申請カート</h2>
+      <div id="cartMeta" style="font-size:13px; color:var(--text-muted); margin-bottom: 12px;">0件</div>
+      <div id="cartList"></div>
+      <div style="display:flex; justify-content: space-between; gap: 8px; margin-top: 14px;">
+        <button type="button" class="secondary" onclick="clearCart()">カートを空にする</button>
+        <button type="button" id="submitBtn" class="primary" onclick="submitCart()">一括申請を送信する</button>
+      </div>
     </div>
     <div class="panel" style="flex: 2; background: #fbfcff;">
       <div class="ai-header">
@@ -252,22 +264,11 @@
         .suggestIamRoles({ goal, resource, principal });
     }
 
-    function submitForm(e) {
-      e.preventDefault();
-      if (!validateRole()) {
-        alert('ロール名を修正してください。');
-        return;
-      }
+    let cart = [];
 
-      const btn = document.getElementById('submitBtn');
-      const overlay = document.getElementById('overlay');
-      const aiSugEl = document.getElementById('roleAiSuggestion');
-      
-      btn.disabled = true;
-      overlay.style.display = 'flex';
-      if (aiSugEl) aiSugEl.style.display = 'none';
-
-      const formData = {
+    function buildFormData() {
+      return {
+        requestId: 'req-' + Math.random().toString(36).substring(2, 12),
         requestType: document.getElementById('requestType').value,
         principal: document.getElementById('principal').value.trim(),
         resource: document.getElementById('resource').value.trim(),
@@ -278,47 +279,123 @@
         requester: '<?= requesterEmail ?>',
         aiSuggestion: document.getElementById('hiddenAiSuggestion').value
       };
+    }
 
-      // 1. Geminiにロール名のタイポ検証を依頼する
+    function addToCart(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      const form = document.getElementById('accessForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+      if (!validateRole()) {
+        alert('ロール名を修正してください。');
+        return false;
+      }
+
+      const overlay = document.getElementById('overlay');
+      const addBtn = document.getElementById('addCartBtn');
+      const aiSugEl = document.getElementById('roleAiSuggestion');
+      overlay.style.display = 'flex';
+      addBtn.disabled = true;
+      if (aiSugEl) aiSugEl.style.display = 'none';
+
+      const formData = buildFormData();
       google.script.run
         .withSuccessHandler(function(validationRes) {
+          overlay.style.display = 'none';
+          addBtn.disabled = false;
           if (validationRes && validationRes.is_valid === false && validationRes.suggested_role) {
-            // タイポ検知: 送信を中断し、赤字で提案を表示
-            overlay.style.display = 'none';
-            btn.disabled = false;
             aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(validationRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline; font-size:14px;">${escapeHtml(validationRes.suggested_role)}</a> ですか？（クリックで修正）`;
             aiSugEl.style.display = 'block';
             return;
           }
-          // 問題なし（または検証通過）の場合は送信実行
-          executeSubmit(formData, btn, overlay, e);
+          cart.push(formData);
+          renderCart();
         })
         .withFailureHandler(function(err) {
-          // AI検証自体がエラーになった場合は、申請者の業務を止めないようフォールバックとしてそのまま送信する
-          console.warn("AI Validation failed, proceeding with submit: " + err.message);
-          executeSubmit(formData, btn, overlay, e);
+          overlay.style.display = 'none';
+          addBtn.disabled = false;
+          console.warn("AI Validation failed, add to cart without blocking: " + err.message);
+          cart.push(formData);
+          renderCart();
         })
         .validateRoleWithAi(formData.role, formData.reason, formData.resource);
+
+      return false;
     }
 
-    function executeSubmit(formData, btn, overlay, e) {
+    function renderCart() {
+      const panel = document.getElementById('cartPanel');
+      const list = document.getElementById('cartList');
+      const meta = document.getElementById('cartMeta');
+      if (!cart.length) {
+        panel.style.display = 'none';
+        list.innerHTML = '';
+        meta.textContent = '0件';
+        return;
+      }
+      panel.style.display = 'block';
+      meta.textContent = cart.length + '件を一括申請予定';
+      list.innerHTML = cart.map((item, i) => `
+        <div class="cart-item">
+          <div>
+            <div class="cart-title">${escapeHtml(item.resource)} / ${escapeHtml(item.role)}</div>
+            <div class="cart-sub">${escapeHtml(item.principal)} | 承認者: ${escapeHtml(item.approver)} | 期限: ${escapeHtml(item.expiresAt)}</div>
+          </div>
+          <div>
+            <button type="button" class="secondary" style="padding:6px 10px; font-size:12px;" onclick="removeFromCart(${i})">削除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      renderCart();
+    }
+
+    function clearCart() {
+      cart = [];
+      renderCart();
+    }
+
+    function submitCart() {
+      if (!cart.length) {
+        alert('カートが空です。');
+        return;
+      }
+
+      const btn = document.getElementById('submitBtn');
+      const overlay = document.getElementById('overlay');
+      btn.disabled = true;
+      overlay.style.display = 'flex';
+
+      const requestGroupId = 'req-grp-' + Math.random().toString(36).substring(2, 12);
+      const payload = {
+        requestGroupId: requestGroupId,
+        requests: cart.map(item => Object.assign({}, item, { requestGroupId }))
+      };
+
       google.script.run
         .withSuccessHandler(function(res) {
           overlay.style.display = 'none';
-          alert('✅ 申請が完了しました！\nリクエストID: ' + res.request_id);
-          e.target.reset();
+          btn.disabled = false;
+          const count = (res && res.count) ? res.count : cart.length;
+          alert('✅ ' + count + '件を一括申請しました。\n申請グループID: ' + requestGroupId);
+          clearCart();
+          document.getElementById('accessForm').reset();
           document.getElementById('hiddenAiSuggestion').value = '';
           document.getElementById('aiResultContainer').style.display = 'none';
           document.getElementById('aiGoal').value = '';
           toggleDate();
-          btn.disabled = false;
         })
         .withFailureHandler(function(err) {
           overlay.style.display = 'none';
-          alert('❌ 申請中にエラーが発生しました:\n' + (err.message || '不明なエラー'));
           btn.disabled = false;
+          alert('❌ 一括申請中にエラーが発生しました:\n' + (err.message || '不明なエラー'));
         })
-        .submitAccessRequest(formData);
+        .submitAccessRequest(payload);
     }
   </script>
 </body>

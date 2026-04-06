@@ -69,10 +69,18 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.iam_permission_bindings_hi
   next_review_at DATE,
   approver STRING,
   request_id STRING,
+  request_group_id STRING,
   note STRING
 )
 PARTITION BY DATE(recorded_at)
 CLUSTER BY resource_id, principal_email, iam_role;
+
+ALTER TABLE `your_project.your_dataset.iam_permission_bindings_history`
+ADD COLUMN IF NOT EXISTS request_group_id STRING;
+
+UPDATE `your_project.your_dataset.iam_permission_bindings_history`
+SET request_group_id = request_id
+WHERE request_group_id IS NULL;
 
 -- Initial status master rows (idempotent via MERGE).
 MERGE `your_project.your_dataset.iam_status_master` T

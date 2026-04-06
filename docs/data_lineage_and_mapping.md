@@ -73,6 +73,7 @@ ______________________________________________________________________
 
 | カラム名 | 源泉 (Source) | 加工・挿入 (Transform/Load) | 下流での用途 (Destination) |
 | :--- | :--- | :--- | :--- |
+| `request_group_id` | Webポータル / GAS内部生成 | 一括申請単位でUUIDを採番し、各明細に付与 | 一括申請の監査トレース、レビュー時のグルーピング |
 | `request_id` | GAS内部生成 | `Utilities.getUuid()` で生成 | 全テーブルの結合キー、`/execute` APIの引数 |
 | `request_type` | ポータル「申請種別」 | GASで `GRANT/REVOKE/CHANGE` に正規化 | 実行エンジンのアクション判定 (`_normalize_action`) |
 | `principal_email` | ポータル「対象プリンシパル」 | GASからそのまま送信 | IAM付与対象、履歴および不整合検知の結合キー |
@@ -115,6 +116,7 @@ Cloud Runが実際にGCPのIAM APIを叩いた結果を記録します。
 | カラム名 | 源泉 (Source) | 加工・挿入 (Transform/Load) | 下流での用途 (Destination) |
 | :--- | :--- | :--- | :--- |
 | `history_id` | GAS / Python内部生成 | 各処理で UUID を生成 | 履歴の一意識別 |
+| `request_group_id` | `iam_access_requests` | 申請正本から引き継ぐ | 一括申請単位での監査・追跡 |
 | `request_id` | `iam_access_requests` | 対象のIDを引き継ぐ | 申請ごとの履歴トレース |
 | `event_type` | 処理のコンテキスト | 申請送信時は `REQUESTED`、以降は `STATUS_CHANGED` | 履歴のフィルタリング |
 | `old_status` | 処理前のステータス | DBの現在ステータス、または空文字 | ステータス遷移の監査 |
@@ -122,7 +124,7 @@ Cloud Runが実際にGCPのIAM APIを叩いた結果を記録します。
 | `reason_snapshot` | `iam_access_requests` | その時点での `reason` (申請理由) をコピー | 後から改ざんできない監査証跡 |
 | `request_type` ～ `approver_email` | `iam_access_requests` | その時点での申請内容全体をスナップショットとしてコピー | 変更履歴ビュー (`v_iam_request_approval_history`) |
 | `acted_by` | 操作者のコンテキスト | GASの `Session.getActiveUser()` または `SYSTEM_AUTO_REVOKE` 等 | 誰が操作・承認したかの監査 |
-| `actor_source` | 処理のコンテキスト | `WEB_APP`, `SHEET_EDIT`, `SYSTEM_BATCH` 等 | どこから操作されたかの監査 |
+| `actor_source` | 処理のコンテキスト | `WEB_APP_BULK`, `SHEET_BULK_REVIEW`, `SYSTEM_BATCH` 等 | どこから操作されたかの監査 |
 | `event_at` | 処理日時 | 処理実行時のタイムスタンプ | 時系列ソート |
 | `details` | 処理のコンテキスト | Webからの送信や一括更新のメタデータをJSONで格納 | 監査補助 |
 

@@ -75,8 +75,6 @@ def execute_request():
     Returns:
         Response: 実行結果を含むJSONレスポンス。
     """
-    execution_id = str(uuid.uuid4())
-
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -85,9 +83,17 @@ def execute_request():
     if not request_id:
         return jsonify({"error": "request_id is required"}), 400
 
+    result_payload, http_status = _execute_request_by_id(request_id)
+    return jsonify(result_payload), http_status
+
+
+def _execute_request_by_id(request_id: str) -> tuple[dict[str, Any], int]:
+    """単一リクエストのIAM反映を実行し、レスポンス本体とHTTPステータスを返します。"""
+    execution_id = str(uuid.uuid4())
+
     req = repo.get_approved_request(request_id)
     if req is None:
-        return jsonify({"error": f"request_id not found: {request_id}"}), 404
+        return {"error": f"request_id not found: {request_id}"}, 404
 
     if req.status != "APPROVED":
         result = ExecutionResult(
@@ -99,12 +105,14 @@ def execute_request():
             details={"reason": f"status is {req.status}"},
         )
         repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
-        return jsonify(
+        return (
             {
                 "execution_id": execution_id,
+                "request_id": request_id,
                 "result": result.result,
                 "reason": "status_not_approved",
-            }
+            },
+            200,
         )
 
     scope_error = scope_validator.validate_resource_name(req.resource_name)
@@ -120,15 +128,13 @@ def execute_request():
         )
         repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
         return (
-            jsonify(
-                {
-                    "execution_id": execution_id,
-                    "request_id": request_id,
-                    "result": result.result,
-                    "error_code": result.error_code,
-                    "error_message": result.error_message,
-                }
-            ),
+            {
+                "execution_id": execution_id,
+                "request_id": request_id,
+                "result": result.result,
+                "error_code": result.error_code,
+                "error_message": result.error_message,
+            },
             400,
         )
 
@@ -142,12 +148,14 @@ def execute_request():
             details={"reason": "already executed"},
         )
         repo.insert_change_log(execution_id, request_id, EXECUTOR_IDENTITY, result)
-        return jsonify(
+        return (
             {
                 "execution_id": execution_id,
+                "request_id": request_id,
                 "result": result.result,
                 "reason": "idempotent_skip",
-            }
+            },
+            200,
         )
 
     if "[緊急]" in (req.reason or ""):
@@ -177,15 +185,13 @@ def execute_request():
 
     http_status = 200 if result.result in ("SUCCESS", "SKIPPED") else 500
     return (
-        jsonify(
-            {
-                "execution_id": execution_id,
-                "request_id": request_id,
-                "result": result.result,
-                "error_code": result.error_code,
-                "error_message": result.error_message,
-            }
-        ),
+        {
+            "execution_id": execution_id,
+            "request_id": request_id,
+            "result": result.result,
+            "error_code": result.error_code,
+            "error_message": result.error_message,
+        },
         http_status,
     )
 
@@ -651,6 +657,25 @@ def api_create_request():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.post("/api/requests/bulk")
+def api_create_requests_bulk():
+    """新規アクセスリクエストを一括登録します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    requests_list = payload.get("requests", [])
+    if not isinstance(requests_list, list):
+        return jsonify({"error": "requests must be an array"}), 400
+    if not requests_list:
+        return jsonify({"result": "SUCCESS", "inserted_count": 0})
+    try:
+        repo.insert_access_requests_raw_bulk(requests_list)
+        return jsonify({"result": "SUCCESS", "inserted_count": len(requests_list)})
+    except Exception as exc:
+        logging.error(f"Failed to bulk create requests: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.post("/api/requests/bulk-status")
 def api_bulk_update_request_status():
     """複数のアクセスリクエストのステータスを一括更新し、履歴を記録します。"""
@@ -665,14 +690,153 @@ def api_bulk_update_request_status():
         return jsonify({"result": "SUCCESS", "updated_count": 0})
 
     try:
-        # バックエンド主導のセキュアな更新メソッドを呼び出す
-        processed_ids = repo.bulk_update_request_status_and_history_secure(
+        detail = repo.bulk_update_request_status_and_history_detailed(
             updates=updates, actor_email=actor_email, actor_source="SHEET_EDIT_BULK"
         )
-        return jsonify({"result": "SUCCESS", "updated_count": len(processed_ids)})
+        return jsonify(
+            {
+                "result": "SUCCESS",
+                "updated_count": len(detail["updated"]),
+                "updated": detail["updated"],
+                "skipped": detail["skipped"],
+                "errors": detail["errors"],
+            }
+        )
     except Exception as exc:
         logging.error(f"Failed to bulk update status: {exc}", exc_info=True)
         return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/v1/requests/bulk-review")
+def api_bulk_review_requests():
+    """レビュー結果を一括適用し、承認分はIAM反映まで行います。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    reviews = payload.get("reviews", payload.get("updates", []))
+    actor_email = str(payload.get("actor_email", "system"))
+    if not isinstance(reviews, list):
+        return jsonify({"error": "reviews must be an array"}), 400
+    if not reviews:
+        return jsonify(
+            {"result": "SUCCESS", "requested_count": 0, "succeeded": [], "failed": []}
+        )
+
+    status_map = {
+        "申請中": "PENDING",
+        "承認済": "APPROVED",
+        "却下": "REJECTED",
+        "取消": "CANCELLED",
+    }
+    normalized_reviews: list[dict[str, Any]] = []
+    reject_reason_map: dict[str, str] = {}
+    for row in reviews:
+        if not isinstance(row, dict):
+            continue
+        request_id = str(row.get("request_id", "")).strip()
+        status_raw = str(row.get("status", "")).strip()
+        status = status_map.get(status_raw, status_raw.upper())
+        reject_reason = str(row.get("reject_reason", "")).strip()
+        if request_id:
+            reject_reason_map[request_id] = reject_reason
+        normalized_reviews.append(
+            {
+                "request_id": request_id,
+                "status": status,
+                "reject_reason": reject_reason,
+            }
+        )
+
+    try:
+        detail = repo.bulk_update_request_status_and_history_detailed(
+            updates=normalized_reviews,
+            actor_email=actor_email,
+            actor_source="SHEET_BULK_REVIEW",
+        )
+    except Exception as exc:
+        logging.error(
+            f"Failed to apply bulk review status updates: {exc}", exc_info=True
+        )
+        return jsonify({"error": str(exc)}), 500
+
+    succeeded: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+
+    for row in detail["errors"]:
+        failed.append(
+            {
+                "request_id": row.get("request_id", ""),
+                "status": row.get("status", ""),
+                "error_code": row.get("error_code", "STATUS_UPDATE_ERROR"),
+                "error_message": row.get("error_message", "status update failed"),
+            }
+        )
+    for row in detail["skipped"]:
+        failed.append(
+            {
+                "request_id": row.get("request_id", ""),
+                "status": row.get("status", ""),
+                "error_code": "SKIPPED",
+                "error_message": row.get("reason", "skipped"),
+            }
+        )
+
+    for row in detail["updated"]:
+        request_id = str(row.get("request_id", "")).strip()
+        status = str(row.get("status", "")).strip()
+        if not request_id:
+            continue
+
+        if status == "APPROVED":
+            execution_payload, execution_http = _execute_request_by_id(request_id)
+            if execution_http >= 300 or execution_payload.get("result") == "FAILED":
+                failed.append(
+                    {
+                        "request_id": request_id,
+                        "status": status,
+                        "error_code": execution_payload.get(
+                            "error_code", "EXECUTION_FAILED"
+                        ),
+                        "error_message": execution_payload.get(
+                            "error_message",
+                            execution_payload.get("error", "execution failed"),
+                        ),
+                    }
+                )
+                continue
+            succeeded.append(
+                {
+                    "request_id": request_id,
+                    "status": status,
+                    "execution_result": execution_payload.get("result", ""),
+                    "execution_id": execution_payload.get("execution_id", ""),
+                }
+            )
+            continue
+
+        success_item = {"request_id": request_id, "status": status}
+        if status == "REJECTED":
+            reason = reject_reason_map.get(request_id, "")
+            if reason:
+                success_item["reject_reason"] = reason
+        succeeded.append(success_item)
+
+    if failed and succeeded:
+        result = "PARTIAL_SUCCESS"
+    elif failed and not succeeded:
+        result = "FAILED"
+    else:
+        result = "SUCCESS"
+
+    return jsonify(
+        {
+            "result": result,
+            "requested_count": len(normalized_reviews),
+            "succeeded": succeeded,
+            "failed": failed,
+        }
+    )
 
 
 @app.put("/api/requests/<request_id>/status")
@@ -703,6 +867,25 @@ def api_create_history():
         return jsonify({"result": "SUCCESS"})
     except Exception as exc:
         logging.error(f"Failed to create history: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/history/bulk")
+def api_create_history_bulk():
+    """リクエスト履歴イベントを一括登録します。"""
+    if not _authorize():
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    events = payload.get("events", [])
+    if not isinstance(events, list):
+        return jsonify({"error": "events must be an array"}), 400
+    if not events:
+        return jsonify({"result": "SUCCESS", "inserted_count": 0})
+    try:
+        repo.insert_request_history_events_bulk(events)
+        return jsonify({"result": "SUCCESS", "inserted_count": len(events)})
+    except Exception as exc:
+        logging.error(f"Failed to create history in bulk: {exc}", exc_info=True)
         return jsonify({"error": str(exc)}), 500
 
 

@@ -24,6 +24,7 @@ resource "google_bigquery_table" "iam_access_requests" {
 
   schema = jsonencode([
     { name = "request_id", type = "STRING", mode = "REQUIRED" },
+    { name = "request_group_id", type = "STRING", mode = "NULLABLE" },
     { name = "request_type", type = "STRING", mode = "REQUIRED" },
     { name = "principal_email", type = "STRING", mode = "REQUIRED" },
     { name = "resource_name", type = "STRING", mode = "REQUIRED" },

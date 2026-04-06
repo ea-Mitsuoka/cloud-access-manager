@@ -81,7 +81,10 @@ SELECT
   l.latest_execution_result,
   l.latest_executed_at
 FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions` p
-LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_request_execution_latest` l
+LEFT JOIN (
+  SELECT * FROM `ea-yukihidemitsuoka2.iam_access_mgmt.v_iam_request_execution_latest`
+  QUALIFY ROW_NUMBER() OVER(PARTITION BY principal_email, role, resource_name ORDER BY requested_at DESC) = 1
+) l
   ON p.resource_name = l.resource_name
   AND p.principal_email = l.principal_email
   AND p.role = l.role

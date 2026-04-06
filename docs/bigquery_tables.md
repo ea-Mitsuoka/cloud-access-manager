@@ -69,6 +69,7 @@ ______________________________________________________________________
 | カラム名 | 型 | NULL | 説明 |
 | :--- | :--- | :--- | :--- |
 | `request_id` | STRING | NOT NULL | 申請の一意なID (UUID等) |
+| `request_group_id` | STRING | NULLABLE | 1回の一括申請を束ねるグループID |
 | `request_type` | STRING | NOT NULL | 申請の種類 (GRANT / REVOKE / CHANGE) |
 | `principal_email` | STRING | NOT NULL | 権限付与・剥奪の対象となるアカウントのメールアドレス |
 | `resource_name` | STRING | NOT NULL | 対象となるGCPリソース名 |
@@ -113,6 +114,7 @@ ______________________________________________________________________
 | :--- | :--- | :--- | :--- |
 | `history_id` | STRING | NOT NULL | 履歴レコードの一意なID |
 | `request_id` | STRING | NOT NULL | 対象となる申請のID |
+| `request_group_id` | STRING | NULLABLE | 一括申請グループID（`iam_access_requests.request_group_id`） |
 | `event_type` | STRING | NOT NULL | イベントの種別 (REQUESTED / STATUS_CHANGED) |
 | `old_status` | STRING | NULLABLE | 変更前のステータス |
 | `new_status` | STRING | NOT NULL | 変更後のステータス |

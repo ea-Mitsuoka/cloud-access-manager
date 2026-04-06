@@ -370,6 +370,8 @@ terraform output cloud_run_url
 # 5. build/sql/007_seed_workbook_from_existing.sql (初期データシード)
 ```
 
+- `build/sql/001_tables.sql` と `build/sql/004_workbook_tables.sql` には `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` と `UPDATE ... SET request_group_id = request_id WHERE request_group_id IS NULL` を含めているため、`request_group_id` 追加と既存データの後方互換バックフィルが自動適用されます。
+
 ### 8.4 変更リリース（通常運用）
 
 ```bash
@@ -499,7 +501,7 @@ Terraform と BigQuery のインフラ構築が完了した後、運用者が日
 
 1. **フォームの作成**: Googleフォームを新規作成し、`apps-script/README.md` の「4. 必須のフォーム項目ラベル」に記載されている通りに質問（申請種別、対象プリンシパル等）を作成します。
 1. **回答先シートの作成**: フォームの「回答」タブから「スプレッドシートにリンク」をクリックし、新規スプレッドシートを作成します（これが今後の管理表の土台になります）。
-1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内のコードを貼り付けます。詳細は `apps-script/README.md` の手順に従い、プロパティ設定とトリガー（`onFormSubmit`, `onEdit`）を設定してください。
+1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内のコードを貼り付けます。詳細は `apps-script/README.md` の手順に従い、プロパティ設定と時間主導トリガー（`refreshRequestReviewStatus_`）を設定してください。承認/却下の反映は `棚卸し > 🔄 レビュー結果を一括送信` で実行します。
 1. **シートの保護（セキュリティ設定: 推奨）**:
    一般ユーザーによる不正な承認操作を防ぐため、スプレッドシート標準の「範囲の保護」機能を利用してUIレベルで編集をブロックします。バックエンド側の認可制御と併用することで、最も堅牢なセキュリティを実現できます。
    - `requests_review` シートを開きます。
@@ -515,6 +517,7 @@ BigQuery に構築された帳票用の整形済みビュー（`v_sheet_*`）を
 1. データセット一覧から `iam_access_mgmt`（または設定したデータセット名）を選択します。
 1. テーブルとビューの一覧が表示されるので、以下のビューを選択して「接続」をクリックします（各ビューごとに新しいシートタブが作成されます）。
    - `v_sheet_iam_permission_history` （IAM権限設定履歴：メインの棚卸し帳票）
+   - `v_sheet_requests_review` （申請レビュー用ビュー）
    - `v_sheet_principal` （プリンシパル一覧）
    - `v_sheet_resource` （リソース一覧）
    - `v_sheet_group` （グループ一覧）

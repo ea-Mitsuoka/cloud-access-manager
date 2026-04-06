@@ -3,23 +3,25 @@
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_principal` AS
 SELECT
-  principal_email AS `プリンシパル（メールアドレス）`,
+  principal_email AS `プリンシパルEmail`,
   principal_name AS `プリンシパル名`,
   principal_type AS `種別`,
   note AS `備考`
 FROM `ea-yukihidemitsuoka2.iam_access_mgmt.principal_catalog`;
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_group_members` AS
-WITH latest AS (
-  SELECT *
+WITH latest_exec AS (
+  SELECT execution_id
   FROM `ea-yukihidemitsuoka2.iam_access_mgmt.google_group_membership_history`
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY group_email, member_email ORDER BY assessed_at DESC, execution_id DESC) = 1
+  ORDER BY assessed_at DESC
+  LIMIT 1
 )
 SELECT
   group_email AS `グループEmail`,
   member_email AS `メンバーEmail`,
   member_display_name AS `メンバー表示名`
-FROM latest;
+FROM `ea-yukihidemitsuoka2.iam_access_mgmt.google_group_membership_history`
+WHERE execution_id = (SELECT execution_id FROM latest_exec);
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_group` AS
 SELECT
@@ -29,10 +31,11 @@ SELECT
 FROM `ea-yukihidemitsuoka2.iam_access_mgmt.google_groups`;
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_resource` AS
-WITH latest AS (
-  SELECT *
+WITH latest_exec AS (
+  SELECT execution_id
   FROM `ea-yukihidemitsuoka2.iam_access_mgmt.gcp_resource_inventory_history`
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY resource_id ORDER BY assessed_at DESC, execution_id DESC) = 1
+  ORDER BY assessed_at DESC
+  LIMIT 1
 )
 SELECT
   resource_type AS `リソースタイプ`,
@@ -40,21 +43,22 @@ SELECT
   resource_id AS `リソースID`,
   parent_resource_id AS `親リソースID`,
   note AS `備考`
-FROM latest;
+FROM `ea-yukihidemitsuoka2.iam_access_mgmt.gcp_resource_inventory_history`
+WHERE execution_id = (SELECT execution_id FROM latest_exec);
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_iam_role` AS
 WITH catalog_roles AS (
   SELECT DISTINCT
     CASE
-      WHEN STARTS_WITH(iam_role, 'roles/') THEN REGEXP_EXTRACT(iam_role, r'roles/([^/]+)$')
-      WHEN REGEXP_CONTAINS(iam_role, r'/roles/') THEN REGEXP_EXTRACT(iam_role, r'/roles/([^/]+)$')
-      ELSE iam_role
+      WHEN STARTS_WITH(role, 'roles/') THEN REGEXP_EXTRACT(role, r'roles/([^/]+)$')
+      WHEN REGEXP_CONTAINS(role, r'/roles/') THEN REGEXP_EXTRACT(role, r'/roles/([^/]+)$')
+      ELSE role
     END AS role_name,
     CASE
-      WHEN STARTS_WITH(iam_role, 'roles/') THEN '事前定義'
+      WHEN STARTS_WITH(role, 'roles/') THEN '事前定義'
       ELSE 'カスタム'
     END AS role_type
-  FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_permission_bindings_history`
+  FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_policy_permissions`
 )
 SELECT
   role_name AS `ロール名`,
@@ -71,18 +75,24 @@ WITH
       ARRAY_AGG(STRUCT(action, result) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS latest_exec
     FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_change_log`
     GROUP BY request_id
+  ),
+  LatestSnapshot AS (
+    SELECT execution_id
+    FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_permission_bindings_history`
+    ORDER BY recorded_at DESC
+    LIMIT 1
   )
 SELECT
   p.resource_name AS `リソース名`,
   p.resource_id AS `リソースID`,
-  p.resource_full_path AS `リソースのフルパス`,
   p.principal_email AS `プリンシパル`,
   p.principal_type AS `種別`,
   p.iam_role AS `IAMロール`,
-  p.iam_condition AS `IAM Condition`,
+  COALESCE(rm.role_name_ja, REGEXP_REPLACE(p.iam_role, r'^roles/', '')) AS `表示用ロール名`,
+  p.iam_condition AS `IAM_Condition`,
   p.ticket_ref AS `申請チケット番号`,
-  p.request_reason AS `申請理由・用途`,
-  COALESCE(r.status, p.status_ja) AS `ステータス`, -- Use request status if available, fallback to history status
+  p.request_reason AS `申請理由_用途`,
+  COALESCE(sm.status_ja, p.status_ja) AS `ステータス`,
   p.approved_at AS `承認日`,
   p.next_review_at AS `次回レビュー日`,
   p.approver AS `承認者`,
@@ -95,9 +105,13 @@ SELECT
 FROM `ea-yukihidemitsuoka2.iam_access_mgmt.iam_permission_bindings_history` AS p
 LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.iam_access_requests` AS r
   ON p.request_id = r.request_id
+LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.iam_status_master` AS sm
+  ON r.status = sm.status_code
+LEFT JOIN `ea-yukihidemitsuoka2.iam_access_mgmt.iam_role_master` AS rm
+  ON p.iam_role = rm.role_id
 LEFT JOIN LatestChangeLog AS lcl
-  ON p.request_id = lcl.request_id;
-
+  ON p.request_id = lcl.request_id
+WHERE p.execution_id = (SELECT execution_id FROM LatestSnapshot);
 
 CREATE OR REPLACE VIEW `ea-yukihidemitsuoka2.iam_access_mgmt.v_sheet_status` AS
 SELECT

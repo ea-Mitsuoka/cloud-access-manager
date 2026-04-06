@@ -96,6 +96,7 @@ SELECT
   p.approved_at AS `承認日`,
   p.next_review_at AS `次回レビュー日`,
   p.approver AS `承認者`,
+  p.request_group_id AS `request_group_id`,
   p.request_id AS `request_id`,
   p.recorded_at AS `recorded_at`,
   r.expires_at AS `利用期限`,
@@ -112,6 +113,52 @@ LEFT JOIN `your_project.your_dataset.iam_role_master` AS rm
 LEFT JOIN LatestChangeLog AS lcl
   ON p.request_id = lcl.request_id
 WHERE p.execution_id = (SELECT execution_id FROM LatestSnapshot);
+
+CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_requests_review` AS
+WITH latest_exec AS (
+  SELECT
+    request_id,
+    ARRAY_AGG(STRUCT(result, executed_at) ORDER BY executed_at DESC LIMIT 1)[OFFSET(0)] AS ex
+  FROM `your_project.your_dataset.iam_access_change_log`
+  GROUP BY request_id
+),
+actual AS (
+  SELECT principal_email, resource_name, role
+  FROM `your_project.your_dataset.iam_policy_permissions`
+)
+SELECT
+  req.request_group_id AS `request_group_id`,
+  req.request_id AS `request_id`,
+  req.request_type AS `request_type`,
+  req.principal_email AS `principal_email`,
+  req.resource_name AS `resource_name`,
+  req.role AS `role`,
+  req.reason AS `reason`,
+  req.expires_at AS `expires_at`,
+  req.requester_email AS `requester_email`,
+  req.approver_email AS `approver_email`,
+  COALESCE(status_map.status_ja, req.status) AS `status`,
+  req.requested_at AS `requested_at`,
+  req.ticket_ref AS `ticket_ref`,
+  COALESCE(latest_exec.ex.result, '未実行') AS `実行結果`,
+  CASE
+    WHEN latest_exec.ex.result IS NULL THEN '未確認'
+    WHEN req.request_type = 'REVOKE' AND actual.principal_email IS NULL THEN '反映済み'
+    WHEN req.request_type = 'REVOKE' AND actual.principal_email IS NOT NULL THEN '未反映'
+    WHEN req.request_type != 'REVOKE' AND actual.principal_email IS NOT NULL THEN '反映済み'
+    WHEN req.request_type != 'REVOKE' AND actual.principal_email IS NULL THEN '未反映'
+    ELSE '未確認'
+  END AS `最終反映確認`,
+  latest_exec.ex.executed_at AS `最終確認時刻`
+FROM `your_project.your_dataset.iam_access_requests` AS req
+LEFT JOIN latest_exec
+  ON req.request_id = latest_exec.request_id
+LEFT JOIN actual
+  ON req.principal_email = actual.principal_email
+  AND req.resource_name = actual.resource_name
+  AND req.role = actual.role
+LEFT JOIN `your_project.your_dataset.iam_status_master` AS status_map
+  ON req.status = status_map.status_code;
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_status` AS
 SELECT
