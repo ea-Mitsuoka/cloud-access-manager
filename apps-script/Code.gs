@@ -27,8 +27,6 @@ const FIELD_PROJECT = '対象プロジェクト';
 const FIELD_ROLE = '付与・変更ロール';
 const FIELD_REASON = '申請理由・利用目的';
 const FIELD_REASON_ALT = '利用目的';
-const FIELD_EXPIRES_AT = '付与終了日時（期間限定を選択した場合）';
-const FIELD_REQUESTER = '申請者メール';
 const FIELD_APPROVER = '承認者メール（または承認グループ）';
 const COL_AI_SUGGEST = 'AI推奨（最小権限）';
 const COL_EXEC_RESULT = '実行結果';
@@ -46,96 +44,6 @@ function onOpen() {
     .addSeparator()
     .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
-}
-
-function onFormSubmit(e) {
-  const props = getProps_();
-  const named = e.namedValues || {};
-  const rawRequestType = pick_(named, FIELD_REQUEST_TYPE);
-  const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
-  const reason = (isEmergency ? '[緊急] ' : '') + pickFirst_(named, [FIELD_REASON, FIELD_REASON_ALT]);
-
-  let expiresAt = null;
-  const expiresRaw = pick_(named, FIELD_EXPIRES_AT);
-  if (expiresRaw && expiresRaw.indexOf('恒久') === -1 && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
-    const d = new Date(expiresRaw);
-    if (!isNaN(d.getTime())) {
-      // 期限日の終端 (23:59:59.999) を有効期限として設定し、当日の早朝剥奪を防ぐ
-      d.setHours(23, 59, 59, 999);
-      expiresAt = d.toISOString();
-    }
-  }
-
-  const request = {
-    request_id: Utilities.getUuid(),
-    request_type: normalizeRequestType_(rawRequestType),
-    principal_email: pick_(named, FIELD_PRINCIPAL),
-    resource_name: normalizeResourceName_(pickFirst_(named, [FIELD_RESOURCE, FIELD_PROJECT])),
-    role: pick_(named, FIELD_ROLE),
-    reason: reason,
-    expires_at: expiresAt,
-    requester_email: pick_(named, FIELD_REQUESTER),
-    approver_email: pick_(named, FIELD_APPROVER),
-    status: STATUS_PENDING,
-    requested_at: new Date().toISOString(),
-    ticket_ref: ''
-  };
-  validateRequest_(request);
-  insertRequestToBigQuery_(props, request);
-  insertRequestHistoryEvent_(props, {
-    request_id: request.request_id,
-    event_type: EVENT_REQUESTED,
-    old_status: '',
-    new_status: request.status,
-    reason_snapshot: request.reason,
-    request_type: request.request_type,
-    principal_email: request.principal_email,
-    resource_name: request.resource_name,
-    role: request.role,
-    requester_email: request.requester_email,
-    approver_email: request.approver_email,
-    acted_by: request.requester_email || getActorEmail_(),
-    actor_source: 'FORM_SUBMIT',
-    details_json: JSON.stringify({ source: 'google_form' })
-  });
-  let aiSuggestion = '';
-  try {
-    const suggestion = suggestIamRoles({ goal: reason, resource: request.resource_name, principal: request.principal_email });
-    const roles = (suggestion.recommended_roles || []).map(r => r.role).join(', ');
-    aiSuggestion = `【推奨ロール】
-${roles}
-
-【レビューア向けメモ】
-${suggestion.reviewer_note || suggestion.summary || ''}`;
-  } catch(e) {
-    aiSuggestion = `AI判定スキップ: ${e.message}`;
-  }
-
-  appendReviewSheet_(request, aiSuggestion);
-
-  // 緊急アクセスの場合は即時承認フローへ回す
-  if (isEmergency) {
-    updateStatusInBigQuery_(props, request.request_id, STATUS_APPROVED);
-    insertRequestHistoryEvent_(props, {
-      request_id: request.request_id,
-      event_type: EVENT_STATUS_CHANGED,
-      old_status: STATUS_PENDING,
-      new_status: STATUS_APPROVED,
-      reason_snapshot: request.reason,
-      request_type: request.request_type,
-      principal_email: request.principal_email,
-      resource_name: request.resource_name,
-      role: request.role,
-      requester_email: request.requester_email,
-      approver_email: request.approver_email,
-      acted_by: 'SYSTEM_AUTO_APPROVE',
-      actor_source: 'SYSTEM',
-      details_json: JSON.stringify({ note: 'Break-glass auto approval' })
-    });
-    callCloudRunExecute_(props, request.request_id);
-    updateSheetStatus_(request.request_id, '承認済');
-    refreshRequestReviewStatusForRequestIds_([request.request_id]);
-  }
 }
 
 
@@ -618,19 +526,6 @@ function param_(name, type, value) {
     parameterType: { type },
     parameterValue: { value }
   };
-}
-
-function pick_(namedValues, key) {
-  const val = namedValues[key];
-  return val && val.length ? String(val[0]).trim() : '';
-}
-
-function pickFirst_(namedValues, keys) {
-  for (let i = 0; i < keys.length; i += 1) {
-    const v = pick_(namedValues, keys[i]);
-    if (v) return v;
-  }
-  return '';
 }
 
 function normalizeRequestType_(raw) {
