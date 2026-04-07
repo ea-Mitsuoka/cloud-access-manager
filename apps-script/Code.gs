@@ -281,8 +281,22 @@ function menuSubmitBulkReview_() {
     .map(item => item.rowNumber)
     .sort((a, b) => b - a);
 
-  rowsToMove.forEach(rowNumber => {
+ rowsToMove.forEach(rowNumber => {
     const rowData = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // ★追加: 履歴に逃がす前に、成功したという「証」をデータに上書きする
+    const reqId = String(rowData[idx.request_id - 1] || '').trim();
+    const successData = successMap[reqId];
+    if (successData) {
+      if (idx[COL_EXEC_RESULT]) {
+        // APIから返ってきた結果(SUCCESSやSKIPPED)をセット、なければSUCCESS
+        rowData[idx[COL_EXEC_RESULT] - 1] = successData.execution_result || 'SUCCESS';
+      }
+      if (idx[COL_LAST_CHECKED]) {
+        rowData[idx[COL_LAST_CHECKED] - 1] = new Date().toLocaleString();
+      }
+    }
+    
     historySheet.appendRow(rowData);
     sheet.deleteRow(rowNumber);
   });
