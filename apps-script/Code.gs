@@ -268,11 +268,14 @@ function menuSubmitBulkReview_() {
       if (!failure) return;
       const msg = `${failure.error_code || 'ERROR'}: ${failure.error_message || 'failed'}`;
       sheet.getRange(item.rowNumber, idx[COL_EXEC_RESULT]).setValue(msg);
+      if (idx[COL_FINAL_REFLECT]) {
+        sheet.getRange(item.rowNumber, idx[COL_FINAL_REFLECT]).setValue('エラー');
+      }
       if (idx[COL_LAST_CHECKED]) {
         sheet.getRange(item.rowNumber, idx[COL_LAST_CHECKED]).setValue(new Date().toLocaleString());
       }
     });
-    refreshRequestReviewStatusForRequestIds_(failedIds);
+    // 失敗行の即時リフレッシュを削除（APIから返った詳細なエラーメッセージがBigQueryの「未実行」等で上書きされるのを防ぐため）
   }
 
   const historySheet = getProcessedHistorySheet_(header);
