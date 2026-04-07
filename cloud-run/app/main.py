@@ -689,6 +689,11 @@ def api_bulk_update_request_status():
     if not updates:
         return jsonify({"result": "SUCCESS", "updated_count": 0})
 
+    for u in updates:
+        s = str(u.get("status", "")).strip().upper()
+        if s and s not in {"PENDING", "APPROVED", "REJECTED", "CANCELLED"}:
+            return jsonify({"error": f"invalid status: {s}"}), 400
+
     try:
         detail = repo.bulk_update_request_status_and_history_detailed(
             updates=updates, actor_email=actor_email, actor_source="SHEET_EDIT_BULK"
@@ -737,6 +742,9 @@ def api_bulk_review_requests():
         request_id = str(row.get("request_id", "")).strip()
         status_raw = str(row.get("status", "")).strip()
         status = status_map.get(status_raw, status_raw.upper())
+        if status not in {"PENDING", "APPROVED", "REJECTED", "CANCELLED"}:
+            return jsonify({"error": f"invalid status: {status_raw}"}), 400
+            
         reject_reason = str(row.get("reject_reason", "")).strip()
         if request_id:
             reject_reason_map[request_id] = reject_reason
@@ -848,6 +856,11 @@ def api_update_request_status(request_id):
     status = payload.get("status")
     if not status:
         return jsonify({"error": "status is required"}), 400
+    
+    status = str(status).strip().upper()
+    if status not in {"PENDING", "APPROVED", "REJECTED", "CANCELLED"}:
+        return jsonify({"error": f"invalid status: {status}"}), 400
+
     try:
         repo.update_request_status(request_id, status)
         return jsonify({"result": "SUCCESS"})
