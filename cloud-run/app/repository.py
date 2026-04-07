@@ -586,12 +586,22 @@ class Repository:
                 )
                 continue
 
-            approver = str(snap.get("approver_email") or "")
+            approver = str(snap.get("approver_email") or "").strip()
             if (
                 new_status in ("APPROVED", "REJECTED")
                 and actor_source != "SYSTEM_BATCH"
             ):
-                if approver and actor_email.lower() != approver.lower():
+                if not approver:
+                    errors.append(
+                        {
+                            "request_id": req_id,
+                            "status": new_status,
+                            "error_code": "MISSING_APPROVER",
+                            "error_message": "approver_email is empty. Cannot approve or reject without an assigned approver.",
+                        }
+                    )
+                    continue
+                if actor_email.lower() != approver.lower():
                     logging.warning(
                         "Unauthorized status update attempt: user=%s request_id=%s approver=%s",
                         actor_email,
