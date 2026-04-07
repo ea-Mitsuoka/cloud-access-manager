@@ -12,32 +12,50 @@
     body { font-family: 'Google Sans', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--bg); color: var(--text); }
     .header { background: #fff; padding: 16px 24px; border-bottom: 1px solid var(--border); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1); display: flex; align-items: center; justify-content: space-between; }
     .header h1 { margin: 0; font-size: 20px; font-weight: 500; color: var(--text); }
-    .container { display: flex; flex-wrap: wrap; max-width: 1200px; margin: 24px auto; gap: 24px; padding: 0 16px; }
-    .panel { background: #fff; border-radius: 8px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.05); flex: 1; min-width: 320px; }
+    
+    /* 2カラムレイアウト */
+    .container { display: flex; flex-wrap: wrap; max-width: 1440px; margin: 24px auto; gap: 24px; padding: 0 16px; align-items: flex-start; }
+    .panel { background: #fff; border-radius: 8px; border: 1px solid var(--border); padding: 28px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.05); }
+    .panel-left { flex: 2.2; min-width: 360px; }
+    .panel-right { flex: 1; min-width: 320px; background: #fbfcff; border-color: #d2e3fc; display: flex; flex-direction: column; position: sticky; top: 24px; max-height: calc(100vh - 48px); }
+    
+    .section-title { font-size: 14px; margin-bottom: 16px; margin-top: 32px; color: var(--primary); border-bottom: 1px solid #e8f0fe; padding-bottom: 6px; font-weight: bold; }
+    .section-title:first-of-type { margin-top: 0; }
+    
     .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; font-weight: 500; margin-bottom: 8px; font-size: 14px; }
+    .form-group label { display: block; font-weight: 500; margin-bottom: 8px; font-size: 13px; }
     .form-group input, .form-group select, .form-group textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 14px; transition: border 0.2s; }
     .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
-    .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
     .error-msg { color: var(--error); font-size: 12px; margin-top: 4px; display: none; }
+    
     button { padding: 10px 24px; border: none; border-radius: 4px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s; }
     button.primary { background: var(--primary); color: #fff; }
-    button.primary:hover { background: var(--primary-hover); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); }
+    button.primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); }
     button.primary:disabled { background: #8ab4f8; cursor: not-allowed; }
     button.secondary { background: #fff; color: var(--primary); border: 1px solid var(--border); }
     button.secondary:hover { background: #f1f3f4; }
-    .ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: var(--primary); }
-    .ai-header svg { width: 24px; height: 24px; fill: currentColor; }
-    .result-content { background: #e8f0fe; padding: 16px; border-radius: 8px; margin-top: 16px; font-size: 14px;}
-    .result-content h4 { margin: 16px 0 8px; color: var(--primary); font-size: 14px; }
+    .text-button { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
+    .text-button:hover { text-decoration: underline; }
+    
+    /* 明細カードUI */
+    .request-list-item { border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 6px; background: #fff; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+    .cart-title { font-size: 13px; margin-bottom: 8px; }
+    .cart-sub { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    .cart-list-container { flex: 1; overflow-y: auto; margin-bottom: 16px; padding-right: 4px; }
+    
+    /* AI インラインパネル */
+    .ai-inline-panel { background: #f8f9fa; border-radius: 8px; padding: 16px; margin-top: 12px; border: 1px dashed var(--border); }
+    .ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--primary); font-size: 14px; font-weight: bold; }
+    .ai-header svg { width: 18px; height: 18px; fill: currentColor; }
+    .result-content { background: #e8f0fe; padding: 12px; border-radius: 6px; margin-top: 12px; font-size: 13px;}
+    .result-content h4 { margin: 12px 0 6px; color: var(--primary); font-size: 13px; }
     .result-content h4:first-child { margin-top: 0; }
     .result-content ul { margin: 0; padding-left: 20px; }
-    .result-content li { margin-bottom: 8px; }
-    .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
-    .apply-btn { margin-left: 12px; padding: 4px 12px; font-size: 12px; }
-    .cart-item { border: 1px solid var(--border); border-radius: 6px; background: #fff; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; gap: 8px; }
-    .cart-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-    .cart-sub { font-size: 12px; color: var(--text-muted); }
+    .result-content li { margin-bottom: 6px; }
+    .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
+    .apply-btn { margin-left: 8px; padding: 4px 10px; font-size: 12px; }
+    
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); flex-direction: column; align-items: center; justify-content: center; z-index: 1000; display: none; }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -48,19 +66,13 @@
     <h1>Cloud Access Manager 申請ポータル</h1>
     <div style="font-size:14px; color:var(--text-muted);">👤 <?= requesterEmail ?></div>
   </div>
+  
   <div class="container">
-    <div class="panel" style="flex: 3;">
-      <h2 style="margin-top:0; font-size: 18px; color: var(--primary);">IAM権限 申請フォーム</h2>
+    <div class="panel panel-left">
+      <h2 style="margin-top:0; margin-bottom:24px; font-size: 18px; color: var(--text);">IAM権限 追加リクエスト</h2>
       <form id="accessForm" onsubmit="addToCart(event)">
-        <div class="form-group">
-          <label>申請種別 <span style="color:var(--error);">*</span></label>
-          <select id="requestType" required>
-            <option value="新規付与" selected>新規付与</option>
-            <option value="変更">変更</option>
-            <option value="削除">削除</option>
-            <option value="緊急付与">緊急付与（※承認不要・即時実行・要事後監査）</option>
-          </select>
-        </div>
+        
+        <div class="section-title">1. 対象者とリソース</div>
         <div class="form-group">
           <label>対象プリンシパル <span style="color:var(--error);">*</span></label>
           <input type="email" id="principal" placeholder="例: user@example.com" required />
@@ -71,13 +83,42 @@
           <input type="text" id="resource" placeholder="例: projects/my-project-id" required />
           <div class="hint">対象のプロジェクトIDやフォルダID</div>
         </div>
+
+        <div class="section-title">2. 権限のアクション内容</div>
+        <div class="form-group">
+          <label>申請種別 <span style="color:var(--error);">*</span></label>
+          <select id="requestType" required>
+            <option value="新規付与" selected>新規付与</option>
+            <option value="変更">変更</option>
+            <option value="削除">削除</option>
+            <option value="緊急付与">緊急付与（※即時実行・要事後監査）</option>
+          </select>
+        </div>
+        
         <div class="form-group">
           <label>付与・変更ロール <span style="color:var(--error);">*</span></label>
-          <input type="text" id="role" placeholder="例: roles/bigquery.dataViewer" required oninput="validateRole()" />
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="role" placeholder="例: roles/bigquery.dataViewer" required oninput="validateRole()" style="flex:1;" />
+            <button type="button" class="secondary" onclick="toggleAiPanel()" style="padding: 0 12px; font-size: 13px; white-space: nowrap;">✨ AIに相談</button>
+          </div>
           <div id="roleError" class="error-msg">「roles/」から始まる正式なロール名を入力してください。</div>
           <div id="roleAiSuggestion" class="error-msg" style="font-weight:bold; font-size:13px; margin-top:8px;"></div>
-          <div class="hint">どのロールを付与するか分からない場合は、右側のAIアシスタントをご利用ください。</div>
+          
+          <div id="aiPanel" class="ai-inline-panel" style="display:none;">
+            <div class="ai-header">
+              <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg>
+              Gemini IAMロール提案アシスタント
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin-top:0; margin-bottom:12px;">やりたいことを自然言語で入力すると、最小権限のロール名を提案します。</p>
+            <textarea id="aiGoal" rows="2" placeholder="例: BigQueryで特定データセットの参照クエリを実行したい" style="margin-bottom:8px;"></textarea>
+            <button type="button" id="aiBtn" class="secondary" onclick="runSuggest()" style="width:100%; font-size:13px; padding:8px;">推論させる</button>
+            <div id="aiResultContainer" style="display:none;">
+              <div id="aiResult" class="result-content"></div>
+            </div>
+            <input type="hidden" id="hiddenAiSuggestion" value="" />
+          </div>
         </div>
+        
         <div class="form-group">
           <label>利用期限 <span style="color:var(--error);">*</span></label>
           <div style="display:flex; gap:12px;">
@@ -87,47 +128,40 @@
             </select>
             <input type="date" id="expiresDate" required style="flex:1;" />
           </div>
-          <div class="hint">期間限定を強く推奨します。指定した日付の23:59に自動的に権限が剥奪されます。</div>
+          <div class="hint">指定した日付の23:59に自動的に権限が剥奪されます。</div>
         </div>
         <div class="form-group">
           <label>申請理由・利用目的 <span style="color:var(--error);">*</span></label>
-          <textarea id="reason" rows="3" placeholder="例: 〇〇プロジェクトのログ調査のため、2月末まで閲覧権限が必要" required></textarea>
+          <textarea id="reason" rows="2" placeholder="例: 〇〇プロジェクトのログ調査のため" required></textarea>
         </div>
+
+        <div class="section-title">3. 承認フロー</div>
         <div class="form-group">
           <label>承認者メール <span style="color:var(--error);">*</span></label>
           <input type="email" id="approver" placeholder="例: manager@example.com" required />
           <div class="hint">この申請をレビューし、承認する権限を持つ上長等のメールアドレス</div>
         </div>
-        <div style="margin-top: 32px; text-align:right;">
-          <button type="button" id="addCartBtn" class="secondary" onclick="addToCart()">🛒 カートに追加</button>
+        
+        <div style="margin-top: 32px;">
+          <button type="submit" id="addCartBtn" class="secondary" style="width:100%; padding: 12px; font-weight:bold; background:#f8f9fa;">＋ リクエスト明細に追加</button>
         </div>
       </form>
     </div>
-    <div class="panel" style="flex: 2; display: none; border-color: #c7e0d5; background: #f6fbf8;" id="cartPanel">
-      <h2 style="margin-top:0; font-size: 16px; color: #137333;">一括申請カート</h2>
-      <div id="cartMeta" style="font-size:13px; color:var(--text-muted); margin-bottom: 12px;">0件</div>
-      <div id="cartList"></div>
-      <div style="display:flex; justify-content: space-between; gap: 8px; margin-top: 14px;">
-        <button type="button" class="secondary" onclick="clearCart()">カートを空にする</button>
-        <button type="button" id="submitBtn" class="primary" onclick="submitCart()">一括申請を送信する</button>
+  
+    <div class="panel panel-right">
+      <h2 style="margin-top:0; font-size: 16px; color: #1967d2;">送信待ちのリクエスト</h2>
+      <div id="cartMeta" style="font-size:13px; color:var(--text-muted); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e8f0fe;">明細はありません</div>
+      
+      <div id="cartList" class="cart-list-container">
+        </div>
+      
+      <div style="display:flex; justify-content: space-between; gap: 12px; border-top: 1px solid #d2e3fc; padding-top: 16px; margin-top:auto;">
+        <button type="button" class="secondary" onclick="clearCart()" style="padding: 10px 16px;">クリア</button>
+        <button type="button" id="submitBtn" class="primary" onclick="submitCart()" style="flex:1; font-weight:bold;" disabled>一括申請を送信する</button>
       </div>
-    </div>
-    <div class="panel" style="flex: 2; background: #fbfcff;">
-      <div class="ai-header">
-        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg>
-        <h2 style="margin:0; font-size: 16px;">Gemini ロール提案アシスタント</h2>
-      </div>
-      <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">やりたいことを自然言語で入力すると、AIがセキュリティベストプラクティスに基づいた「最小権限のロール名」を提案します。</p>
-      <div class="form-group">
-        <textarea id="aiGoal" rows="3" placeholder="例: BigQueryで特定データセットの参照クエリを実行したい"></textarea>
-      </div>
-      <button type="button" id="aiBtn" class="secondary" onclick="runSuggest()" style="width:100%;">AIに推論させる</button>
-      <div id="aiResultContainer" style="display:none;">
-        <div id="aiResult" class="result-content"></div>
-      </div>
-      <input type="hidden" id="hiddenAiSuggestion" value="" />
     </div>
   </div>
+
   <div id="overlay" class="overlay">
     <div class="spinner"></div>
     <div style="margin-top:16px; font-weight:500;">バックエンドへ送信中...</div>
@@ -150,7 +184,7 @@
       }
       toggleDate();
       
-      // 却下メール等からのURLパラメータを復元 (Pre-filled URL機能の再構築)
+      // 却下メール等からのURLパラメータを復元 (Pre-filled URL機能)
       if (initialData['申請種別']) document.getElementById('requestType').value = initialData['申請種別'];
       if (initialData['対象プリンシパル']) document.getElementById('principal').value = initialData['対象プリンシパル'];
       if (initialData['対象リソース'] || initialData['対象プロジェクト']) document.getElementById('resource').value = initialData['対象リソース'] || initialData['対象プロジェクト'];
@@ -161,6 +195,7 @@
       if (document.getElementById('role').value) {
         validateRole();
       }
+      renderCart();
     };
 
     function escapeHtml(str) {
@@ -196,6 +231,11 @@
       }
     }
 
+    function toggleAiPanel() {
+      const panel = document.getElementById('aiPanel');
+      panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+    }
+
     function applySuggestion(role, summary) {
       document.getElementById('role').value = role;
       validateRole();
@@ -203,6 +243,7 @@
       if (!reasonEl.value.includes(summary)) {
         reasonEl.value = summary + '\n' + reasonEl.value;
       }
+      toggleAiPanel(); // 反映したら閉じる
     }
 
     function runSuggest() {
@@ -225,7 +266,7 @@
         .withSuccessHandler(res => {
           let html = '';
           let textForSheet = '';
-          if (res.summary) html += `<h4>💡 要約</h4><p>${escapeHtml(res.summary)}</p>`;
+          if (res.summary) html += `<h4>💡 要約</h4><p style="margin-top:0; margin-bottom:8px;">${escapeHtml(res.summary)}</p>`;
           if (res.recommended_roles && res.recommended_roles.length > 0) {
             html += `<h4>🔑 推奨ロール候補</h4><ul>`;
             const rolesForSheet = [];
@@ -235,9 +276,9 @@
               html += `<li>
                 <div class="role-badge">
                   ${safeRole}
-                  <button type="button" class="secondary apply-btn" onclick="applySuggestion('${safeRole}', '${safeSummary}')">反映する</button>
+                  <button type="button" class="secondary apply-btn" onclick="applySuggestion('${safeRole}', '${safeSummary}')">反映</button>
                 </div>
-                <div style="font-size:12px; color:var(--text-muted);"><b>理由:</b> ${escapeHtml(r.reason)} <br><b>スコープ:</b> ${escapeHtml(r.scope_hint)}</div>
+                <div style="font-size:11px; color:var(--text-muted);">理由: ${escapeHtml(r.reason)}</div>
               </li>`;
               rolesForSheet.push(r.role);
             });
@@ -246,7 +287,7 @@
           }
           if (res.cautions && res.cautions.length > 0) {
             html += `<h4>⚠️ 注意点・確認事項</h4><ul>`;
-            res.cautions.forEach(c => { html += `<li style="font-size:12px; color:var(--text-muted);">${escapeHtml(c)}</li>`; });
+            res.cautions.forEach(c => { html += `<li style="font-size:11px; color:var(--text-muted);">${escapeHtml(c)}</li>`; });
             html += `</ul>`;
           }
           if (res.reviewer_note) textForSheet += `【レビューア向けメモ】\n${res.reviewer_note}`;
@@ -259,7 +300,7 @@
         .withFailureHandler(err => {
           resultEl.innerHTML = `<span style="color:var(--error);">エラーが発生しました: ${escapeHtml(err.message)}</span>`;
           btn.disabled = false;
-          btn.textContent = 'AIに推論させる';
+          btn.textContent = '推論させる';
         })
         .suggestIamRoles({ goal, resource, principal });
     }
@@ -306,7 +347,7 @@
           overlay.style.display = 'none';
           addBtn.disabled = false;
           if (validationRes && validationRes.is_valid === false && validationRes.suggested_role) {
-            aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(validationRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline; font-size:14px;">${escapeHtml(validationRes.suggested_role)}</a> ですか？（クリックで修正）`;
+            aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(validationRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline; font-size:14px;">${escapeHtml(validationRes.suggested_role)}</a> ですか？`;
             aiSugEl.style.display = 'block';
             return;
           }
@@ -326,28 +367,44 @@
     }
 
     function renderCart() {
-      const panel = document.getElementById('cartPanel');
       const list = document.getElementById('cartList');
       const meta = document.getElementById('cartMeta');
+      const submitBtn = document.getElementById('submitBtn');
+      
       if (!cart.length) {
-        panel.style.display = 'none';
-        list.innerHTML = '';
-        meta.textContent = '0件';
+        list.innerHTML = '<div style="text-align:center; padding: 64px 0; color:var(--text-muted); font-size:13px;">左のフォームから追加された<br>リクエスト明細がここに表示されます</div>';
+        meta.textContent = '明細はありません';
+        submitBtn.disabled = true;
         return;
       }
-      panel.style.display = 'block';
-      meta.textContent = cart.length + '件を一括申請予定';
-      list.innerHTML = cart.map((item, i) => `
-        <div class="cart-item">
-          <div>
-            <div class="cart-title">${escapeHtml(item.resource)} / ${escapeHtml(item.role)}</div>
-            <div class="cart-sub">${escapeHtml(item.principal)} | 承認者: ${escapeHtml(item.approver)} | 期限: ${escapeHtml(item.expiresAt)}</div>
+      
+      submitBtn.disabled = false;
+      meta.textContent = cart.length + '件のリクエスト明細';
+      list.innerHTML = cart.map((item, i) => {
+        let borderColor = '#bdc1c6';
+        let typeColor = '#5f6368';
+        if(item.requestType.includes('新規') || item.requestType.includes('緊急')) {
+          borderColor = '#34a853'; typeColor = '#137333';
+        } else if(item.requestType.includes('削除')) {
+          borderColor = '#ea4335'; typeColor = '#c5221f';
+        } else {
+          borderColor = '#4285f4'; typeColor = '#1967d2';
+        }
+
+        return `
+        <div class="request-list-item" style="border-left-color: ${borderColor};">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <div class="cart-title" style="margin:0;"><span style="color:${typeColor};font-weight:bold;">${escapeHtml(item.requestType)}</span> : <span style="font-family:monospace; font-size:12px; background:#f1f3f4; padding:2px 6px; border-radius:4px; color:#202124;">${escapeHtml(item.role)}</span></div>
+            <button type="button" class="text-button" style="color:var(--text-muted); padding:0 4px; font-size:18px; line-height:1;" title="この明細を削除" onclick="removeFromCart(${i})">×</button>
           </div>
-          <div>
-            <button type="button" class="secondary" style="padding:6px 10px; font-size:12px;" onclick="removeFromCart(${i})">削除</button>
+          <div class="cart-sub">
+             <div style="margin-bottom:2px;"><strong>対象:</strong> ${escapeHtml(item.principal)}</div>
+             <div style="margin-bottom:2px;"><strong>リソース:</strong> ${escapeHtml(item.resource)}</div>
+             <div><strong>期限:</strong> ${escapeHtml(item.expiresAt)}</div>
           </div>
         </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function removeFromCart(index) {
@@ -362,7 +419,7 @@
 
     function submitCart() {
       if (!cart.length) {
-        alert('カートが空です。');
+        alert('明細が空です。');
         return;
       }
 
@@ -382,11 +439,12 @@
           overlay.style.display = 'none';
           btn.disabled = false;
           const count = (res && res.count) ? res.count : cart.length;
-          alert('✅ ' + count + '件を一括申請しました。\n申請グループID: ' + requestGroupId);
+          alert('✅ ' + count + '件の明細を一括申請しました。\n申請グループID: ' + requestGroupId);
           clearCart();
           document.getElementById('accessForm').reset();
           document.getElementById('hiddenAiSuggestion').value = '';
           document.getElementById('aiResultContainer').style.display = 'none';
+          document.getElementById('aiPanel').style.display = 'none';
           document.getElementById('aiGoal').value = '';
           toggleDate();
         })
