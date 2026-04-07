@@ -384,12 +384,10 @@ terraform apply -var-file=../environment.auto.tfvars
 ### 8.5 収集ジョブ手動実行（リソース・グループ・IAMポリシー）
 
 ```bash
-cd terraform
-CLOUD_RUN_URL="$(terraform output -raw cloud_run_url)"
-
-bash ../scripts/collect-resource-inventory.sh --cloud-run-url "$CLOUD_RUN_URL"
-bash ../scripts/collect-google-groups.sh --cloud-run-url "$CLOUD_RUN_URL"
-bash ../scripts/collect-iam-policies.sh --cloud-run-url "$CLOUD_RUN_URL"
+# Cloud Schedulerジョブを直接キックしてデータ収集を実行します
+bash scripts/collect-resource-inventory.sh
+bash scripts/collect-google-groups.sh
+bash scripts/collect-iam-policies.sh
 ```
 
 ### 8.6 Cloud Scheduler（日次自動実行）確認
@@ -497,11 +495,11 @@ bash scripts/teardown.sh
 Terraform と BigQuery のインフラ構築が完了した後、運用者が日常的に利用する「IAM権限管理表（スプレッドシート）」を作成し、システムと連携させるための手順です。
 本システムはセキュリティとパフォーマンスの観点から、GASでデータを書き込むのではなく、スプレッドシートの標準機能である\*\*「Connected Sheets（BigQueryデータコネクタ）」\*\*を用いてビューを直接表示（Read-Only）するアーキテクチャを採用しています。
 
-### 12.1. スプレッドシートとフォームの基本セットアップ
+### 12.1. 管理用スプレッドシートの基本セットアップ
 
-1. **フォームの作成**: Googleフォームを新規作成し、`apps-script/README.md` の「4. 必須のフォーム項目ラベル」に記載されている通りに質問（申請種別、対象プリンシパル等）を作成します。
-1. **回答先シートの作成**: フォームの「回答」タブから「スプレッドシートにリンク」をクリックし、新規スプレッドシートを作成します（これが今後の管理表の土台になります）。
-1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内のコードを貼り付けます。詳細は `apps-script/README.md` の手順に従い、プロパティ設定と時間主導トリガー（`refreshRequestReviewStatus_`）を設定してください。承認/却下の反映は `棚卸し > 🔄 レビュー結果を一括送信` で実行します。
+1. **スプレッドシートの新規作成**: Googleドライブ等から、新しい空のスプレッドシートを作成し、任意の名前（例：「Cloud Access Manager 管理表」）を付けます。
+1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内の3つのコードを貼り付けます。
+1. **初期設定**: 詳細は `apps-script/README.md` の手順に従い、環境変数の登録、マニフェスト（oauthScopes）の追加、および時間主導トリガー（`refreshRequestReviewStatus_`）を設定してください。
 1. **シートの保護（セキュリティ設定: 推奨）**:
    一般ユーザーによる不正な承認操作を防ぐため、スプレッドシート標準の「範囲の保護」機能を利用してUIレベルで編集をブロックします。バックエンド側の認可制御と併用することで、最も堅牢なセキュリティを実現できます。
    - `requests_review` シートを開きます。
