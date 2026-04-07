@@ -744,7 +744,7 @@ def api_bulk_review_requests():
         status = status_map.get(status_raw, status_raw.upper())
         if status not in {"PENDING", "APPROVED", "REJECTED", "CANCELLED"}:
             return jsonify({"error": f"invalid status: {status_raw}"}), 400
-            
+
         reject_reason = str(row.get("reject_reason", "")).strip()
         if request_id:
             reject_reason_map[request_id] = reject_reason
@@ -856,7 +856,7 @@ def api_update_request_status(request_id):
     status = payload.get("status")
     if not status:
         return jsonify({"error": "status is required"}), 400
-    
+
     status = str(status).strip().upper()
     if status not in {"PENDING", "APPROVED", "REJECTED", "CANCELLED"}:
         return jsonify({"error": f"invalid status: {status}"}), 400
