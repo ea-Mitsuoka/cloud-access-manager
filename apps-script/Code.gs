@@ -37,14 +37,14 @@ const EVENT_STATUS_CHANGED = 'STATUS_CHANGED';
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('棚卸し')
-    .addItem('申請反映ステータス更新', 'menuRefreshRequestReviewStatus_')
-    .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
-    .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
-    .addSeparator()
     .addItem('🔄 レビュー結果を一括送信', 'menuSubmitBulkReview_')
+    .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
+    .addItem('最新ステータス取得', 'menuRefreshRequestReviewStatus_')
+    .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
     .addSeparator()
     .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
+
 }
 
 
@@ -684,8 +684,9 @@ function getActorEmail_() {
 }
 
 /**
- * Build pivot table in `IAM権限設定マトリクス` from raw rows in `IAM権限設定履歴`.
- * Non-engineers can refresh this from Apps Script editor.
+ * BigQueryの `v_sheet_iam_permission_history` ビューから最新データを直接取得し、
+ * `IAM権限設定マトリクス` シートにピボットテーブルを構築します。
+ * スプレッドシートのカスタムメニュー（棚卸し > マトリクス更新）から実行可能です。
  */
 function refreshIamMatrixPivotFromHistory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1157,7 +1158,7 @@ function menuRetryFailedExecutions_() {
   const execResultCol = idx[COL_EXEC_RESULT];
 
   if (!reqIdCol || !statusCol || !execResultCol) {
-    ui.alert('必要なカラムが見つかりません。先に「申請反映ステータス更新」メニューを実行してください。');
+    ui.alert('必要なカラムが見つかりません。先に「最新ステータス取得」メニューを実行してください。');
     return;
   }
 
