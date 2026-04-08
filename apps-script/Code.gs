@@ -9,7 +9,7 @@
  *    - BQ_LOCATION
  *    - CLOUD_RUN_EXECUTE_URL
  *    - GAS_INVOKER_SA_EMAIL
- *    - GEMINI_API_KEY (GeminiRoleAdvisor.gs を使う場合)
+ * 認証: スクリプトプロパティは不要です。ScriptApp.getOAuthToken() を使用し、Vertex AI経由でセキュアに認証・実行されます。
  * 3) Create installable triggers:
  *    - refreshRequestReviewStatus_ (From spreadsheet, Time-driven)
  */
