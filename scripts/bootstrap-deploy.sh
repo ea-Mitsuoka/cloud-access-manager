@@ -231,7 +231,7 @@ else
         done
 
         echo
-        echo "⚠️ IMPORTANT: To apply VPC-SC, you MUST already have 'Organization Admin' and 'Access Context Manager Admin' roles."
+        echo "⚠️ IMPORTANT: To apply VPC-SC, you MUST already have 'Organization Viewer' and 'Access Context Manager Admin' roles."
         echo "This script will NOT automatically grant these highly privileged roles."
     else
         update_config "enable_vpc_sc" "false" "$CONFIG_FILE"
