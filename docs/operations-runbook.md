@@ -24,10 +24,10 @@
 日次バッチは、時刻を自由に変更できますが、次の依存順序を崩さないでください。
 
 1. `revoke_expired_permissions`（期限切れ剥奪）
-2. `collect/resources`, `collect/groups`, `collect/iam-policies`（現況収集）
-3. `reconcile`（申請と現況の突合）
-4. `jobs/update-iam-bindings-history`（帳票向け履歴更新）
-5. `jobs/discover-iam-roles`（未知ロール発見・翻訳）
+1. `collect/resources`, `collect/groups`, `collect/iam-policies`（現況収集）
+1. `reconcile`（申請と現況の突合）
+1. `jobs/update-iam-bindings-history`（帳票向け履歴更新）
+1. `jobs/discover-iam-roles`（未知ロール発見・翻訳）
 
 推奨理由:
 
