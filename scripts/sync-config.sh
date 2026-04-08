@@ -25,6 +25,7 @@ required=(
   RESOURCE_COLLECTION_SCHEDULE
   GROUP_COLLECTION_SCHEDULE
   IAM_POLICY_COLLECTION_SCHEDULE
+  IAM_ROLE_DISCOVERY_SCHEDULE
   RECONCILIATION_SCHEDULE
   REVOKE_EXPIRED_PERMISSIONS_SCHEDULE
   IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE
@@ -66,6 +67,7 @@ workspace_customer_id                = "$WORKSPACE_CUSTOMER_ID"
 resource_collection_schedule         = "$RESOURCE_COLLECTION_SCHEDULE"
 group_collection_schedule            = "$GROUP_COLLECTION_SCHEDULE"
 iam_policy_collection_schedule       = "$IAM_POLICY_COLLECTION_SCHEDULE"
+iam_role_discovery_schedule         = "$IAM_ROLE_DISCOVERY_SCHEDULE"
 reconciliation_schedule              = "$RECONCILIATION_SCHEDULE"
 revoke_expired_permissions_schedule  = "$REVOKE_EXPIRED_PERMISSIONS_SCHEDULE"
 iam_bindings_history_update_schedule = "$IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE"

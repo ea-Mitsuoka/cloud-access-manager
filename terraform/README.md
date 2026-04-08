@@ -95,9 +95,11 @@ bash scripts/bootstrap-deploy.sh
 - `workspace_customer_id` は、Cloud Identity のグループ検索対象を制御します (デフォルト: `my_customer`)。
 - `resource_collection_schedule` は、`/collect/resources` を実行するリソース収集ジョブのスケジュールを制御します。
 - `group_collection_schedule` は、`/collect/groups` を実行するグループ収集ジョブのスケジュールを制御します。
+- `iam_policy_collection_schedule` は、`/collect/iam-policies` を実行するIAM権限収集ジョブのスケジュールを制御します。
 - `reconciliation_schedule` は、`/reconcile` を実行する不整合検知ジョブのスケジュールを制御します。
 - `revoke_expired_permissions_schedule` は、`/revoke_expired_permissions` を実行する期限切れ権限の自動剥奪ジョブのスケジュールを制御します。
 - `iam_bindings_history_update_schedule` は、`/jobs/update-iam-bindings-history` を実行する履歴スナップショット更新ジョブのスケジュールを制御します。
+- `iam_role_discovery_schedule` は、`/jobs/discover-iam-roles` を実行する未知ロール発見ジョブのスケジュールを制御します。
 - `scheduler_time_zone` は、すべてのCloud Schedulerジョブのタイムゾーンを制御します。
 - `terraform output management_scope` で選択されている管理スコープを確認できます。
 - `terraform output effective_managed_project_id` で現在の管理対象プロジェクトを確認できます。

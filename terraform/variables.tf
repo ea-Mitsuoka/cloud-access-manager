@@ -120,3 +120,9 @@ variable "iam_policy_collection_schedule" {
   description = "Cloud Scheduler cron for /collect/iam-policies"
   default     = "15 2 * * *"
 }
+
+variable "iam_role_discovery_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /jobs/discover-iam-roles"
+  default     = "30 4 * * *"
+}

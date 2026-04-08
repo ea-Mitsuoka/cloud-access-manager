@@ -150,6 +150,7 @@ module "scheduler" {
   resource_collection_schedule            = var.resource_collection_schedule
   group_collection_schedule               = var.group_collection_schedule
   iam_policy_collection_schedule          = var.iam_policy_collection_schedule
+  iam_role_discovery_schedule             = var.iam_role_discovery_schedule
   reconciliation_schedule                 = var.reconciliation_schedule
   revoke_expired_permissions_schedule     = var.revoke_expired_permissions_schedule
   iam_bindings_history_update_schedule    = var.iam_bindings_history_update_schedule

@@ -161,11 +161,10 @@ resource "google_cloud_scheduler_job" "iam_policy_collection_daily" {
 }
 
 resource "google_cloud_scheduler_job" "iam_role_discovery_daily" {
-  name    = "iam-role-discovery-daily"
-  project = var.tool_project_id
-  region  = var.region
-  # 既存インフラの変数を汚さないよう、不整合検知(04:00)の後の 04:30 AM をハードコード指定
-  schedule         = "30 4 * * *"
+  name             = "iam-role-discovery-daily"
+  project          = var.tool_project_id
+  region           = var.region
+  schedule         = var.iam_role_discovery_schedule
   time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 

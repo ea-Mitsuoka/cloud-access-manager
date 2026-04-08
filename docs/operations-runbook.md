@@ -19,6 +19,22 @@
 
 - 障害対応が完了次第、管理者は監査ログ（BigQuery）の記録をもとに事後監査を行い、付与された権限を速やかに手動で剥奪してください（またはシステムの期限切れ自動剥奪を待ちます）。
 
+## Cloud Scheduler の実行順序制約
+
+日次バッチは、時刻を自由に変更できますが、次の依存順序を崩さないでください。
+
+1. `revoke_expired_permissions`（期限切れ剥奪）
+2. `collect/resources`, `collect/groups`, `collect/iam-policies`（現況収集）
+3. `reconcile`（申請と現況の突合）
+4. `jobs/update-iam-bindings-history`（帳票向け履歴更新）
+5. `jobs/discover-iam-roles`（未知ロール発見・翻訳）
+
+推奨理由:
+
+- `reconcile` は最新の `iam_policy_permissions` を前提に判定するため、`collect/iam-policies` より後に実行する必要があります。
+- `jobs/discover-iam-roles` は `iam_policy_permissions` から未知ロールを抽出するため、収集系の後に実行する必要があります。
+- 剥奪処理を先に走らせることで、期限切れ権限を含まない状態で突合できます。
+
 ### 12.1. 管理用スプレッドシートの基本セットアップ
 
 1. **スプレッドシートの新規作成**: Googleドライブ等から、新しい空のスプレッドシートを作成し、任意の名前（例：「Cloud Access Manager 管理表」）を付けます。

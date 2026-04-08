@@ -52,3 +52,8 @@ variable "iam_policy_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/iam-policies"
 }
+
+variable "iam_role_discovery_schedule" {
+  type        = string
+  description = "Cloud Scheduler cron for /jobs/discover-iam-roles"
+}
