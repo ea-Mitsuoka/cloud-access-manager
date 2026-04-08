@@ -150,7 +150,6 @@ def test_update_iam_bindings_history_success(
         mock_repo (MagicMock): モック化されたリポジトリ。
     """
     # Arrange
-    mock_repo.sync_principal_catalog.return_value = 2
     mock_repo.run_update_raw_bindings_history_job.return_value = 10
     mock_repo.run_update_bindings_history_job.return_value = 10
 
@@ -167,7 +166,6 @@ def test_update_iam_bindings_history_success(
     assert json_data["inserted_rows"] == 10
     assert json_data["raw_inserted_rows"] == 10
 
-    mock_repo.sync_principal_catalog.assert_called_once()
     mock_repo.run_update_raw_bindings_history_job.assert_called_once_with(
         json_data["execution_id"]
     )

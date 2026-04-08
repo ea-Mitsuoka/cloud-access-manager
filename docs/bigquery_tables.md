@@ -23,15 +23,13 @@
 | :--- | :--- | :--- | :--- |
 | **`iam_access_change_log`** | 追記 | **Cloud RunによるAPI実行ログ。** 承認された申請に基づき、システムが実際にIAM API（GRANT/REVOKE）を呼び出した際の「成否（SUCCESS/FAILED）」とエラー内容を記録する。冪等性（二重実行防止）の判定にも使用される。 | **・実行ステータス確認**: 申請がシステムによって正しく処理されたか、失敗した場合はその理由を調査するためのログ。 <br>**・冪等性の担保**: 過去の成功履歴を確認し、同一申請の二重実行を防止する。 |
 | **`iam_reconciliation_issues`** | 追記 | **不整合検知アラート。** 「承認済なのに権限が付与されていない」「却下されたのに権限が残っている」「期限切れなのに権限が残っている」など、意図（申請）と実態（IAM）の矛盾を検知して記録する。 | **・セキュリティインシデント調査**: 意図しない権限の残留や、システム外での直接的な権限変更（シャドーIT）を検知し、セキュリティチームが対応するためのアラート一覧。 |
-| **`iam_pipeline_job_reports`** | 追記 | **非同期バッチの処理結果レポート。** リソース収集、グループ収集、不整合検知など、バックグラウンドで動く定期バッチジョブの実行結果や処理件数を記録する。 | **・システム運用監視**: 日次のバッチ処理が正常に完了しているか、データ収集漏れがないかをシステム管理者がモニタリングするためのレポート。 |
+| **`iam_pipeline_job_reports`** | 追記 | **非同期バッチの処理結果レポート。** リソース収集、プリンシパル収集、不整合検知など、バックグラウンドで動く定期バッチジョブの実行結果や処理件数を記録する。 | **・システム運用監視**: 日次のバッチ処理が正常に完了しているか、データ収集漏れがないかをシステム管理者がモニタリングするためのレポート。 |
 
 ## 4. リソース・グループ棚卸し
 
 | テーブル名 | 更新方式 | 真の利用目的（プログラムの実態） | データの使い道 |
 | :--- | :--- | :--- | :--- |
 | **`gcp_resource_inventory_history`** | 追記 | **GCPリソース構造の履歴。** Cloud Asset API から収集したプロジェクトやフォルダの情報を日次で追記する。 | **・リソース階層の把握**: 権限が付与されている対象リソースが、組織内のどの階層（フォルダ等）に属しているかを特定するためのマスタ情報。 |
-| **`google_groups`** | 洗い替え | **Googleグループの一覧マスタ。** Cloud Identity API から収集した最新のグループ一覧。収集のたびに全件 DELETE & INSERT される。 | **・グループ情報の補完**: 権限が付与されている対象がグループの場合、そのグループの表示名や説明を帳票上で表示するためのマスタ。 |
-| **`google_group_membership_history`**| 追記 | **グループメンバーシップの履歴。** どのグループに誰が所属しているかの変遷を日次で追記する。 | **・間接的な権限の監査**: グループに対して付与された権限が、実際にはどのメンバーに行き渡っているかを特定し、棚卸しレビューを詳細化するためのデータ。 |
 
 ## 5. 帳票用マスタ
 
@@ -156,7 +154,7 @@ ______________________________________________________________________
 | カラム名 | 型 | NULL | 説明 |
 | :--- | :--- | :--- | :--- |
 | `execution_id` | STRING | NOT NULL | バッチ処理の実行ID |
-| `job_type` | STRING | NOT NULL | ジョブの種類 (RESOURCE_COLLECTION / GROUP_COLLECTION 等) |
+| `job_type` | STRING | NOT NULL | ジョブの種類 (RESOURCE_COLLECTION / PRINCIPAL_COLLECTION 等) |
 | `result` | STRING | NOT NULL | 実行結果 (SUCCESS / FAILED_PERMISSION / FAILED) |
 | `error_code` | STRING | NULLABLE | 失敗時のエラーコードや例外名 |
 | `error_message` | STRING | NULLABLE | エラーの詳細メッセージ |
@@ -175,6 +173,8 @@ ______________________________________________________________________
 | `principal_email` | STRING | NOT NULL | プリンシパルのメールアドレス（主キー） |
 | `principal_name` | STRING | NULLABLE | プリンシパルの表示名 |
 | `principal_type` | STRING | NULLABLE | アカウント種別（User, ServiceAccount, Group 等） |
+| `principal_status` | STRING | NOT NULL | 同期状態（`ACTIVE` / `INACTIVE`） |
+| `deactivated_at` | TIMESTAMP | NULLABLE | `INACTIVE` に遷移した日時 |
 | `note` | STRING | NULLABLE | 管理用の備考 |
 | `updated_at` | TIMESTAMP | NOT NULL | レコードの最終更新日時 |
 
@@ -190,21 +190,6 @@ ______________________________________________________________________
 | `description` | STRING | NULLABLE | グループの説明文 |
 | `source` | STRING | NULLABLE | データの収集元 (cloudidentity 等) |
 | `updated_at` | TIMESTAMP | NOT NULL | 収集・更新された日時 |
-
-### `google_group_membership_history`
-
-- **利用目的:** Googleグループのメンバー所属状況（誰がどのグループにいるか）の変遷を記録する。
-- **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
-
-| カラム名 | 型 | NULL | 説明 |
-| :--- | :--- | :--- | :--- |
-| `execution_id` | STRING | NOT NULL | 収集ジョブの実行ID |
-| `assessed_at` | TIMESTAMP | NOT NULL | 情報が収集された日時 |
-| `group_email` | STRING | NOT NULL | 親となるグループのメールアドレス |
-| `member_email` | STRING | NOT NULL | 所属しているメンバーのメールアドレス |
-| `member_display_name` | STRING | NULLABLE | メンバーの表示名 |
-| `membership_type` | STRING | NULLABLE | メンバーシップの種別やロール（MEMBER, OWNER 等） |
-| `source` | STRING | NULLABLE | データの収集元 |
 
 ### `gcp_resource_inventory_history`
 

@@ -28,6 +28,7 @@ locals {
     "bigquery.googleapis.com",
     "cloudasset.googleapis.com",
     "cloudidentity.googleapis.com",
+    "admin.googleapis.com",
     "aiplatform.googleapis.com",
     "cloudscheduler.googleapis.com",
     "run.googleapis.com",
@@ -42,11 +43,47 @@ locals {
     var.enable_vpc_sc ? ["accesscontextmanager.googleapis.com"] : []
   )
   all_enabled_services = setunion(local.base_enabled_services, local.conditional_enabled_services)
+
+  revoke_schedule_parts     = split(" ", var.revoke_expired_permissions_schedule)
+  resource_schedule_parts   = split(" ", var.resource_collection_schedule)
+  principal_schedule_parts  = split(" ", var.principal_collection_schedule)
+  iam_policy_schedule_parts = split(" ", var.iam_policy_collection_schedule)
+  reconcile_schedule_parts  = split(" ", var.reconciliation_schedule)
+  bindings_schedule_parts   = split(" ", var.iam_bindings_history_update_schedule)
+  role_discovery_parts      = split(" ", var.iam_role_discovery_schedule)
+
+  revoke_schedule_minutes         = tonumber(local.revoke_schedule_parts[1]) * 60 + tonumber(local.revoke_schedule_parts[0])
+  resource_schedule_minutes       = tonumber(local.resource_schedule_parts[1]) * 60 + tonumber(local.resource_schedule_parts[0])
+  principal_schedule_minutes      = tonumber(local.principal_schedule_parts[1]) * 60 + tonumber(local.principal_schedule_parts[0])
+  iam_policy_schedule_minutes     = tonumber(local.iam_policy_schedule_parts[1]) * 60 + tonumber(local.iam_policy_schedule_parts[0])
+  reconcile_schedule_minutes      = tonumber(local.reconcile_schedule_parts[1]) * 60 + tonumber(local.reconcile_schedule_parts[0])
+  bindings_schedule_minutes       = tonumber(local.bindings_schedule_parts[1]) * 60 + tonumber(local.bindings_schedule_parts[0])
+  role_discovery_schedule_minutes = tonumber(local.role_discovery_parts[1]) * 60 + tonumber(local.role_discovery_parts[0])
 }
 
 # プロジェクト番号を取得（VPC-SCの境界設定に必要）
 data "google_project" "tool_project" {
   project_id = var.tool_project_id
+}
+
+resource "terraform_data" "scheduler_order_guard" {
+  input = "scheduler-order-guard"
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.revoke_schedule_minutes < local.resource_schedule_minutes &&
+        local.revoke_schedule_minutes < local.principal_schedule_minutes &&
+        local.revoke_schedule_minutes < local.iam_policy_schedule_minutes &&
+        local.resource_schedule_minutes < local.reconcile_schedule_minutes &&
+        local.principal_schedule_minutes < local.reconcile_schedule_minutes &&
+        local.iam_policy_schedule_minutes < local.reconcile_schedule_minutes &&
+        local.reconcile_schedule_minutes < local.bindings_schedule_minutes &&
+        local.bindings_schedule_minutes < local.role_discovery_schedule_minutes
+      )
+      error_message = "Invalid scheduler order. Keep: revoke -> collect(resources/principals/iam-policies) -> reconcile -> update-iam-bindings-history -> discover-iam-roles."
+    }
+  }
 }
 
 resource "google_project_service" "services" {
@@ -148,7 +185,7 @@ module "scheduler" {
   cloud_run_uri                           = module.cloud_run.uri
   scheduler_invoker_service_account_email = module.service_accounts.scheduler_invoker_service_account_email
   resource_collection_schedule            = var.resource_collection_schedule
-  group_collection_schedule               = var.group_collection_schedule
+  principal_collection_schedule           = var.principal_collection_schedule
   iam_policy_collection_schedule          = var.iam_policy_collection_schedule
   iam_role_discovery_schedule             = var.iam_role_discovery_schedule
   reconciliation_schedule                 = var.reconciliation_schedule
@@ -156,6 +193,7 @@ module "scheduler" {
   iam_bindings_history_update_schedule    = var.iam_bindings_history_update_schedule
   scheduler_time_zone                     = var.scheduler_time_zone
   depends_on = [
+    terraform_data.scheduler_order_guard,
     google_project_service.services,
     google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
   ]
@@ -176,6 +214,7 @@ resource "google_access_context_manager_service_perimeter" "tool_perimeter" {
       "cloudresourcemanager.googleapis.com",
       "cloudasset.googleapis.com",
       "cloudidentity.googleapis.com",
+      "admin.googleapis.com",
       "aiplatform.googleapis.com",
       "iamcredentials.googleapis.com",
       "artifactregistry.googleapis.com"

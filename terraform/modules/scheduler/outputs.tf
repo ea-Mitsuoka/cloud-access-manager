@@ -3,9 +3,9 @@ output "resource_inventory_scheduler_job_name" {
   description = "Cloud Scheduler job name for daily resource inventory collection."
 }
 
-output "group_collection_scheduler_job_name" {
-  value       = google_cloud_scheduler_job.group_collection_daily.name
-  description = "Cloud Scheduler job name for daily Google group collection."
+output "principal_collection_scheduler_job_name" {
+  value       = google_cloud_scheduler_job.principal_collection_daily.name
+  description = "Cloud Scheduler job name for daily principal collection."
 }
 
 output "reconciliation_scheduler_job_name" {

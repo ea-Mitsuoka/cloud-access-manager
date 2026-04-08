@@ -1,9 +1,13 @@
 # コレクター群
 
-## Google Group コレクター
+## Principal コレクター
 
-::: app.google_group_collector
+::: app.principal_collector
 
 ## Resource Inventory コレクター
 
 ::: app.resource_inventory_collector
+
+## IAM Policy コレクター
+
+::: app.iam_policy_collector

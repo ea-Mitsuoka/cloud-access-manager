@@ -42,13 +42,13 @@ def mock_resource_collector():
 
 
 @pytest.fixture
-def mock_group_collector():
+def mock_principal_collector():
     """グループコレクターのモックを作成します。
 
     Yields:
         unittest.mock.MagicMock: モック化されたグループコレクターオブジェクト。
     """
-    with patch("app.main.group_collector", autospec=True) as mock:
+    with patch("app.main.principal_collector", autospec=True) as mock:
         mock.source = "cloudidentity"
         yield mock
 
@@ -137,54 +137,90 @@ def test_collect_resources_permission_denied(
     assert "roles/cloudasset.viewer" in call_args["hint"]
 
 
-def test_collect_groups_success(
-    client: FlaskClient, mock_repo, mock_group_collector, mock_auth
+def test_collect_principals_success(
+    client: FlaskClient, mock_repo, mock_principal_collector, mock_auth
 ):
-    """【要件3: 正常系】グループとメンバーシップ情報が収集され、DBの洗替・追記が行われること
-
-    Args:
-        client (FlaskClient): テスト用のFlaskクライアント。
-        mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
-        mock_group_collector (unittest.mock.MagicMock): モック化されたグループコレクター。
-        mock_auth (unittest.mock.MagicMock): モック化された認証。
-    """
-    mock_group_collector.collect.return_value = (
-        [{"group_email": "g@example.com"}],
-        [{"member_email": "m@example.com"}],
-        {"groups": 1, "memberships": 1},
+    mock_principal_collector.collect.return_value = (
+        [
+            {
+                "principal_email": "u@example.com",
+                "principal_name": "Test",
+                "principal_type": "USER",
+            }
+        ],
+        {"User": 1},
+        [],
     )
-    mock_repo.replace_groups.return_value = 1
-    mock_repo.insert_group_membership_rows.return_value = 1
+    mock_repo.upsert_principal_catalog.return_value = 1
 
-    response = client.post("/collect/groups", json={"execution_id": "exec-456"})
+    response = client.post("/collect/principals", json={"execution_id": "exec-456"})
 
     assert response.status_code == 200
     assert response.get_json()["result"] == "SUCCESS"
-    assert response.get_json()["groups_replaced"] == 1
-
-    # グループは洗替（DELETE/INSERT）、メンバーは追記（INSERT）が呼ばれること
-    mock_repo.replace_groups.assert_called_once()
-    mock_repo.insert_group_membership_rows.assert_called_once()
-
-    # 成功レポートが書き込まれたこと
+    assert response.get_json()["warnings"] == []
+    mock_repo.upsert_principal_catalog.assert_called_once_with(
+        [
+            {
+                "principal_email": "u@example.com",
+                "principal_name": "Test",
+                "principal_type": "USER",
+            }
+        ],
+        deactivate_missing=True,
+    )
     mock_repo.insert_pipeline_job_report.assert_called_once()
-    assert mock_repo.insert_pipeline_job_report.call_args[1]["result"] == "SUCCESS"
 
 
-def test_collect_groups_failure(
-    client: FlaskClient, mock_repo, mock_group_collector, mock_auth
+def test_collect_principals_partial_success(
+    client: FlaskClient, mock_repo, mock_principal_collector, mock_auth
+):
+    mock_principal_collector.collect.return_value = (
+        [
+            {
+                "principal_email": "u@example.com",
+                "principal_name": "Test",
+                "principal_type": "USER",
+            }
+        ],
+        {"User": 1},
+        [{"source": "ADMIN_DIRECTORY_USERS", "error": "403 permission denied"}],
+    )
+    mock_repo.upsert_principal_catalog.return_value = 1
+
+    response = client.post("/collect/principals", json={"execution_id": "exec-456"})
+
+    assert response.status_code == 200
+    assert response.get_json()["result"] == "PARTIAL_SUCCESS"
+    assert len(response.get_json()["warnings"]) == 1
+    mock_repo.upsert_principal_catalog.assert_called_once_with(
+        [
+            {
+                "principal_email": "u@example.com",
+                "principal_name": "Test",
+                "principal_type": "USER",
+            }
+        ],
+        deactivate_missing=False,
+    )
+    call_args = mock_repo.insert_pipeline_job_report.call_args[1]
+    assert call_args["result"] == "PARTIAL_SUCCESS"
+    assert call_args["error_code"] == "PARTIAL_COLLECTION"
+
+
+def test_collect_principals_failure(
+    client: FlaskClient, mock_repo, mock_principal_collector, mock_auth
 ):
     """【要件4: フェイルセーフ (汎用エラー)】グループ収集APIが例外を起こした場合、500エラーを返し、DBに FAILED レポートを記録すること
 
     Args:
         client (FlaskClient): テスト用のFlaskクライアント。
         mock_repo (unittest.mock.MagicMock): モック化されたリポジトリ。
-        mock_group_collector (unittest.mock.MagicMock): モック化されたグループコレクター。
+        mock_principal_collector (unittest.mock.MagicMock): モック化されたグループコレクター。
         mock_auth (unittest.mock.MagicMock): モック化された認証。
     """
-    mock_group_collector.collect.side_effect = Exception("Identity API is down")
+    mock_principal_collector.collect.side_effect = Exception("Identity API is down")
 
-    response = client.post("/collect/groups", json={"execution_id": "exec-456"})
+    response = client.post("/collect/principals", json={"execution_id": "exec-456"})
 
     assert response.status_code == 500
     assert response.get_json()["result"] == "FAILED"
@@ -193,7 +229,7 @@ def test_collect_groups_failure(
     # レポートが確実にDBに保存されたこと
     mock_repo.insert_pipeline_job_report.assert_called_once()
     call_args = mock_repo.insert_pipeline_job_report.call_args[1]
-    assert call_args["job_type"] == "GROUP_COLLECTION"
+    assert call_args["job_type"] == "PRINCIPAL_COLLECTION"
     assert call_args["result"] == "FAILED"
 
 
@@ -207,7 +243,7 @@ def test_collectors_reject_unauthorized(client: FlaskClient):
     resp_resources = client.post("/collect/resources")
     assert resp_resources.status_code == 401
 
-    resp_groups = client.post("/collect/groups")
+    resp_groups = client.post("/collect/principals")
     assert resp_groups.status_code == 401
 
 

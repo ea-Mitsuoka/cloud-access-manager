@@ -44,18 +44,6 @@ class Repository:
         )
 
     @property
-    def groups_table(self) -> str:
-        """Googleグループテーブルの完全なテーブルID。"""
-        return f"{self._project_id}.{self._dataset_id}.google_groups"
-
-    @property
-    def group_membership_history_table(self) -> str:
-        """Googleグループメンバーシップ履歴テーブルの完全なテーブルID。"""
-        return (
-            f"{self._project_id}.{self._dataset_id}" ".google_group_membership_history"
-        )
-
-    @property
     def pipeline_job_reports_table(self) -> str:
         """パイプラインジョブレポートテーブルの完全なテーブルID。"""
         return f"{self._project_id}.{self._dataset_id}.iam_pipeline_job_reports"
@@ -199,79 +187,6 @@ class Repository:
                 raise RuntimeError(
                     "failed to insert resource inventory rows: {}".format(errors)
                 )
-            inserted += len(chunk)
-        return inserted
-
-    def replace_groups(self, rows: list[dict[str, Any]], source: str) -> int:
-        """
-        指定されたソースのGoogleグループを洗い替えます。
-
-        Args:
-            rows (list[dict[str, Any]]): 新しいグループデータのリスト。
-            source (str): データのソース（例: "cloudidentity"）。
-
-        Returns:
-            int: 挿入された行数。
-
-        Raises:
-            RuntimeError: 挿入に失敗した場合。
-        """
-        delete_sql = f"DELETE FROM `{self.groups_table}` WHERE source = @source"
-        params = [bigquery.ScalarQueryParameter("source", "STRING", source)]
-        self._client.query(
-            delete_sql,
-            job_config=bigquery.QueryJobConfig(query_parameters=params),
-        ).result()
-
-        if not rows:
-            return 0
-
-        now = datetime.now(timezone.utc).isoformat()
-        payload = []
-        for row in rows:
-            payload.append(
-                {
-                    "group_email": row["group_email"],
-                    "group_name": row.get("group_name"),
-                    "description": row.get("description"),
-                    "source": source,
-                    "updated_at": now,
-                }
-            )
-
-        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_APPEND")
-        job = self._client.load_table_from_json(
-            payload, self.groups_table, job_config=job_config
-        )
-        job.result()
-        return job.output_rows
-
-    def insert_group_membership_rows(
-        self, rows: list[dict[str, Any]], chunk_size: int = 500
-    ) -> int:
-        """
-        Googleグループのメンバーシップデータを挿入します。
-
-        Args:
-            rows (list[dict[str, Any]]): 挿入するデータのリスト。
-            chunk_size (int, optional): 一度に挿入する行数。デフォルトは500。
-
-        Returns:
-            int: 挿入された行数。
-
-        Raises:
-            RuntimeError: 挿入に失敗した場合。
-        """
-        if not rows:
-            return 0
-        inserted = 0
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            errors = self._client.insert_rows_json(
-                self.group_membership_history_table, chunk
-            )
-            if errors:
-                raise RuntimeError(f"failed to insert group membership rows: {errors}")
             inserted += len(chunk)
         return inserted
 
@@ -962,35 +877,107 @@ class Repository:
         job.result()
         return job.num_dml_affected_rows or 0
 
-    def sync_principal_catalog(self) -> int:
-        """
-        現在のIAM権限状態からプリンシパルマスタを同期（MERGE）します。
+    def upsert_principal_catalog(
+        self, principals: list[dict[str, Any]], deactivate_missing: bool = False
+    ) -> int:
+        """収集したプリンシパル情報でマスタを安全にMERGEします。"""
+        if not principals and not deactivate_missing:
+            return 0
+        import uuid
 
-        Returns:
-            int: 挿入または更新された行数。
+        tmp_table = (
+            f"{self._project_id}.{self._dataset_id}._tmp_principals_{uuid.uuid4().hex}"
+        )
+
+        job_config = bigquery.LoadJobConfig(
+            schema=[
+                bigquery.SchemaField("principal_email", "STRING"),
+                bigquery.SchemaField("principal_name", "STRING"),
+                bigquery.SchemaField("principal_type", "STRING"),
+            ],
+            write_disposition="WRITE_TRUNCATE",
+        )
+        self._client.load_table_from_json(
+            principals or [], tmp_table, job_config=job_config
+        ).result()
+
+        deduped_source_sql = f"""
+        SELECT
+          principal_email,
+          ARRAY_AGG(
+            principal_name IGNORE NULLS
+            ORDER BY LENGTH(principal_name) DESC
+            LIMIT 1
+          )[SAFE_OFFSET(0)] AS principal_name,
+          ARRAY_AGG(
+            principal_type IGNORE NULLS
+            ORDER BY
+              CASE principal_type
+                WHEN 'SERVICE_ACCOUNT' THEN 1
+                WHEN 'USER' THEN 2
+                WHEN 'GROUP' THEN 3
+                ELSE 9
+              END
+            LIMIT 1
+          )[SAFE_OFFSET(0)] AS principal_type
+        FROM `{tmp_table}`
+        WHERE principal_email IS NOT NULL
+          AND principal_email != ''
+        GROUP BY principal_email
         """
+
         sql = f"""
         MERGE `{self._project_id}.{self._dataset_id}.principal_catalog` T
-        USING (
-          SELECT
-            principal_email,
-            ANY_VALUE(principal_type) AS principal_type
-          FROM `{self.iam_policy_permissions_table}`
-          WHERE principal_email IS NOT NULL AND principal_email != ''
-          GROUP BY principal_email
-        ) S
+        USING ({deduped_source_sql}) S
         ON T.principal_email = S.principal_email
         WHEN MATCHED THEN
           UPDATE SET
+            principal_name = COALESCE(S.principal_name, T.principal_name),
             principal_type = COALESCE(S.principal_type, T.principal_type),
+            principal_status = 'ACTIVE',
+            deactivated_at = NULL,
             updated_at = CURRENT_TIMESTAMP()
         WHEN NOT MATCHED THEN
-          INSERT (principal_email, principal_type)
-          VALUES (S.principal_email, S.principal_type)
+          INSERT (
+            principal_email,
+            principal_name,
+            principal_type,
+            principal_status,
+            deactivated_at
+          )
+          VALUES (
+            S.principal_email,
+            S.principal_name,
+            S.principal_type,
+            'ACTIVE',
+            NULL
+          )
         """
         job = self._client.query(sql)
         job.result()
-        return job.num_dml_affected_rows or 0
+
+        affected_rows = job.num_dml_affected_rows or 0
+
+        if deactivate_missing and principals:
+            deactivate_sql = f"""
+            UPDATE `{self._project_id}.{self._dataset_id}.principal_catalog` T
+            SET
+              principal_status = 'INACTIVE',
+              deactivated_at = COALESCE(T.deactivated_at, CURRENT_TIMESTAMP()),
+              updated_at = CURRENT_TIMESTAMP()
+            WHERE T.principal_status = 'ACTIVE'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM ({deduped_source_sql}) S
+                WHERE S.principal_email = T.principal_email
+              )
+            """
+            deactivate_job = self._client.query(deactivate_sql)
+            deactivate_job.result()
+            affected_rows += deactivate_job.num_dml_affected_rows or 0
+
+        self._client.delete_table(tmp_table, not_found_ok=True)
+        return affected_rows
 
     def run_update_raw_bindings_history_job(self, execution_id: str) -> int:
         """

@@ -13,10 +13,19 @@ USING (
 ) S
 ON T.principal_email = S.principal_email
 WHEN MATCHED THEN
-  UPDATE SET principal_type = COALESCE(S.principal_type, T.principal_type), updated_at = CURRENT_TIMESTAMP()
+  UPDATE SET
+    principal_type = COALESCE(S.principal_type, T.principal_type),
+    principal_status = 'ACTIVE',
+    deactivated_at = NULL,
+    updated_at = CURRENT_TIMESTAMP()
 WHEN NOT MATCHED THEN
-  INSERT (principal_email, principal_type)
-  VALUES (S.principal_email, S.principal_type);
+  INSERT (
+    principal_email,
+    principal_type,
+    principal_status,
+    deactivated_at
+  )
+  VALUES (S.principal_email, S.principal_type, 'ACTIVE', NULL);
 
 -- 2) IAM permission history from request + latest execution result
 INSERT INTO `your_project.your_dataset.iam_permission_bindings_history` (

@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 from .iam_executor import IamExecutor
 from .models import ExecutionResult
 from .iam_policy_collector import IamPolicyCollector
-from .google_group_collector import GoogleGroupCollector
+from .principal_collector import PrincipalCollector
 from .resource_inventory_collector import ResourceInventoryCollector
 from .repository import Repository
 from .scope_validator import ScopeConfig, ScopeValidator
@@ -47,9 +47,10 @@ resource_collector = ResourceInventoryCollector(
     target_project_id=TARGET_PROJECT_ID,
     target_org_id=TARGET_ORG_ID,
 )
-group_collector = GoogleGroupCollector(
+principal_collector = PrincipalCollector(
     workspace_customer_id=WORKSPACE_CUSTOMER_ID,
-    source="cloudidentity",
+    target_project_id=TARGET_PROJECT_ID,
+    target_org_id=TARGET_ORG_ID,
 )
 iam_policy_collector = IamPolicyCollector(
     target_project_id=TARGET_PROJECT_ID,
@@ -254,14 +255,9 @@ def collect_resources():
     )
 
 
-@app.post("/collect/groups")
-def collect_groups():
-    """
-    Google Workspace (Cloud Identity) からグループとメンバーシップ情報を収集し、DBを更新します。
-
-    Returns:
-        Response: 収集結果を含むJSONレスポンス。
-    """
+@app.post("/collect/principals")
+def collect_principals():
+    """各種APIからプリンシパル（User, Group, SA）を収集し、マスタを更新します。"""
     if not _authorize():
         return jsonify({"error": "unauthorized"}), 401
 
@@ -269,55 +265,65 @@ def collect_groups():
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
-        group_rows, membership_rows, counts = group_collector.collect(
-            execution_id=execution_id
+        principals, counts, warnings = principal_collector.collect()
+        upserted = repo.upsert_principal_catalog(
+            principals, deactivate_missing=(len(warnings) == 0)
         )
-        replaced_groups = repo.replace_groups(group_rows, source=group_collector.source)
-        inserted_memberships = repo.insert_group_membership_rows(membership_rows)
-        counts_for_report = {
-            "groups_replaced": replaced_groups,
-            "memberships_inserted": (inserted_memberships),
-            **counts,
-        }
+        is_partial = len(warnings) > 0
+        result = "PARTIAL_SUCCESS" if is_partial else "SUCCESS"
+        error_code = "PARTIAL_COLLECTION" if is_partial else None
+        error_message = (
+            "One or more principal sources could not be collected. "
+            "See details.warnings for source-level errors."
+            if is_partial
+            else None
+        )
+        hint = (
+            "Verify Admin SDK / Cloud Identity / IAM permissions and enabled APIs."
+            if is_partial
+            else None
+        )
         repo.insert_pipeline_job_report(
             execution_id=execution_id,
-            job_type="GROUP_COLLECTION",
-            result="SUCCESS",
-            error_code=None,
-            error_message=None,
-            hint=None,
-            counts=counts_for_report,
-            details={"source": group_collector.source},
+            job_type="PRINCIPAL_COLLECTION",
+            result=result,
+            error_code=error_code,
+            error_message=error_message,
+            hint=hint,
+            counts={"upserted_rows": upserted, **counts},
+            details={
+                "note": "Collected from Workspace and IAM",
+                "warnings": warnings,
+            },
+        )
+        return jsonify(
+            {
+                "execution_id": execution_id,
+                "result": result,
+                "upserted_rows": upserted,
+                "counts": counts,
+                "warnings": warnings,
+            }
         )
     except Exception as exc:  # pragma: no cover
+        logging.error(f"Principal collection failed: {exc}", exc_info=True)
         report = _build_collection_error_report(
-            job_type="GROUP_COLLECTION",
-            execution_id=execution_id,
-            exc=exc,
+            job_type="PRINCIPAL_COLLECTION", execution_id=execution_id, exc=exc
         )
-        report_for_db = {}
-        for k, v in report.items():
-            if k != "http_status":
-                report_for_db[k] = v
+        report_for_db = {k: v for k, v in report.items() if k != "http_status"}
         repo.insert_pipeline_job_report(**report_for_db)
-        json_response = {
-            "execution_id": execution_id,
-            "result": report["result"],
-            "error_code": (report["error_code"]),
-            "error_message": (report["error_message"]),
-            "hint": report["hint"],
-        }
-        return jsonify(json_response), report["http_status"]
-
-    return jsonify(
-        {
-            "execution_id": execution_id,
-            "result": "SUCCESS",
-            "groups_replaced": replaced_groups,
-            "memberships_inserted": inserted_memberships,
-            "counts": counts,
-        }
-    )
+        return (
+            jsonify(
+                {
+                    "execution_id": execution_id,
+                    "result": report["result"],
+                    "error_code": report["error_code"],
+                    "error_message": report["error_message"],
+                    "hint": report["hint"],
+                }
+            ),
+            report["http_status"],
+        )
 
 
 @app.post("/collect/iam-policies")
@@ -581,7 +587,6 @@ def update_iam_bindings_history():
 
     try:
         # 1. プリンシパルマスタの同期
-        repo.sync_principal_catalog()
 
         # 2. 生のIAM履歴 (Raw History) の追記
         raw_inserted = repo.run_update_raw_bindings_history_job(execution_id)
@@ -999,10 +1004,10 @@ def _permission_hint(job_type: str) -> str:
             "Grant roles/cloudasset.viewer to executor SA on managed scope "
             "and verify Cloud Asset API is enabled."
         )
-    if job_type == "GROUP_COLLECTION":
+    if job_type == "PRINCIPAL_COLLECTION":
         return (
-            "Grant Cloud Identity/Workspace group read permissions to "
-            "executor SA and verify cloudidentity.googleapis.com is enabled."
+            "Grant Cloud Identity / Admin SDK / IAM read permissions to "
+            "executor SA and verify related APIs are enabled."
         )
     return "Verify IAM permissions for this collection job."
 

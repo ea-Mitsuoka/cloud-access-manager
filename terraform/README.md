@@ -94,7 +94,7 @@ bash scripts/bootstrap-deploy.sh
 - `organization_id` はオプションです。空 (`""`) の場合は、このスタックはプロジェクト単体の管理スコープとして扱われます。
 - `workspace_customer_id` は、Cloud Identity のグループ検索対象を制御します (デフォルト: `my_customer`)。
 - `resource_collection_schedule` は、`/collect/resources` を実行するリソース収集ジョブのスケジュールを制御します。
-- `group_collection_schedule` は、`/collect/groups` を実行するグループ収集ジョブのスケジュールを制御します。
+- `principal_collection_schedule` は、`/collect/principals` を実行するプリンシパル収集ジョブのスケジュールを制御します。
 - `iam_policy_collection_schedule` は、`/collect/iam-policies` を実行するIAM権限収集ジョブのスケジュールを制御します。
 - `reconciliation_schedule` は、`/reconcile` を実行する不整合検知ジョブのスケジュールを制御します。
 - `revoke_expired_permissions_schedule` は、`/revoke_expired_permissions` を実行する期限切れ権限の自動剥奪ジョブのスケジュールを制御します。
@@ -103,7 +103,7 @@ bash scripts/bootstrap-deploy.sh
 - `scheduler_time_zone` は、すべてのCloud Schedulerジョブのタイムゾーンを制御します。
 - `terraform output management_scope` で選択されている管理スコープを確認できます。
 - `terraform output effective_managed_project_id` で現在の管理対象プロジェクトを確認できます。
-- `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `group_collection_scheduler_job` など)。
+- `terraform output` で、各スケジューラジョブ名を確認できます (`resource_inventory_scheduler_job`, `principal_collection_scheduler_job` など)。
 - 有効化されたAPIは `disable_on_destroy = false` が設定されていることに加え、`teardown.sh` でStateから保護されるため、意図せず無効化されることはありません。
 - **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。通常の運用や環境の再構築時は、必ず提供されている `scripts/teardown.sh` と `scripts/bootstrap-deploy.sh` を使用してライフサイクルを管理してください。
 - **重要:** GASからのOIDC認証連携を利用する場合、`var.gas_trigger_owner_email` に指定したユーザー（GASトリガーのオーナー）に対して、Terraformが自動的にサービスアカウントトークン作成者ロール（`roles/iam.serviceAccountTokenCreator`）を付与します。これにより、GASスクリプト内から安全にCloud Run呼び出し用のOIDCトークンを動的に生成できるようになります。

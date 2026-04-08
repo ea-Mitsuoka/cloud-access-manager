@@ -6,29 +6,10 @@ SELECT
   principal_email AS `プリンシパルEmail`,
   principal_name AS `プリンシパル名`,
   principal_type AS `種別`,
+  principal_status AS `状態`,
+  deactivated_at AS `無効化日時`,
   note AS `備考`
 FROM `your_project.your_dataset.principal_catalog`;
-
-CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_group_members` AS
-WITH latest_exec AS (
-  SELECT execution_id
-  FROM `your_project.your_dataset.google_group_membership_history`
-  ORDER BY assessed_at DESC
-  LIMIT 1
-)
-SELECT
-  group_email AS `グループEmail`,
-  member_email AS `メンバーEmail`,
-  member_display_name AS `メンバー表示名`
-FROM `your_project.your_dataset.google_group_membership_history`
-WHERE execution_id = (SELECT execution_id FROM latest_exec);
-
-CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_group` AS
-SELECT
-  group_email AS `グループEmail`,
-  group_name AS `グループ名`,
-  description AS `説明`
-FROM `your_project.your_dataset.google_groups`;
 
 CREATE OR REPLACE VIEW `your_project.your_dataset.v_sheet_resource` AS
 WITH latest_exec AS (

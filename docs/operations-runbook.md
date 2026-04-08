@@ -24,7 +24,7 @@
 日次バッチは、時刻を自由に変更できますが、次の依存順序を崩さないでください。
 
 1. `revoke_expired_permissions`（期限切れ剥奪）
-1. `collect/resources`, `collect/groups`, `collect/iam-policies`（現況収集）
+1. `collect/resources`, `collect/principals`, `collect/iam-policies`（現況収集）
 1. `reconcile`（申請と現況の突合）
 1. `jobs/update-iam-bindings-history`（帳票向け履歴更新）
 1. `jobs/discover-iam-roles`（未知ロール発見・翻訳）
@@ -34,6 +34,11 @@
 - `reconcile` は最新の `iam_policy_permissions` を前提に判定するため、`collect/iam-policies` より後に実行する必要があります。
 - `jobs/discover-iam-roles` は `iam_policy_permissions` から未知ロールを抽出するため、収集系の後に実行する必要があります。
 - 剥奪処理を先に走らせることで、期限切れ権限を含まない状態で突合できます。
+
+補足:
+
+- `scripts/bootstrap-deploy.sh` は実行前に順序を検証し、逆転している場合は停止します。
+- Terraform 側にも順序ガード（`scheduler_order_guard`）を実装しており、`terraform apply` 直実行でも順序違反を拒否します。
 
 ## 3. 管理用スプレッドシートの基本セットアップ
 
@@ -56,10 +61,8 @@ BigQuery に構築された帳票用の整形済みビュー（`v_sheet_*`）を
 1. テーブルとビューの一覧が表示されるので、以下のビューを選択して「接続」をクリックします（各ビューごとに新しいシートタブが作成されます）。
    - `v_sheet_iam_permission_history` （IAM権限設定履歴：メインの棚卸し帳票）
    - `v_sheet_requests_review` （申請レビュー用ビュー）
-   - `v_sheet_principal` （プリンシパル一覧）
+   - `v_sheet_principal` （プリンシパル一覧: User/Group/ServiceAccount統合）
    - `v_sheet_resource` （リソース一覧）
-   - `v_sheet_group` （グループ一覧）
-   - `v_sheet_group_members` （グループメンバー一覧）
    - `v_sheet_status` （ステータスマスタ）
 1. 接続された各シートで、必要に応じて「スケジュールされた更新」を設定します（例: 毎朝8時に自動更新など）。これにより、前夜のバッチで収集・整形された最新のIAM監査データが、スプレッドシートを開くたびに自動で反映されます。
 

@@ -23,9 +23,9 @@ variable "resource_collection_schedule" {
   description = "Cloud Scheduler cron for /collect/resources"
 }
 
-variable "group_collection_schedule" {
+variable "principal_collection_schedule" {
   type        = string
-  description = "Cloud Scheduler cron for /collect/groups"
+  description = "Cloud Scheduler cron for /collect/principals"
 }
 
 variable "reconciliation_schedule" {

@@ -1288,23 +1288,21 @@ function refreshSheetFromBigQuery_(sheetName, viewName) {
 // -------------------------------------------------------------------------
 // 各シートの更新用関数（カスタムメニュー等から呼び出し可能）
 // -------------------------------------------------------------------------
-function refreshGroupsSheet() {
-  // ※ビュー名は実際のBigQuery環境に合わせて適宜修正してください
-  refreshSheetFromBigQuery_('グループ', 'v_sheet_group');
-}
 
-function refreshGroupMembersSheet() {
-  refreshSheetFromBigQuery_('グループメンバー', 'v_sheet_group_members');
-}
+
+
 
 function refreshResourcesSheet() {
   refreshSheetFromBigQuery_('リソース', 'v_sheet_resource');
 }
 
-// 3つのマスターシートを一括更新する関数
+function refreshPrincipalsSheet() {
+  refreshSheetFromBigQuery_('プリンシパル', 'v_sheet_principal');
+}
+
+// マスターシート（プリンシパル・リソース）を一括更新する関数
 function refreshAllMasterData() {
-  refreshGroupsSheet();
-  refreshGroupMembersSheet();
+  refreshPrincipalsSheet();
   refreshResourcesSheet();
-  SpreadsheetApp.getUi().alert("✅ マスターデータ（グループ・メンバー・リソース）の最新化が完了しました。");
+  SpreadsheetApp.getUi().alert("✅ マスターデータ（プリンシパル・リソース）の最新化が完了しました。");
 }

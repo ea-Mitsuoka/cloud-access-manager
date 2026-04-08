@@ -25,11 +25,11 @@ resource "google_cloud_scheduler_job" "resource_inventory_daily" {
   }
 }
 
-resource "google_cloud_scheduler_job" "group_collection_daily" {
-  name             = "iam-group-collection-daily"
+resource "google_cloud_scheduler_job" "principal_collection_daily" {
+  name             = "iam-principal-collection-daily"
   project          = var.tool_project_id
   region           = var.region
-  schedule         = var.group_collection_schedule
+  schedule         = var.principal_collection_schedule
   time_zone        = var.scheduler_time_zone
   attempt_deadline = "900s"
 
@@ -38,7 +38,7 @@ resource "google_cloud_scheduler_job" "group_collection_daily" {
   }
 
   http_target {
-    uri         = "${var.cloud_run_uri}/collect/groups"
+    uri         = "${var.cloud_run_uri}/collect/principals"
     http_method = "POST"
     headers = {
       "Content-Type" = "application/json"

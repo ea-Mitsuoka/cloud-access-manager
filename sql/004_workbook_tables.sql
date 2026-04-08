@@ -5,31 +5,22 @@ CREATE TABLE IF NOT EXISTS `your_project.your_dataset.principal_catalog` (
   principal_email STRING NOT NULL,
   principal_name STRING,
   principal_type STRING,
+  principal_status STRING DEFAULT 'ACTIVE' NOT NULL,
+  deactivated_at TIMESTAMP,
   note STRING,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
 )
 CLUSTER BY principal_type;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.google_groups` (
-  group_email STRING NOT NULL,
-  group_name STRING,
-  description STRING,
-  source STRING,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP() NOT NULL
-)
-CLUSTER BY group_email;
+ALTER TABLE `your_project.your_dataset.principal_catalog`
+ADD COLUMN IF NOT EXISTS principal_status STRING;
 
-CREATE TABLE IF NOT EXISTS `your_project.your_dataset.google_group_membership_history` (
-  execution_id STRING NOT NULL,
-  assessed_at TIMESTAMP NOT NULL,
-  group_email STRING NOT NULL,
-  member_email STRING NOT NULL,
-  member_display_name STRING,
-  membership_type STRING,
-  source STRING
-)
-PARTITION BY DATE(assessed_at)
-CLUSTER BY group_email, member_email;
+ALTER TABLE `your_project.your_dataset.principal_catalog`
+ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMP;
+
+UPDATE `your_project.your_dataset.principal_catalog`
+SET principal_status = 'ACTIVE'
+WHERE principal_status IS NULL;
 
 CREATE TABLE IF NOT EXISTS `your_project.your_dataset.gcp_resource_inventory_history` (
   execution_id STRING NOT NULL,

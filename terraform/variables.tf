@@ -71,30 +71,55 @@ variable "resource_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/resources"
   default     = "0 2 * * *"
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.resource_collection_schedule))
+    error_message = "resource_collection_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
-variable "group_collection_schedule" {
+variable "principal_collection_schedule" {
   type        = string
-  description = "Cloud Scheduler cron for /collect/groups"
+  description = "Cloud Scheduler cron for /collect/principals"
   default     = "30 2 * * *"
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.principal_collection_schedule))
+    error_message = "principal_collection_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
 variable "reconciliation_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /reconcile"
   default     = "0 4 * * *" # Daily at 04:00 AM
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.reconciliation_schedule))
+    error_message = "reconciliation_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
 variable "revoke_expired_permissions_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /revoke_expired_permissions"
   default     = "0 1 * * *" # Daily at 01:00 AM
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.revoke_expired_permissions_schedule))
+    error_message = "revoke_expired_permissions_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
 variable "iam_bindings_history_update_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/update-iam-bindings-history"
   default     = "30 4 * * *" # Daily at 04:30 AM
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.iam_bindings_history_update_schedule))
+    error_message = "iam_bindings_history_update_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
 variable "scheduler_time_zone" {
@@ -119,10 +144,20 @@ variable "iam_policy_collection_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /collect/iam-policies"
   default     = "15 2 * * *"
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.iam_policy_collection_schedule))
+    error_message = "iam_policy_collection_schedule must be daily cron format: \"M H * * *\"."
+  }
 }
 
 variable "iam_role_discovery_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/discover-iam-roles"
   default     = "0 5 * * *"
+
+  validation {
+    condition     = can(regex("^([0-5]?\\d) ([01]?\\d|2[0-3]) \\* \\* \\*$", var.iam_role_discovery_schedule))
+    error_message = "iam_role_discovery_schedule must be daily cron format: \"M H * * *\"."
+  }
 }

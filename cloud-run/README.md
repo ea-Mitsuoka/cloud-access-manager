@@ -15,7 +15,7 @@
 - `GET /healthz`: ヘルスチェック用エンドポイント。
 - `POST /execute`: 指定された `request_id` に基づき、権限の付与・剥奪を実行します。
 - `POST /collect/resources`: GCPリソース（プロジェクト、フォルダ）のインベントリを収集します。
-- `POST /collect/groups`: Google Workspace/Cloud Identityのグループとメンバーシップ情報を収集します。
+- `POST /collect/principals`: Google Workspace（User/Group）とGCP IAM（Service Account）からプリンシパル情報を収集します。
 - `POST /reconcile`: 申請内容と実際の権限の不整合を検知します。
 - `POST /revoke_expired_permissions`: 期限切れの権限を自動的に剥奪します。
 - `POST /jobs/update-iam-bindings-history`: 帳票用の整形済み権限履歴テーブルを更新します。
