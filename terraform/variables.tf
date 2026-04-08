@@ -94,7 +94,7 @@ variable "revoke_expired_permissions_schedule" {
 variable "iam_bindings_history_update_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/update-iam-bindings-history"
-  default     = "30 3 * * *" # Daily at 03:30 AM
+  default     = "30 4 * * *" # Daily at 04:30 AM
 }
 
 variable "scheduler_time_zone" {
@@ -124,5 +124,5 @@ variable "iam_policy_collection_schedule" {
 variable "iam_role_discovery_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/discover-iam-roles"
-  default     = "30 4 * * *"
+  default     = "0 5 * * *"
 }

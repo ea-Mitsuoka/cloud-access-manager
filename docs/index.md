@@ -4,7 +4,7 @@ Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承
 
 ## 🚀 アーキテクチャ概要
 
-システムは仮想マシンを一切持たず、Google Workspace（フォーム/スプレッドシート）とGCPのフルマネージドサービス（Cloud Run/BigQuery）を組み合わせることで、「アイドル時の固定費ゼロ（Scale-to-Zero）」を実現しています。
+システムは仮想マシンを一切持たず、Google Workspace（GAS Webアプリ/スプレッドシート）とGCPのフルマネージドサービス（Cloud Run/BigQuery）を組み合わせることで、「アイドル時の固定費ゼロ（Scale-to-Zero）」を実現しています。
 （※アーキテクチャ図の詳細はリポジトリのREADMEをご参照ください）
 
 ## 📚 ドキュメントナビゲーション

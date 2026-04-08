@@ -84,6 +84,53 @@ require_cmd() {
   fi
 }
 
+cron_to_daily_minutes() {
+  local expr="$1"
+  local minute hour
+  if [[ "$expr" =~ ^([0-9]{1,2})[[:space:]]+([0-9]{1,2})[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*$ ]]; then
+    minute="${BASH_REMATCH[1]}"
+    hour="${BASH_REMATCH[2]}"
+    if ((minute >= 0 && minute <= 59 && hour >= 0 && hour <= 23)); then
+      echo $((hour * 60 + minute))
+      return 0
+    fi
+  fi
+  return 1
+}
+
+assert_schedule_before() {
+  local left_name="$1"
+  local left_expr="$2"
+  local right_name="$3"
+  local right_expr="$4"
+  local left_min right_min
+
+  if ! left_min="$(cron_to_daily_minutes "$left_expr")"; then
+    echo "WARN: Skip strict order check for $left_name. Unsupported cron format: $left_expr"
+    return 0
+  fi
+  if ! right_min="$(cron_to_daily_minutes "$right_expr")"; then
+    echo "WARN: Skip strict order check for $right_name. Unsupported cron format: $right_expr"
+    return 0
+  fi
+
+  if ((left_min >= right_min)); then
+    echo "Invalid scheduler order: $left_name ($left_expr) must be earlier than $right_name ($right_expr)." >&2
+    exit 1
+  fi
+}
+
+validate_scheduler_order() {
+  assert_schedule_before "REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "$REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "RESOURCE_COLLECTION_SCHEDULE" "$RESOURCE_COLLECTION_SCHEDULE"
+  assert_schedule_before "REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "$REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "GROUP_COLLECTION_SCHEDULE" "$GROUP_COLLECTION_SCHEDULE"
+  assert_schedule_before "REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "$REVOKE_EXPIRED_PERMISSIONS_SCHEDULE" "IAM_POLICY_COLLECTION_SCHEDULE" "$IAM_POLICY_COLLECTION_SCHEDULE"
+  assert_schedule_before "RESOURCE_COLLECTION_SCHEDULE" "$RESOURCE_COLLECTION_SCHEDULE" "RECONCILIATION_SCHEDULE" "$RECONCILIATION_SCHEDULE"
+  assert_schedule_before "GROUP_COLLECTION_SCHEDULE" "$GROUP_COLLECTION_SCHEDULE" "RECONCILIATION_SCHEDULE" "$RECONCILIATION_SCHEDULE"
+  assert_schedule_before "IAM_POLICY_COLLECTION_SCHEDULE" "$IAM_POLICY_COLLECTION_SCHEDULE" "RECONCILIATION_SCHEDULE" "$RECONCILIATION_SCHEDULE"
+  assert_schedule_before "RECONCILIATION_SCHEDULE" "$RECONCILIATION_SCHEDULE" "IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE" "$IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE"
+  assert_schedule_before "IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE" "$IAM_BINDINGS_HISTORY_UPDATE_SCHEDULE" "IAM_ROLE_DISCOVERY_SCHEDULE" "$IAM_ROLE_DISCOVERY_SCHEDULE"
+}
+
 if [[ ! -f "$CONFIG_FILE" ]]; then
   if [[ -f "$ROOT_DIR/saas.env.example" ]] && ask_yes_no "Config not found. Create from saas.env.example?" y; then
     cp "$ROOT_DIR/saas.env.example" "$CONFIG_FILE"
@@ -183,6 +230,8 @@ for key in "${required[@]}"; do
     exit 1
   fi
 done
+
+validate_scheduler_order
 
 MANAGED_EFFECTIVE="${MANAGED_PROJECT_ID:-$TOOL_PROJECT_ID}"
 ORG_EFFECTIVE="${ORGANIZATION_ID:-}"
