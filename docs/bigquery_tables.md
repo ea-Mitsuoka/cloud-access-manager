@@ -29,6 +29,7 @@
 
 | テーブル名 | 更新方式 | 真の利用目的（プログラムの実態） | データの使い道 |
 | :--- | :--- | :--- | :--- |
+| **`google_group_membership_history`**| 追記 | **グループメンバーシップの履歴。** どのグループに誰が所属しているかの変遷を日次で追記する。 | **・間接的な権限の監査**: グループに対して付与された権限が、実際にはどのメンバーに行き渡っているかを特定し、棚卸しレビューを詳細化するためのデータ。 |
 | **`gcp_resource_inventory_history`** | 追記 | **GCPリソース構造の履歴。** Cloud Asset API から収集したプロジェクトやフォルダの情報を日次で追記する。 | **・リソース階層の把握**: 権限が付与されている対象リソースが、組織内のどの階層（フォルダ等）に属しているかを特定するためのマスタ情報。 |
 
 ## 5. 帳票用マスタ
@@ -178,18 +179,20 @@ ______________________________________________________________________
 | `note` | STRING | NULLABLE | 管理用の備考 |
 | `updated_at` | TIMESTAMP | NOT NULL | レコードの最終更新日時 |
 
-### `google_groups`
+### `google_group_membership_history`
 
-- **利用目的:** Cloud Identityから収集されたGoogleグループの一覧を保持する（洗い替えマスタ）。
-- **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`
+- **利用目的:** Googleグループのメンバー所属状況（誰がどのグループにいるか）の変遷を記録する。
+- **主要なソース:** `sql/004_workbook_tables.sql`, `cloud-run/app/repository.py`, `cloud-run/app/principal_collector.py`
 
 | カラム名 | 型 | NULL | 説明 |
 | :--- | :--- | :--- | :--- |
-| `group_email` | STRING | NOT NULL | グループのメールアドレス（主キー） |
-| `group_name` | STRING | NULLABLE | グループの表示名 |
-| `description` | STRING | NULLABLE | グループの説明文 |
-| `source` | STRING | NULLABLE | データの収集元 (cloudidentity 等) |
-| `updated_at` | TIMESTAMP | NOT NULL | 収集・更新された日時 |
+| `execution_id` | STRING | NOT NULL | 収集ジョブの実行ID |
+| `assessed_at` | TIMESTAMP | NOT NULL | 情報が収集された日時 |
+| `group_email` | STRING | NOT NULL | 親となるグループのメールアドレス |
+| `member_email` | STRING | NOT NULL | 所属しているメンバーのメールアドレス |
+| `member_display_name` | STRING | NULLABLE | メンバーの表示名 |
+| `membership_type` | STRING | NULLABLE | メンバーシップの種別やロール（MEMBER, OWNER 等） |
+| `source` | STRING | NULLABLE | データの収集元 |
 
 ### `gcp_resource_inventory_history`
 

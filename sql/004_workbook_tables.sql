@@ -22,6 +22,18 @@ UPDATE `your_project.your_dataset.principal_catalog`
 SET principal_status = 'ACTIVE'
 WHERE principal_status IS NULL;
 
+CREATE TABLE IF NOT EXISTS `your_project.your_dataset.google_group_membership_history` (
+  execution_id STRING NOT NULL,
+  assessed_at TIMESTAMP NOT NULL,
+  group_email STRING NOT NULL,
+  member_email STRING NOT NULL,
+  member_display_name STRING,
+  membership_type STRING,
+  source STRING
+)
+PARTITION BY DATE(assessed_at)
+CLUSTER BY group_email, member_email;
+
 CREATE TABLE IF NOT EXISTS `your_project.your_dataset.gcp_resource_inventory_history` (
   execution_id STRING NOT NULL,
   assessed_at TIMESTAMP NOT NULL,

@@ -148,16 +148,27 @@ def test_collect_principals_success(
                 "principal_type": "USER",
             }
         ],
+        [
+            {
+                "group_email": "group@example.com",
+                "member_email": "member@example.com",
+                "member_display_name": None,
+                "membership_type": "MEMBER",
+                "source": "cloudidentity",
+            }
+        ],
         {"User": 1},
         [],
     )
     mock_repo.upsert_principal_catalog.return_value = 1
+    mock_repo.insert_group_membership_rows.return_value = 1
 
     response = client.post("/collect/principals", json={"execution_id": "exec-456"})
 
     assert response.status_code == 200
     assert response.get_json()["result"] == "SUCCESS"
     assert response.get_json()["warnings"] == []
+    assert response.get_json()["inserted_memberships"] == 1
     mock_repo.upsert_principal_catalog.assert_called_once_with(
         [
             {
@@ -168,6 +179,7 @@ def test_collect_principals_success(
         ],
         deactivate_missing=True,
     )
+    mock_repo.insert_group_membership_rows.assert_called_once()
     mock_repo.insert_pipeline_job_report.assert_called_once()
 
 
@@ -182,10 +194,12 @@ def test_collect_principals_partial_success(
                 "principal_type": "USER",
             }
         ],
+        [],
         {"User": 1},
         [{"source": "ADMIN_DIRECTORY_USERS", "error": "403 permission denied"}],
     )
     mock_repo.upsert_principal_catalog.return_value = 1
+    mock_repo.insert_group_membership_rows.return_value = 0
 
     response = client.post("/collect/principals", json={"execution_id": "exec-456"})
 
@@ -202,6 +216,7 @@ def test_collect_principals_partial_success(
         ],
         deactivate_missing=False,
     )
+    mock_repo.insert_group_membership_rows.assert_called_once_with([])
     call_args = mock_repo.insert_pipeline_job_report.call_args[1]
     assert call_args["result"] == "PARTIAL_SUCCESS"
     assert call_args["error_code"] == "PARTIAL_COLLECTION"

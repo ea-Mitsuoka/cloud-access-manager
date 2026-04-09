@@ -35,6 +35,7 @@ graph TD
         CR --> H["BigQuery: iam_access_change_log"]
         CR --> I["BigQuery: iam_policy_bindings_raw_history"]
         CR --> J["BigQuery: principal_catalog"]
+        CR --> K["BigQuery: google_group_membership_history"]
         CR --> R["BigQuery: gcp_resource_inventory_history"]
         CR --> L["BigQuery: iam_reconciliation_issues"]
         CR --> M["BigQuery: iam_pipeline_job_reports"]
@@ -49,6 +50,7 @@ graph TD
     E -- "used by" --> P
     H -- "used by" --> P
     J -- "used by" --> P
+    K -- "used by" --> P
     R -- "used by" --> P
     L -- "used by" --> P
     N -- "used by" --> P

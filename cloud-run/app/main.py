@@ -4,6 +4,7 @@ import logging
 import os
 import traceback
 import uuid
+from datetime import datetime, timezone
 from dataclasses import replace
 from typing import Any
 
@@ -265,10 +266,15 @@ def collect_principals():
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
     try:
-        principals, counts, warnings = principal_collector.collect()
+        principals, memberships, counts, warnings = principal_collector.collect()
         upserted = repo.upsert_principal_catalog(
             principals, deactivate_missing=(len(warnings) == 0)
         )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for row in memberships:
+            row["execution_id"] = execution_id
+            row["assessed_at"] = now_iso
+        memberships_inserted = repo.insert_group_membership_rows(memberships)
         is_partial = len(warnings) > 0
         result = "PARTIAL_SUCCESS" if is_partial else "SUCCESS"
         error_code = "PARTIAL_COLLECTION" if is_partial else None
@@ -290,7 +296,12 @@ def collect_principals():
             error_code=error_code,
             error_message=error_message,
             hint=hint,
-            counts={"upserted_rows": upserted, **counts},
+            counts={
+                "upserted_rows": upserted,
+                "upserted_principals": upserted,
+                "inserted_memberships": memberships_inserted,
+                **counts,
+            },
             details={
                 "note": "Collected from Workspace and IAM",
                 "warnings": warnings,
@@ -301,6 +312,8 @@ def collect_principals():
                 "execution_id": execution_id,
                 "result": result,
                 "upserted_rows": upserted,
+                "upserted_principals": upserted,
+                "inserted_memberships": memberships_inserted,
                 "counts": counts,
                 "warnings": warnings,
             }

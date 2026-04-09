@@ -44,6 +44,11 @@ class Repository:
         )
 
     @property
+    def group_membership_history_table(self) -> str:
+        """Googleグループメンバーシップ履歴テーブルの完全なテーブルID。"""
+        return f"{self._project_id}.{self._dataset_id}.google_group_membership_history"
+
+    @property
     def pipeline_job_reports_table(self) -> str:
         """パイプラインジョブレポートテーブルの完全なテーブルID。"""
         return f"{self._project_id}.{self._dataset_id}.iam_pipeline_job_reports"
@@ -186,6 +191,38 @@ class Repository:
             if errors:
                 raise RuntimeError(
                     "failed to insert resource inventory rows: {}".format(errors)
+                )
+            inserted += len(chunk)
+        return inserted
+
+    def insert_group_membership_rows(
+        self, rows: list[dict[str, Any]], chunk_size: int = 500
+    ) -> int:
+        """
+        グループメンバーシップ履歴データを挿入します。
+
+        Args:
+            rows (list[dict[str, Any]]): 挿入するデータのリスト。
+            chunk_size (int, optional): 一度に挿入する行数。デフォルトは500。
+
+        Returns:
+            int: 挿入された行数。
+
+        Raises:
+            RuntimeError: 挿入に失敗した場合。
+        """
+        if not rows:
+            return 0
+
+        inserted = 0
+        for i in range(0, len(rows), chunk_size):
+            chunk = rows[i : i + chunk_size]
+            errors = self._client.insert_rows_json(
+                self.group_membership_history_table, chunk
+            )
+            if errors:
+                raise RuntimeError(
+                    "failed to insert group membership rows: {}".format(errors)
                 )
             inserted += len(chunk)
         return inserted

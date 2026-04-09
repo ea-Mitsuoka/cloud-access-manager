@@ -38,13 +38,14 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('棚卸し')
     .addItem('🔄 レビュー結果を一括送信', 'menuSubmitBulkReview_')
-    .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
-    .addItem('最新ステータス取得', 'menuRefreshRequestReviewStatus_')
     .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
+    .addItem('マスタ一括更新 (プリンシパル/グループ等)', 'refreshAllMasterData')
+    .addItem('未反映の承認済リクエストを再実行', 'menuRetryFailedExecutions_')
+    .addSeparator()
+    .addItem('最新ステータス取得', 'menuRefreshRequestReviewStatus_')
     .addSeparator()
     .addItem('不整合アラート(インシデント)の確認', 'menuPullReconciliationIssues_')
     .addToUi();
-
 }
 
 
@@ -1296,13 +1297,18 @@ function refreshResourcesSheet() {
   refreshSheetFromBigQuery_('リソース', 'v_sheet_resource');
 }
 
+function refreshGroupMembersSheet() {
+  refreshSheetFromBigQuery_('グループメンバー', 'v_sheet_group_members');
+}
+
 function refreshPrincipalsSheet() {
   refreshSheetFromBigQuery_('プリンシパル', 'v_sheet_principal');
 }
 
-// マスターシート（プリンシパル・リソース）を一括更新する関数
+// マスターシート（プリンシパル・グループメンバー・リソース）を一括更新する関数
 function refreshAllMasterData() {
   refreshPrincipalsSheet();
+  refreshGroupMembersSheet();
   refreshResourcesSheet();
-  SpreadsheetApp.getUi().alert("✅ マスターデータ（プリンシパル・リソース）の最新化が完了しました。");
+  SpreadsheetApp.getUi().alert("✅ マスターデータ（プリンシパル・グループメンバー・リソース）の最新化が完了しました。");
 }

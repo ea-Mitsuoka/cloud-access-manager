@@ -62,6 +62,7 @@ BigQuery に構築された帳票用の整形済みビュー（`v_sheet_*`）を
    - `v_sheet_iam_permission_history` （IAM権限設定履歴：メインの棚卸し帳票）
    - `v_sheet_requests_review` （申請レビュー用ビュー）
    - `v_sheet_principal` （プリンシパル一覧: User/Group/ServiceAccount統合）
+   - `v_sheet_group_members` （グループメンバー一覧）
    - `v_sheet_resource` （リソース一覧）
    - `v_sheet_status` （ステータスマスタ）
 1. 接続された各シートで、必要に応じて「スケジュールされた更新」を設定します（例: 毎朝8時に自動更新など）。これにより、前夜のバッチで収集・整形された最新のIAM監査データが、スプレッドシートを開くたびに自動で反映されます。

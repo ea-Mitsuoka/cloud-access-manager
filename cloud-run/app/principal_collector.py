@@ -23,9 +23,15 @@ class PrincipalCollector:
 
     def collect(
         self,
-    ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, str]]]:
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, int],
+        list[dict[str, str]],
+    ]:
         principals = []
-        counts = {"Group": 0, "User": 0, "ServiceAccount": 0}
+        memberships = []
+        counts = {"Group": 0, "GroupMembership": 0, "User": 0, "ServiceAccount": 0}
         warnings: list[dict[str, str]] = []
 
         try:
@@ -40,6 +46,7 @@ class PrincipalCollector:
                 for g in resp.get("groups", []):
                     email = str(g.get("groupKey", {}).get("id", "")).strip()
                     name = str(g.get("displayName", "")).strip()
+                    group_name = str(g.get("name", "")).strip()
                     if email:
                         principals.append(
                             {
@@ -49,6 +56,61 @@ class PrincipalCollector:
                             }
                         )  # noqa: E501
                         counts["Group"] += 1
+                        if group_name:
+                            try:
+                                member_page_token = ""
+                                while True:
+                                    member_resp = (
+                                        self._cloudidentity_api.groups()
+                                        .memberships()
+                                        .list(
+                                            parent=group_name,
+                                            pageSize=200,
+                                            pageToken=member_page_token,
+                                            view="FULL",
+                                        )
+                                        .execute()
+                                    )
+                                    for m in member_resp.get("memberships", []):
+                                        member_email = str(
+                                            m.get("preferredMemberKey", {}).get(
+                                                "id", ""
+                                            )
+                                        ).strip()
+                                        if not member_email:
+                                            continue
+                                        role_name = ""
+                                        roles = m.get("roles", [])
+                                        if roles:
+                                            role_name = str(
+                                                roles[0].get("name", "")
+                                            ).strip()
+                                        memberships.append(
+                                            {
+                                                "group_email": email,
+                                                "member_email": member_email,
+                                                "member_display_name": None,
+                                                "membership_type": role_name or None,
+                                                "source": "cloudidentity",
+                                            }
+                                        )
+                                        counts["GroupMembership"] += 1
+                                    member_page_token = str(
+                                        member_resp.get("nextPageToken", "")
+                                    ).strip()
+                                    if not member_page_token:
+                                        break
+                            except Exception as member_exc:
+                                logging.warning(
+                                    "Failed to collect memberships "
+                                    f"for {email}: {member_exc}"
+                                )
+                                warnings.append(
+                                    {
+                                        "source": "CLOUD_IDENTITY_GROUP_MEMBERSHIPS",
+                                        "error": f"{email}: {member_exc}",
+                                    }
+                                )
                 page_token = str(resp.get("nextPageToken", "")).strip()
                 if not page_token:
                     break
@@ -118,4 +180,4 @@ class PrincipalCollector:
                 logging.warning(f"Failed to collect service accounts: {e}")
                 warnings.append({"source": "IAM_SERVICE_ACCOUNTS", "error": str(e)})
 
-        return principals, counts, warnings
+        return principals, memberships, counts, warnings
