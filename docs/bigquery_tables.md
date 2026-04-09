@@ -7,6 +7,7 @@
 | テーブル名 | 更新方式 | 真の利用目的（プログラムの実態） | データの使い道 |
 | :--- | :--- | :--- | :--- |
 | **`iam_policy_permissions`** | 洗い替え (外部) | **最新のIAM状態スナップショット（読み取り専用）。** 外部システムが最新の権限状態で定期的に上書き（WRITE_TRUNCATE）する前提のテーブル。本システムは不整合検知や帳票作成のための「現状の正」として SELECT のみを行う。 | **・不整合検知の比較元**: 申請状態と実際の権限状態に差異がないかをチェックするための正解データとして利用。 <br>**・マスタ生成の源泉**: プリンシパル（アカウント）情報を抽出し、カタログを最新化するために利用。 |
+| **`iam_policy_bindings_raw_history`** | 追記 | **生のIAM権限履歴アーカイブ（監査用）。** `iam_policy_permissions` のIAMの断面情報を、加工せずに日次バッチで追記していくための器。第三者の監査向け。 | **・外部監査**: 過去の特定の時点において、誰がどの権限を持っていたかを証明するための改ざん不可能な証跡として提出。 |
 | **`iam_permission_bindings_history`** | 追記 | **帳票出力用の整形済みIAM権限履歴（レビュー用）。** 最新の `iam_policy_permissions` に対して、過去の申請内容（理由、承認者、チケット番号）を結合し、人間が棚卸しレビューしやすい形に整形して保存するテーブル。 | **・定期棚卸し**: 各部門のマネージャーやセキュリティ担当者が、現在付与されている権限の正当性（理由や承認者）をスプレッドシート上で確認・レビューするためのデータソース。 |
 
 ## 2. 申請・承認ワークフロー
@@ -42,6 +43,22 @@
 ______________________________________________________________________
 
 ## テーブル詳細とスキーマ
+
+### `iam_policy_bindings_raw_history`
+
+- **利用目的:** 特定の時点におけるIAMポリシーバインディングの生データスナップショットを記録する監査用テーブル。
+- **主要なソース:** `sql/001_tables.sql`, `terraform/modules/bigquery/main.tf`
+
+| カラム名 | 型 | NULL | 説明 |
+| :--- | :--- | :--- | :--- |
+| `execution_id` | STRING | NOT NULL | 収集ジョブのユニークな実行ID |
+| `assessment_timestamp` | TIMESTAMP | NOT NULL | IAM設定が収集・評価された日時 |
+| `scope` | STRING | NULLABLE | 収集対象のスコープ（例: 組織IDやプロジェクトID） |
+| `resource_type` | STRING | NULLABLE | リソースの種別（Project, Folder, Organization 等） |
+| `resource_name` | STRING | NULLABLE | 権限が付与されている対象リソース名 |
+| `principal_type` | STRING | NULLABLE | 権限を持つアカウントの種別（User, ServiceAccount, Group 等） |
+| `principal_email` | STRING | NULLABLE | 権限を持つアカウントのメールアドレス |
+| `role` | STRING | NULLABLE | 付与されているIAMロール（roles/xxx） |
 
 ### `iam_access_requests`
 

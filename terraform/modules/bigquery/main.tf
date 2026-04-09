@@ -74,6 +74,33 @@ resource "google_bigquery_table" "iam_access_change_log" {
   ])
 }
 
+resource "google_bigquery_table" "iam_policy_bindings_raw_history" {
+  project    = var.tool_project_id
+  dataset_id = google_bigquery_dataset.iam.dataset_id
+  table_id   = "iam_policy_bindings_raw_history"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  time_partitioning {
+    type  = "DAY"
+    field = "assessment_timestamp"
+  }
+
+  clustering = ["resource_type", "principal_email", "role"]
+
+  schema = jsonencode([
+    { name = "execution_id", type = "STRING", mode = "REQUIRED" },
+    { name = "assessment_timestamp", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "scope", type = "STRING", mode = "NULLABLE" },
+    { name = "resource_type", type = "STRING", mode = "NULLABLE" },
+    { name = "resource_name", type = "STRING", mode = "NULLABLE" },
+    { name = "principal_type", type = "STRING", mode = "NULLABLE" },
+    { name = "principal_email", type = "STRING", mode = "NULLABLE" },
+    { name = "role", type = "STRING", mode = "NULLABLE" },
+  ])
+}
 
 resource "google_bigquery_table" "iam_reconciliation_issues" {
   project    = var.tool_project_id

@@ -33,6 +33,7 @@ graph TD
         CR -- "Cloud Identity API" --> G3["Google Cloud Identity"]
 
         CR --> H["BigQuery: iam_access_change_log"]
+        CR --> I["BigQuery: iam_policy_bindings_raw_history"]
         CR --> J["BigQuery: principal_catalog"]
         CR --> K["BigQuery: google_group_membership_history"]
         CR --> R["BigQuery: gcp_resource_inventory_history"]
