@@ -383,7 +383,6 @@ bq_tables=(
   "iam_access_change_log"
   "iam_access_requests"
   "iam_pipeline_job_reports"
-  "iam_policy_bindings_raw_history"
   "iam_policy_permissions"
   "iam_reconciliation_issues"
 )

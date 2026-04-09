@@ -150,7 +150,6 @@ def test_update_iam_bindings_history_success(
         mock_repo (MagicMock): モック化されたリポジトリ。
     """
     # Arrange
-    mock_repo.run_update_raw_bindings_history_job.return_value = 10
     mock_repo.run_update_bindings_history_job.return_value = 10
 
     # Act
@@ -164,11 +163,7 @@ def test_update_iam_bindings_history_success(
     json_data = response.get_json()
     assert json_data["result"] == "SUCCESS"
     assert json_data["inserted_rows"] == 10
-    assert json_data["raw_inserted_rows"] == 10
 
-    mock_repo.run_update_raw_bindings_history_job.assert_called_once_with(
-        json_data["execution_id"]
-    )
     mock_repo.run_update_bindings_history_job.assert_called_once_with(
         json_data["execution_id"]
     )
@@ -179,8 +174,8 @@ def test_update_iam_bindings_history_success(
         error_code=None,
         error_message=None,
         hint=None,
-        counts={"inserted_rows": 10, "raw_inserted_rows": 10},
-        details={"note": "Includes principal catalog sync and raw history update"},
+        counts={"inserted_rows": 10},
+        details={"note": "Includes principal catalog sync and history update"},
     )
 
 

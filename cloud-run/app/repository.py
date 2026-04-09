@@ -1016,34 +1016,6 @@ class Repository:
         self._client.delete_table(tmp_table, not_found_ok=True)
         return affected_rows
 
-    def run_update_raw_bindings_history_job(self, execution_id: str) -> int:
-        """
-        生のIAMバインディング履歴を記録します。
-
-        Args:
-            execution_id (str): このジョブ実行のユニークID。
-
-        Returns:
-            int: 挿入された行数。
-        """
-        sql = f"""
-        INSERT INTO
-          `{self._project_id}.{self._dataset_id}.iam_policy_bindings_raw_history` (
-          execution_id, assessment_timestamp, scope, resource_type,
-          resource_name, principal_type, principal_email, role
-        )
-        SELECT
-          @execution_id, CURRENT_TIMESTAMP(), scope, resource_type,
-          resource_name, principal_type, principal_email, role
-        FROM `{self.iam_policy_permissions_table}`
-        """
-        params = [bigquery.ScalarQueryParameter("execution_id", "STRING", execution_id)]
-        job = self._client.query(
-            sql, job_config=bigquery.QueryJobConfig(query_parameters=params)
-        )
-        job.result()
-        return job.num_dml_affected_rows or 0
-
     @property
     def role_master_table(self) -> str:
         """IAMロールマスタテーブルの完全なテーブルID。"""

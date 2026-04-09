@@ -601,10 +601,7 @@ def update_iam_bindings_history():
     try:
         # 1. プリンシパルマスタの同期
 
-        # 2. 生のIAM履歴 (Raw History) の追記
-        raw_inserted = repo.run_update_raw_bindings_history_job(execution_id)
-
-        # 3. 帳票用整形済み履歴の追記
+        # 2. 帳票用整形済み履歴の追記
         inserted_rows = repo.run_update_bindings_history_job(execution_id)
 
         repo.insert_pipeline_job_report(
@@ -614,15 +611,14 @@ def update_iam_bindings_history():
             error_code=None,
             error_message=None,
             hint=None,
-            counts={"inserted_rows": inserted_rows, "raw_inserted_rows": raw_inserted},
-            details={"note": "Includes principal catalog sync and raw history update"},
+            counts={"inserted_rows": inserted_rows},
+            details={"note": "Includes principal catalog sync and history update"},
         )
         return jsonify(
             {
                 "execution_id": execution_id,
                 "result": "SUCCESS",
                 "inserted_rows": inserted_rows,
-                "raw_inserted_rows": raw_inserted,
             }
         )
     except Exception as exc:  # pragma: no cover

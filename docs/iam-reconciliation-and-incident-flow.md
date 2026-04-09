@@ -137,17 +137,20 @@ ORDER BY req.requested_at DESC;
 ### 5.3 野良権限（UNMANAGED_BINDING）の深掘り調査
 
 システム外で直接付与された権限が検知された場合、その権限が「いつから存在するのか」、過去の生履歴（Raw History）を遡って特定します。
+※「誰がその手動付与操作を行ったか」の正確な実行犯を特定したい場合は、GCPの **Cloud Audit Logs (Admin Activity)** を併せて確認してください。
 
 ```sql
-SELECT 
-  assessment_timestamp,
+SELECT
+  recorded_at,
   principal_email,
   resource_name,
-  role
-FROM `your_project.your_dataset.iam_policy_bindings_raw_history`
+  iam_role AS role,
+  request_id,
+  status_ja
+FROM `your_project.your_dataset.iam_permission_bindings_history`
 WHERE principal_email = 'unknown-user@example.com'
   AND resource_name = 'projects/target-project-id'
-ORDER BY assessment_timestamp ASC
+ORDER BY recorded_at ASC
 LIMIT 10;
 ```
 
