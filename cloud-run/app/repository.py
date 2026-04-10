@@ -667,6 +667,7 @@ class Repository:
           req.status,
           req.approved_at,
           req.expires_at,
+          req.reason,
           (perm.principal_email IS NOT NULL) AS is_permission_active
         FROM `{self.requests_table}` AS req
         LEFT JOIN `{self.iam_policy_permissions_table}` AS perm
@@ -692,6 +693,7 @@ class Repository:
                     approved_at=row["approved_at"],
                     expires_at=row["expires_at"],
                     is_permission_active=row["is_permission_active"],
+                    reason=row["reason"],
                 )
             )
         return requests
