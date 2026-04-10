@@ -125,10 +125,10 @@ poetry run mkdocs serve -f ../mkdocs.yml
 | ドキュメントファイル | 役割と目的 | ユースケース |
 | :--- | :--- | :--- |
 | **`README.md`** | プロジェクトの顔（ポータル） | 全体アーキテクチャや主要機能の把握、各種ドキュメントへの玄関口として利用。 |
-| **`docs/requirements.md`** | 要件定義書 | なぜこのシステム構成になったか（非機能要件や制約）を理解する際に参照。 |
-| **`docs/operations-runbook.md`** | SRE向け運用手順書 | デプロイ手順、コスト管理、VPC-SC設定、トラブルシューティングを行う際に参照。 |
-| **`docs/iam-reconciliation-and-incident-flow.md`** | インシデント対応と監査 | 野良権限検知時の対応や、BigQueryを用いた監査用SQLを調べる際に参照。 |
-| **`docs/data_lineage_and_mapping.md`** | データリネージ | スキーマ変更時や、APIから帳票(スプレッドシート)までのデータの流れを追う際に参照。 |
-| **`docs/bigquery_tables.md`** | テーブル仕様書 | 全13テーブルの用途や更新方式を正確に把握する際に参照。 |
-| **`docs/untested-items-handover.md`** | QA・未テスト台帳 | リリース前に消化すべきテスト項目や、過去の検証履歴を確認する際に参照。 |
+| **`docs/design/requirements.md`** | 要件定義書 | なぜこのシステム構成になったか（非機能要件や制約）を理解する際に参照。 |
+| **`docs/operation/operations-runbook.md`** | SRE向け運用手順書 | デプロイ手順、コスト管理、VPC-SC設定、トラブルシューティングを行う際に参照。 |
+| **`docs/operation/iam-reconciliation-and-incident-flow.md`** | インシデント対応と監査 | 野良権限検知時の対応や、BigQueryを用いた監査用SQLを調べる際に参照。 |
+| **`docs/design/data_lineage_and_mapping.md`** | データリネージ | スキーマ変更時や、APIから帳票(スプレッドシート)までのデータの流れを追う際に参照。 |
+| **`docs/design/bigquery_tables.md`** | テーブル仕様書 | 全13テーブルの用途や更新方式を正確に把握する際に参照。 |
+| **`docs/development/untested-items-handover.md`** | QA・未テスト台帳 | リリース前に消化すべきテスト項目や、過去の検証履歴を確認する際に参照。 |
 | **`CHANGELOG_SUMMARY.md`** | 変更履歴 | 過去の開発の文脈や、バグ修正の経緯をビジネス視点で確認する際に参照。 |

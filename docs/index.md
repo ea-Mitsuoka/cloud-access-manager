@@ -12,13 +12,13 @@ Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承
 上部のナビゲーションバー、または以下のリンクから各ドキュメントにアクセスしてください。
 
 - **ユーザー・運用向け**
-  - [ユーザーガイド (申請者向け)](user-guide.md)
-  - [運用マニュアル (SRE向け)](operations-runbook.md)
-  - [IAM権限の整合性管理とインシデント対応フロー](iam-reconciliation-and-incident-flow.md)
+  - [ユーザーガイド (申請者向け)](operation/user-guide.md)
+  - [運用マニュアル (SRE向け)](operation/operations-runbook.md)
+  - [IAM権限の整合性管理とインシデント対応フロー](operation/iam-reconciliation-and-incident-flow.md)
 - **設計・データ仕様**
-  - [要件定義書](requirements.md)
-  - [BigQuery テーブル仕様書](bigquery_tables.md)
-  - [データリネージとマッピング](data_lineage_and_mapping.md)
+  - [要件定義書](design/requirements.md)
+  - [BigQuery テーブル仕様書](design/bigquery_tables.md)
+  - [データリネージとマッピング](design/data_lineage_and_mapping.md)
 - **開発・API**
-  - [未検証項目引継ぎ](untested-items-handover.md)
+  - [未検証項目引継ぎ](development/untested-items-handover.md)
   - [Python API リファレンス](api/main.md)
