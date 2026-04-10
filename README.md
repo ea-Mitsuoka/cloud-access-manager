@@ -8,62 +8,64 @@ Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承
 
 ```mermaid
 graph TD
-    subgraph UserInteraction ["User Interaction"]
-        A[User] <-->|AIリアルタイム推論| B("SaaS Portal (Web App)")
-        B --> C("Google Sheet: requests_review (Approver)")
+    %% ユーザーインタラクション層
+    subgraph UI ["User Interface (フロントエンド)"]
+        Requester(["👤 申請者"])
+        Approver(["👑 承認者・管理者"])
+
+        Portal["SaaS Portal (GAS Web App)"]
+        Sheet["Google Sheet (管理UI)"]
+
+        Requester -->|"① アクセス申請"| Portal
+        Portal -.->|"明細同期"| Sheet
+        Approver -->|"② 一括承認 / 棚卸し"| Sheet
     end
 
-    subgraph DataProcessing ["Data Processing & Automation"]
-        B -- "Submit" --> D["Google Apps Script"]
-        C -- "Approve / Reject" --> D
-        D -- "Validate" --> AI("Vertex AI (Gemini)")
+    %% AIアシスタント
+    AI["✨ Vertex AI (Gemini)"]
+    Portal <-->|"事前検証・ロール提案"| AI
 
-        subgraph CloudRunService ["Cloud Run Service"]
-            CR["Cloud Run (iam-access-executor)"]
-            F("Cloud Scheduler") --> CR
-        end
+    %% バックエンド層
+    subgraph Backend ["Backend & Automation (バックエンド)"]
+        CR["🚀 Cloud Run (実行エンジン)"]
+        Scheduler["⏰ Cloud Scheduler"]
 
-        D -- "HTTP API" --> CR
-
-        CR --> E["BigQuery: iam_access_requests"]
-        CR --> E2["BigQuery: iam_access_request_history"]
-
-        CR -- "IAM API" --> G1["Google Cloud IAM"]
-        CR -- "Cloud Asset API" --> G2["Google Cloud Asset Inventory"]
-        CR -- "Cloud Identity API" --> G3["Google Cloud Identity"]
-
-        CR --> H["BigQuery: iam_access_change_log"]
-        CR --> I["BigQuery: iam_policy_bindings_raw_history"]
-        CR --> J["BigQuery: principal_catalog"]
-        CR --> K["BigQuery: google_group_membership_history"]
-        CR --> R["BigQuery: gcp_resource_inventory_history"]
-        CR --> L["BigQuery: iam_reconciliation_issues"]
-        CR --> M["BigQuery: iam_pipeline_job_reports"]
-        CR --> N["BigQuery: iam_permission_bindings_history"]
+        Portal -- "HTTP API (OIDC認証)" --> CR
+        Sheet -- "HTTP API (OIDC認証)" --> CR
+        Scheduler -->|"③ 定期バッチ (自動剥奪 / 不整合検知)"| CR
     end
 
-    subgraph DataVisualization ["Data Visualization"]
-        P["BigQuery Views: v_sheet_*"] --> Q("Google Sheet: Management Report")
+    %% インフラ・データ層
+    subgraph Infrastructure ["GCP Infrastructure (ターゲット & DB)"]
+        IAM["🔐 Google Cloud IAM (対象リソース)"]
+        BQ[("📊 BigQuery (監査・構成管理DB)")]
+
+        CR -->|"④ 権限の自動付与 / 剥奪"| IAM
+        CR -->|"⑤ 監査ログ・ステータス同期"| BQ
+        CR -.->|"現況収集 (Cloud Asset API)"| IAM
     end
 
-    %% クロスサブグラフのリンクは外側に記述する
-    E -- "used by" --> P
-    H -- "used by" --> P
-    J -- "used by" --> P
-    K -- "used by" --> P
-    R -- "used by" --> P
-    L -- "used by" --> P
-    N -- "used by" --> P
+    %% 監視・アラート層
+    subgraph Observability ["Monitoring (監視・インシデント通知)"]
+        Monitor["🚨 Cloud Monitoring"]
+        Admin(["👨‍💻 運用担当者 / SRE"])
 
-    style CR fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#FFFFFF
-    style F fill:#FBBC04,stroke:#e0b200,stroke-width:2px
-    style G1 fill:#34A853,stroke:#267d3f,stroke-width:2px
-    style G2 fill:#34A853,stroke:#267d3f,stroke-width:2px
-    style G3 fill:#34A853,stroke:#267d3f,stroke-width:2px
-    style AI fill:#ea4335,stroke:#b31404,stroke-width:2px,color:#FFFFFF
-    style B fill:#ECEFF1,stroke:#616161,stroke-width:2px
-    style C fill:#ECEFF1,stroke:#616161,stroke-width:2px
-    style Q fill:#ECEFF1,stroke:#616161,stroke-width:2px
+        CR -- "エラー / 緊急アクセス(Break-glass)" --> Monitor
+        Monitor -->|"⑥ Email / Webhook 連携"| Admin
+    end
+
+    %% データ可視化
+    BQ -.->|"⑦ Connected Sheets (棚卸し表示)"| Sheet
+
+    %% スタイル定義
+    style Portal fill:#ECEFF1,stroke:#616161,stroke-width:2px
+    style Sheet fill:#34A853,stroke:#267d3f,stroke-width:2px,color:#fff
+    style CR fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#fff
+    style BQ fill:#4285F4,stroke:#2a56c4,stroke-width:2px,color:#fff
+    style IAM fill:#FBBC04,stroke:#e0b200,stroke-width:2px
+    style Scheduler fill:#FBBC04,stroke:#e0b200,stroke-width:2px
+    style Monitor fill:#EA4335,stroke:#b31404,stroke-width:2px,color:#fff
+    style AI fill:#EA4335,stroke:#b31404,stroke-width:2px,color:#fff
 ```
 
 ## ✨ 主要機能 (Features)
