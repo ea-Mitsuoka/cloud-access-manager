@@ -4,6 +4,31 @@
 
 ## Phase 0: 社内導入・Webアプリ化（初期運用フェーズ）
 
+```mermaid
+graph TD
+    User(["👤 社内ユーザー (申請者 / 承認者)"])
+    
+    subgraph Internal ["当社 GCPプロジェクト (社内専用環境)"]
+        subgraph VPCSC ["VPC Service Controls (サービス境界)"]
+            IAP["IAP (Cloud Run直接統合 / LBなし)"]
+            CR["🚀 Cloud Run (Webポータル & 実行エンジン)"]
+            IAM["🔐 対象IAM (社内リソース)"]
+            BQ[("📊 BigQuery (監査ログ・マスタ)")]
+            
+            IAP -->|"② ゼロトラスト認証"| CR
+            CR -->|"③ 権限の付与/剥奪"| IAM
+            CR -->|"④ 監査ログの書き込み"| BQ
+        end
+    end
+
+    User -->|"① 直接アクセス (run.appドメイン)"| IAP
+
+    style Internal fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style VPCSC fill:#FAD2CF,stroke:#B31404,stroke-width:2px,stroke-dasharray: 5 5
+    style IAP fill:#4285F4,color:#fff,stroke:#2a56c4
+    style CR fill:#34A853,color:#fff,stroke:#267d3f
+```
+
 **目標:** インフラ構築のオーバーヘッドをゼロに抑え、最速でゼロトラストな検証環境を構築し、社内での価値提供を開始する。
 
 - **アーキテクチャ構成:**
