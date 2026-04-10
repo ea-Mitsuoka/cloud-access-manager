@@ -21,6 +21,40 @@ ______________________________________________________________________
 
 ## Phase 1: マルチテナントSaaSモデル（データ分離フェーズ）
 
+```mermaid
+graph TD
+    subgraph Vendor ["SaaSベンダー管理環境 (メインシステム)"]
+        Edge["カスタムドメイン + LB + Cloud Armor"]
+        IAP["IAP (ゼロトラスト認証)"]
+        CR["Cloud Run (申請ポータル & 実行エンジン)"]
+        
+        Edge -->|"防御"| IAP
+        IAP -->|"認証"| CR
+    end
+
+    subgraph TenantA ["テナントA GCPプロジェクト"]
+        IAMA["🔐 対象IAM (Tenant A)"]
+        BQA[("📊 BigQuery (監査ログ Tenant A)")]
+    end
+
+    subgraph TenantB ["テナントB GCPプロジェクト"]
+        IAMB["🔐 対象IAM (Tenant B)"]
+        BQB[("📊 BigQuery (監査ログ Tenant B)")]
+    end
+
+    User(["👤 テナントA/B ユーザー"]) -->|"① HTTPSアクセス"| Edge
+    CR -->|"② 権限の付与/剥奪 (Cross-Project)"| IAMA
+    CR -->|"③ 監査ログの書き込み (Cross-Project)"| BQA
+    CR -.-> IAMB
+    CR -.-> BQB
+
+    style Vendor fill:#F8F9FA,stroke:#9AA0A6,stroke-width:2px
+    style TenantA fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style TenantB fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style Edge fill:#4285F4,color:#fff,stroke:#2a56c4
+    style CR fill:#34A853,color:#fff,stroke:#267d3f
+```
+
 **目標:** 1つのコアシステムで複数テナントを効率的に捌きつつ、外部公開に向けた強固なセキュリティの確立と、監査データストアの物理的な分離を行う。
 
 - **アーキテクチャ構成:**
@@ -37,6 +71,38 @@ ______________________________________________________________________
 ______________________________________________________________________
 
 ## Phase 2: BYOC（Bring Your Own Cloud）モデル確立（※Phase 1との選択オプション）
+
+```mermaid
+graph TD
+    subgraph Vendor ["SaaSベンダー環境 (コントロールプレーン)"]
+        Portal["Cloud Run (ログイン & 統合ポータルUI)"]
+        AR["Artifact Registry (コンテナイメージ一元管理)"]
+        GCS[("GCS (Terraform State 一元管理)")]
+    end
+
+    subgraph Tenant ["顧客GCP環境 (BYOC / データプレーン)"]
+        subgraph VPCSC ["VPC Service Controls (境界) - ※オプション"]
+            CR_T["🚀 Cloud Run (IAM実行エンジン)"]
+            BQ_T[("📊 BigQuery (監査ログ・マスタ)")]
+            IAM_T["🔐 対象IAM"]
+            
+            CR_T -->|"③ 閉域網内での権限実行"| IAM_T
+            CR_T -->|"④ 閉域網内でのログ記録"| BQ_T
+        end
+    end
+
+    User(["👤 顧客ユーザー"]) -->|"① 申請・承認"| Portal
+    Portal -->|"② API連携 (OIDC)"| CR_T
+    
+    AR -.->|"⑤ 最新イメージの配信"| CR_T
+    GCS -.->|"⑥ インフラ構成の統制"| Tenant
+
+    style Vendor fill:#F8F9FA,stroke:#9AA0A6,stroke-width:2px
+    style Tenant fill:#FCE8E6,stroke:#EA4335,stroke-width:2px
+    style VPCSC fill:#FAD2CF,stroke:#B31404,stroke-width:2px,stroke-dasharray: 5 5
+    style CR_T fill:#34A853,color:#fff,stroke:#267d3f
+    style Portal fill:#4285F4,color:#fff,stroke:#2a56c4
+```
 
 **目標:** 顧客自身のGCP環境内でデータと処理を完結させ、エンタープライズ特有の極めて厳しいセキュリティ要件（データ主権）を満たす。
 **※本モデルはPhase 1のSaaSモデルへの完全移行ではなく、顧客のセキュリティ要件（手軽なSaaS型か、堅牢な自社環境ホスティング型か）に応じて並行して提供・選択できる「エンタープライズ向け上位オプション」としての位置づけになります。**
@@ -55,6 +121,49 @@ ______________________________________________________________________
 ______________________________________________________________________
 
 ## Phase 3: マルチクラウド展開
+
+```mermaid
+graph TD
+    subgraph Core ["統合 Cloud Access Manager (SaaSまたはBYOC)"]
+        Portal["統合ポータルUI (申請・承認・棚卸し)"]
+        Engine["マルチクラウド実行エンジン (API抽象化)"]
+        Portal --> Engine
+    end
+
+    subgraph GCP ["Google Cloud"]
+        GCP_IAM["🔐 Cloud IAM"]
+        GCP_Log[("📊 BigQuery (監査)")]
+    end
+
+    subgraph AWS ["Amazon Web Services"]
+        AWS_IAM["🔐 AWS IAM"]
+        AWS_Log[("📊 CloudTrail / S3")]
+    end
+
+    subgraph Azure ["Microsoft Azure"]
+        AZ_IAM["🔐 Entra ID / Azure RBAC"]
+        AZ_Log[("📊 Log Analytics")]
+    end
+
+    User(["👤 ユーザー"]) -->|"① 権限申請"| Portal
+    
+    Engine -->|"② 権限付与"| GCP_IAM
+    Engine -->|"③ ログ記録"| GCP_Log
+    
+    Engine -->|"④ 権限付与"| AWS_IAM
+    Engine -->|"⑤ ログ記録"| AWS_Log
+    
+    Engine -->|"⑥ 権限付与"| AZ_IAM
+    Engine -->|"⑦ ログ記録"| AZ_Log
+
+    style Core fill:#E8EAED,stroke:#5F6368,stroke-width:2px
+    style GCP fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style AWS fill:#FEF7E0,stroke:#F9AB00,stroke-width:2px
+    style Azure fill:#E1F5FE,stroke:#0078D4,stroke-width:2px
+    style Engine fill:#34A853,color:#fff,stroke:#267d3f
+    style AWS_IAM fill:#FF9900,color:#fff,stroke:#e28700
+    style AZ_IAM fill:#0078D4,color:#fff,stroke:#005a9e
+```
 
 **目標:** Google Cloudの枠を超え、マルチクラウド環境における統合的な権限管理プラットフォームへ進化する。
 
