@@ -23,12 +23,12 @@ plugins:
 
 nav:
   - ホーム: index.md
-  - ユーザーガイド (申請者向け): user-guide.md
-  - 運用マニュアル (SRE向け): operations-runbook.md
-  - 要件定義書: requirements.md
-  - BigQuery仕様: bigquery_tables.md
-  - データリネージとマッピング: data_lineage_and_mapping.md
-  - 未検証項目引継ぎ: untested-items-handover.md
+  - ユーザーガイド (申請者向け): operation/user-guide.md
+  - 運用マニュアル (SRE向け): operation/operations-runbook.md
+  - 要件定義書: design/requirements.md
+  - BigQuery仕様: design/bigquery_tables.md
+  - データリネージとマッピング: design/data_lineage_and_mapping.md
+  - 未検証項目引継ぎ: development/untested-items-handover.md
   - APIリファレンス (Python):
     - メインAPI (main): api/main.md
     - 実行エンジン (iam_executor): api/iam_executor.md
