@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 from google.cloud import asset_v1
@@ -28,7 +29,11 @@ class IamPolicyCollector:
 
         for result in response:
             counts["policies"] += 1
-            resource_name = result.resource
+            resource_name = (
+                re.sub(r"^//[^/]+/", "", result.resource)
+                if result.resource.startswith("//")
+                else result.resource
+            )
             asset_type = result.asset_type
             policy = result.policy
 
