@@ -16,12 +16,14 @@ locals {
   executor_project_roles = [
     "roles/resourcemanager.projectIamAdmin",
     "roles/cloudasset.viewer",
+    "roles/iam.serviceAccountViewer"
   ]
 
   executor_organization_roles = [
     "roles/browser",
     "roles/cloudasset.viewer",
     "roles/resourcemanager.projectIamAdmin",
+    "roles/iam.serviceAccountViewer"
   ]
 
   base_enabled_services = toset([
