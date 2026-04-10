@@ -48,23 +48,27 @@ ______________________________________________________________________
 
 ```mermaid
 graph TD
-    subgraph Vendor ["SaaSベンダー管理環境 (メインシステム)"]
-        Edge["カスタムドメイン + LB + Cloud Armor"]
-        IAP["IAP (ゼロトラスト認証)"]
-        CR["Cloud Run (申請ポータル & 実行エンジン)"]
+    subgraph OurOrg ["🏢 当社 Google Cloud 組織"]
         
-        Edge -->|"防御"| IAP
-        IAP -->|"認証"| CR
-    end
+        subgraph Vendor ["SaaSベンダー管理環境 (メインシステム)"]
+            Edge["カスタムドメイン + LB + Cloud Armor"]
+            IAP["IAP (ゼロトラスト認証)"]
+            CR["Cloud Run (申請ポータル & 実行エンジン)"]
+            
+            Edge -->|"防御"| IAP
+            IAP -->|"認証"| CR
+        end
 
-    subgraph TenantA ["テナントA GCPプロジェクト"]
-        IAMA["🔐 対象IAM (Tenant A)"]
-        BQA[("📊 BigQuery (監査ログ Tenant A)")]
-    end
+        subgraph TenantA ["テナントA GCPプロジェクト"]
+            IAMA["🔐 対象IAM (Tenant A)"]
+            BQA[("📊 BigQuery (監査ログ Tenant A)")]
+        end
 
-    subgraph TenantB ["テナントB GCPプロジェクト"]
-        IAMB["🔐 対象IAM (Tenant B)"]
-        BQB[("📊 BigQuery (監査ログ Tenant B)")]
+        subgraph TenantB ["テナントB GCPプロジェクト"]
+            IAMB["🔐 対象IAM (Tenant B)"]
+            BQB[("📊 BigQuery (監査ログ Tenant B)")]
+        end
+
     end
 
     User(["👤 テナントA/B ユーザー"]) -->|"① HTTPSアクセス"| Edge
@@ -73,7 +77,9 @@ graph TD
     CR -.-> IAMB
     CR -.-> BQB
 
-    style Vendor fill:#F8F9FA,stroke:#9AA0A6,stroke-width:2px
+    %% スタイル定義
+    style OurOrg fill:#f8f9fa,stroke:#5f6368,stroke-width:2px,stroke-dasharray: 5 5,color:#202124
+    style Vendor fill:#ffffff,stroke:#9AA0A6,stroke-width:2px
     style TenantA fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
     style TenantB fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
     style Edge fill:#4285F4,color:#fff,stroke:#2a56c4
