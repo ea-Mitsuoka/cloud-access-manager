@@ -175,6 +175,13 @@ jobs:
           echo "revoke_expired_permissions_schedule = \"0 1 * * *\"" >> terraform/environment.auto.tfvars
           echo "iam_bindings_history_update_schedule = \"0 2 * * *\"" >> terraform/environment.auto.tfvars
           echo "scheduler_time_zone = \"Asia/Tokyo\"" >> terraform/environment.auto.tfvars
+          ENABLE_IAP="${{ vars.ENABLE_IAP }}"
+          echo "enable_iap = ${ENABLE_IAP:-false}" >> terraform/environment.auto.tfvars
+          echo "iap_oauth_client_id = \"${{ secrets.IAP_OAUTH_CLIENT_ID }}\"" >> terraform/environment.auto.tfvars
+          echo "iap_oauth_client_secret = \"${{ secrets.IAP_OAUTH_CLIENT_SECRET }}\"" >> terraform/environment.auto.tfvars
+          PRINCIPALS='${{ vars.IAP_ALLOWED_PRINCIPALS }}'
+          if [ -z "$PRINCIPALS" ]; then PRINCIPALS="[]"; fi
+          echo "iap_allowed_principals = $PRINCIPALS" >> terraform/environment.auto.tfvars
 
       - name: Setup Terraform
         if: steps.check_wif.outputs.wif_enabled == 'true'

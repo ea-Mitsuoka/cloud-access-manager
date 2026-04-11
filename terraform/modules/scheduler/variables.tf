@@ -57,3 +57,8 @@ variable "iam_role_discovery_schedule" {
   type        = string
   description = "Cloud Scheduler cron for /jobs/discover-iam-roles"
 }
+
+variable "oidc_audience" {
+  type        = string
+  description = "OIDC audience for Cloud Scheduler tokens. Use IAP client ID when IAP is enabled."
+}

@@ -125,6 +125,10 @@ alert_notification_email             = "${ALERT_NOTIFICATION_EMAIL:-}"
 alert_notification_webhook_url       = "${ALERT_NOTIFICATION_WEBHOOK_URL:-}"
 enable_vpc_sc                        = $ENABLE_VPC_SC
 access_policy_name                   = "$ACCESS_POLICY_NAME"
+enable_iap                           = ${ENABLE_IAP:-false}
+iap_oauth_client_id                  = "${IAP_OAUTH_CLIENT_ID:-}"
+iap_oauth_client_secret              = "${IAP_OAUTH_CLIENT_SECRET:-}"
+iap_allowed_principals               = ${IAP_ALLOWED_PRINCIPALS:-[]}
 TFVARS
 
 # 3. Cloud Run / ローカルテスト用変数の出力
@@ -138,6 +142,7 @@ WORKSPACE_CUSTOMER_ID=$WORKSPACE_CUSTOMER_ID
 EXECUTOR_IDENTITY=iam-access-executor@$TOOL_PROJECT_ID.iam.gserviceaccount.com
 GAS_INVOKER_EMAIL=iam-gas-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com
 SCHEDULER_INVOKER_EMAIL=iam-scheduler-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com
+IAP_OAUTH_CLIENT_ID=${IAP_OAUTH_CLIENT_ID:-}
 ENV
 
 # 4. GAS用プロパティの出力 (キー名をCode.gsの実装と一致させる)
@@ -147,7 +152,8 @@ cat > "$ROOT_DIR/apps-script/script-properties.json" <<JSON
   "BQ_DATASET_ID": "$BQ_DATASET_ID",
   "BQ_LOCATION": "$BQ_LOCATION",
   "CLOUD_RUN_EXECUTE_URL": "<set-after-terraform-output-cloud_run_url>",
-  "GAS_INVOKER_SA_EMAIL": "iam-gas-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com"
+  "GAS_INVOKER_SA_EMAIL": "iam-gas-invoker@$TOOL_PROJECT_ID.iam.gserviceaccount.com",
+  "IAP_OAUTH_CLIENT_ID": "${IAP_OAUTH_CLIENT_ID:-}"
 }
 JSON
 

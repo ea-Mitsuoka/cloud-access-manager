@@ -57,3 +57,24 @@ variable "gas_invoker_service_account_email" {
   type        = string
   description = "Email of the GAS invoker service account"
 }
+
+variable "enable_iap" {
+  type        = bool
+  description = "Enable IAP directly on Cloud Run service"
+}
+
+variable "iap_oauth_client_id" {
+  type        = string
+  description = "OAuth client ID for IAP"
+}
+
+variable "iap_oauth_client_secret" {
+  type        = string
+  description = "OAuth client secret for IAP (optional for compatibility)"
+  sensitive   = true
+}
+
+variable "iap_allowed_principals" {
+  type        = list(string)
+  description = "Principals allowed to access IAP-protected web UI"
+}

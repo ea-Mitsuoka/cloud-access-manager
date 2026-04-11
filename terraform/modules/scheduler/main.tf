@@ -20,7 +20,7 @@ resource "google_cloud_scheduler_job" "resource_inventory_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -47,7 +47,7 @@ resource "google_cloud_scheduler_job" "principal_collection_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -74,7 +74,7 @@ resource "google_cloud_scheduler_job" "reconciliation_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -101,7 +101,7 @@ resource "google_cloud_scheduler_job" "revoke_expired_permissions_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -128,7 +128,7 @@ resource "google_cloud_scheduler_job" "iam_bindings_history_update_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -155,7 +155,7 @@ resource "google_cloud_scheduler_job" "iam_policy_collection_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }
@@ -182,7 +182,7 @@ resource "google_cloud_scheduler_job" "iam_role_discovery_daily" {
 
     oidc_token {
       service_account_email = var.scheduler_invoker_service_account_email
-      audience              = var.cloud_run_uri
+      audience              = var.oidc_audience
     }
   }
 }

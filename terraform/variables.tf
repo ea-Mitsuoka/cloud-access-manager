@@ -161,3 +161,28 @@ variable "iam_role_discovery_schedule" {
     error_message = "iam_role_discovery_schedule must be daily cron format: \"M H * * *\"."
   }
 }
+
+variable "enable_iap" {
+  type        = bool
+  description = "Enable IAP directly on Cloud Run service."
+  default     = false
+}
+
+variable "iap_oauth_client_id" {
+  type        = string
+  description = "OAuth client ID for IAP. Required when enable_iap is true."
+  default     = ""
+}
+
+variable "iap_oauth_client_secret" {
+  type        = string
+  description = "OAuth client secret for IAP (optional for compatibility)."
+  default     = ""
+  sensitive   = true
+}
+
+variable "iap_allowed_principals" {
+  type        = list(string)
+  description = "Principals allowed to access IAP-protected web UI."
+  default     = []
+}

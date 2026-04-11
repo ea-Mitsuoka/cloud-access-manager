@@ -40,6 +40,29 @@
 - `scripts/bootstrap-deploy.sh` は実行前に順序を検証し、逆転している場合は停止します。
 - Terraform 側にも順序ガード（`scheduler_order_guard`）を実装しており、`terraform apply` 直実行でも順序違反を拒否します。
 
+## 2.1 IAP有効化の切替手順（Phase 0 / Part 1）
+
+`ENABLE_IAP=true` への切替は、以下の順序で実施してください。
+
+1. `saas.env` に IAP 設定を入力します（`ENABLE_IAP=true`, `IAP_OAUTH_CLIENT_ID`, `IAP_OAUTH_CLIENT_SECRET`, `IAP_ALLOWED_PRINCIPALS`）。
+1. `IAP_ALLOWED_PRINCIPALS` に、まず運用者ユーザー（最低1名）を追加します。
+1. Cloud Run 実行サービスに対する IAP 通過ロールを付与します（Terraform適用）。
+   - 付与順序:
+     1. 運用者ユーザー（動作確認用）
+     1. GAS 実行主体（必要な場合）
+     1. Cloud Scheduler 実行主体（必要な場合）
+1. `bash scripts/sync-config.sh` を実行して設定を反映します。
+1. `bash scripts/bootstrap-deploy.sh --skip-apply` で生成物確認後、通常の `bootstrap-deploy.sh` または `terraform apply` を実行します。
+1. 切替直後に以下を確認します。
+   - `/healthz` へのアクセス（運用者）
+   - GAS からの API 呼び出し
+   - Cloud Scheduler の日次ジョブ（`RESOURCE_COLLECTION`, `PRINCIPAL_COLLECTION`, `IAM_POLICY_COLLECTION`）が `iam_pipeline_job_reports` で `SUCCESS` または `PARTIAL_SUCCESS`
+
+補足:
+
+- 本システムは移行互換のため、バックエンドで OIDC audience を `run.app URL` と `IAP_OAUTH_CLIENT_ID` の両方受け入れます。
+- そのため段階移行（先にIAP有効化、後から呼び出し主体を順次切替）でも停止しにくい構成です。
+
 ## 3. テナント・オンボーディングと初期データ収集
 
 SaaS基盤のデプロイ完了後、以下の手順で顧客環境の初期データを収集し、システムを稼働可能な状態にします。

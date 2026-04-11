@@ -35,6 +35,7 @@ TARGET_PROJECT_ID = os.environ.get("MGMT_TARGET_PROJECT_ID", "").strip()
 TARGET_ORG_ID = os.environ.get("MGMT_TARGET_ORGANIZATION_ID", "").strip()
 WORKSPACE_CUSTOMER_ID = os.environ.get("WORKSPACE_CUSTOMER_ID", "my_customer").strip()
 SCHEDULER_INVOKER_EMAIL = os.environ.get("SCHEDULER_INVOKER_EMAIL", "").strip()
+IAP_OAUTH_CLIENT_ID = os.environ.get("IAP_OAUTH_CLIENT_ID", "").strip()
 
 repo = Repository(project_id=PROJECT_ID, dataset_id=DATASET_ID)
 iam_executor = IamExecutor()
@@ -936,14 +937,25 @@ def _authorize() -> bool:
     if not token:
         return False
 
-    # Cloud Runコンテナ内部ではhttpとして扱われるため、Audience検証用にhttpsへ強制する
-    expected_audience = request.url_root.rstrip("/").replace("http://", "https://")
-    try:
-        claims = google_id_token.verify_oauth2_token(
-            token, google_auth_requests.Request(), expected_audience
-        )
-    except Exception as e:
-        logging.warning(f"OIDC verification failed: {e}")
+    # Cloud Runコンテナ内部ではhttpとして扱われるため、Audience検証用にhttpsへ強制する。
+    # IAP移行期は run.app audience と IAP OAuth client ID の両方を許容する。
+    expected_audiences = [request.url_root.rstrip("/").replace("http://", "https://")]
+    if IAP_OAUTH_CLIENT_ID:
+        expected_audiences.append(IAP_OAUTH_CLIENT_ID)
+
+    claims: dict[str, Any] | None = None
+    last_error: Exception | None = None
+    for expected_audience in expected_audiences:
+        try:
+            claims = google_id_token.verify_oauth2_token(
+                token, google_auth_requests.Request(), expected_audience
+            )
+            break
+        except Exception as e:
+            last_error = e
+
+    if claims is None:
+        logging.warning(f"OIDC verification failed: {last_error}")
         return False
 
     email = str(claims.get("email", "")).strip().lower()

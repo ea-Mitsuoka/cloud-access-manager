@@ -111,6 +111,12 @@ graph TD
 1. **初期データの収集**
    権限付与完了後、初期データ収集バッチを手動トリガー（または `bash scripts/onboard-tenant.sh` を実行）してセットアップ完了です。
 
+**IAP切替（Phase 0 / Part 1）最短手順**
+
+1. `saas.env` に `ENABLE_IAP=true` と `IAP_OAUTH_CLIENT_ID` / `IAP_OAUTH_CLIENT_SECRET` / `IAP_ALLOWED_PRINCIPALS` を設定。
+1. `bash scripts/sync-config.sh` 実行後、`terraform apply`（または `bash scripts/bootstrap-deploy.sh`）を実行。
+1. 切替後に `/healthz`、GAS経由API、Schedulerジョブ結果（`iam_pipeline_job_reports`）を確認。
+
 ## 📚 ドキュメントナビゲーション
 
 詳細な仕様や手順は `docs/` ディレクトリ配下の各ドキュメントを参照してください。

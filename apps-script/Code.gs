@@ -460,8 +460,9 @@ function insertRequestHistoryEvent_(props, event) {
 function getOidcToken_(props) {
   if (!props.gasInvokerEmail) throw new Error("Missing GAS_INVOKER_SA_EMAIL property");
   const url = `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${props.gasInvokerEmail}:generateIdToken`;
+  const audience = props.iapClientId || props.cloudRunUrl.replace(/\/execute\/?$/, '');
   const payload = {
-    audience: props.cloudRunUrl.replace(/\/execute\/?$/, ''),
+    audience: audience,
     includeEmail: true
   };
   const options = {
@@ -574,7 +575,8 @@ function getProps_() {
     datasetId: p.getProperty('BQ_DATASET_ID'),
     location: p.getProperty('BQ_LOCATION'),
     cloudRunUrl: p.getProperty('CLOUD_RUN_EXECUTE_URL'),
-    gasInvokerEmail: p.getProperty('GAS_INVOKER_SA_EMAIL')
+    gasInvokerEmail: p.getProperty('GAS_INVOKER_SA_EMAIL'),
+    iapClientId: p.getProperty('IAP_OAUTH_CLIENT_ID')
   };
   validateProps_(props);
   return props;

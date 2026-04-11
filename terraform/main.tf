@@ -3,6 +3,11 @@ provider "google" {
   region  = var.region
 }
 
+provider "google-beta" {
+  project = var.tool_project_id
+  region  = var.region
+}
+
 locals {
   organization_scope_enabled   = trimspace(var.organization_id) != ""
   effective_managed_project_id = trimspace(var.managed_project_id) != "" ? var.managed_project_id : var.tool_project_id
@@ -27,6 +32,7 @@ locals {
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
+    "iap.googleapis.com",
   ])
   conditional_enabled_services = toset(
     var.enable_vpc_sc ? ["accesscontextmanager.googleapis.com"] : []
@@ -71,6 +77,20 @@ resource "terraform_data" "scheduler_order_guard" {
         local.bindings_schedule_minutes < local.role_discovery_schedule_minutes
       )
       error_message = "Invalid scheduler order. Keep: revoke -> collect(resources/principals/iam-policies) -> reconcile -> update-iam-bindings-history -> discover-iam-roles."
+    }
+  }
+}
+
+resource "terraform_data" "iap_config_guard" {
+  input = "iap-config-guard"
+
+  lifecycle {
+    precondition {
+      condition = (
+        !var.enable_iap ||
+        trimspace(var.iap_oauth_client_id) != ""
+      )
+      error_message = "When enable_iap is true, iap_oauth_client_id must be set."
     }
   }
 }
@@ -131,6 +151,10 @@ module "cloud_run" {
   workspace_customer_id                   = var.workspace_customer_id
   scheduler_invoker_service_account_email = module.service_accounts.scheduler_invoker_service_account_email
   gas_invoker_service_account_email       = module.service_accounts.gas_invoker_service_account_email
+  enable_iap                              = var.enable_iap
+  iap_oauth_client_id                     = var.iap_oauth_client_id
+  iap_oauth_client_secret                 = var.iap_oauth_client_secret
+  iap_allowed_principals                  = var.iap_allowed_principals
 
   depends_on = [
     google_project_service.services,
@@ -161,7 +185,9 @@ module "scheduler" {
   revoke_expired_permissions_schedule     = var.revoke_expired_permissions_schedule
   iam_bindings_history_update_schedule    = var.iam_bindings_history_update_schedule
   scheduler_time_zone                     = var.scheduler_time_zone
+  oidc_audience                           = var.enable_iap && trimspace(var.iap_oauth_client_id) != "" ? var.iap_oauth_client_id : module.cloud_run.uri
   depends_on = [
+    terraform_data.iap_config_guard,
     terraform_data.scheduler_order_guard,
     google_project_service.services,
     google_cloud_run_v2_service_iam_member.scheduler_run_invoker,
