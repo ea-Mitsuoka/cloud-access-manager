@@ -7,8 +7,9 @@ import uuid
 from datetime import datetime, timezone
 from dataclasses import replace
 from typing import Any
+from functools import wraps
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from google.api_core.exceptions import PermissionDenied as GcpPermissionDenied
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
@@ -21,8 +22,9 @@ from .principal_collector import PrincipalCollector
 from .resource_inventory_collector import ResourceInventoryCollector
 from .repository import Repository
 from .scope_validator import ScopeConfig, ScopeValidator
+from .ai_advisor import suggest_iam_roles, validate_role_with_ai
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +61,56 @@ iam_policy_collector = IamPolicyCollector(
     target_org_id=TARGET_ORG_ID,
 )
 
+# --- Authorization Decorators ---
+
+
+def require_oidc_auth(f):
+    """Cloud Scheduler または GAS からの機械的な OIDC トークン通信を検証するデコレータ。"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not _authorize():
+            return jsonify({"error": "unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def require_iap_auth(f):
+    """IAPを通過した人間（ブラウザ）からのアクセスを検証するデコレータ。"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        iap_email = request.headers.get("X-Goog-Authenticated-User-Email", "")
+        if not iap_email:
+            # ローカル開発時のフォールバック (IAP無効時)
+            if not IAP_OAUTH_CLIENT_ID:
+                request.environ["user_email"] = "local-dev@example.com"
+                return f(*args, **kwargs)
+            logging.warning("Blocked access without IAP header.")
+            return "Unauthorized: Please access via IAP.", 401
+
+        # ヘッダから "accounts.google.com:" プレフィックスを除去
+        clean_email = iap_email.replace("accounts.google.com:", "").strip().lower()
+        request.environ["user_email"] = clean_email
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+# --- Web Portal UI ---
+
+
+@app.route("/", methods=["GET"])
+@require_iap_auth
+def index():
+    """IAP経由でアクセスされるSaaSポータルのUIを提供します。"""
+    email = request.environ.get("user_email", "unknown@example.com")
+    return render_template("RoleAdvisor.html", requester_email=email)
+
+
+# --- Batch / System APIs (Protected by OIDC) ---
+
 
 @app.get("/healthz")
 def healthz():
@@ -71,6 +123,7 @@ def healthz():
 
 
 @app.post("/execute")
+@require_oidc_auth
 def execute_request():
     """
     承認済みのアクセスリクエストに基づいてIAMポリシー変更を実行します。
@@ -78,9 +131,6 @@ def execute_request():
     Returns:
         Response: 実行結果を含むJSONレスポンス。
     """
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     request_id = str(payload.get("request_id", "")).strip()
     if not request_id:
@@ -200,6 +250,7 @@ def _execute_request_by_id(request_id: str) -> tuple[dict[str, Any], int]:
 
 
 @app.post("/collect/resources")
+@require_oidc_auth
 def collect_resources():
     """
     管理対象スコープ内のGCPリソースを収集し、棚卸しデータをDBに保存します。
@@ -207,9 +258,6 @@ def collect_resources():
     Returns:
         Response: 収集結果を含むJSONレスポンス。
     """
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
@@ -258,11 +306,9 @@ def collect_resources():
 
 
 @app.post("/collect/principals")
+@require_oidc_auth
 def collect_principals():
     """各種APIからプリンシパル（User, Group, SA）を収集し、マスタを更新します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
@@ -341,11 +387,9 @@ def collect_principals():
 
 
 @app.post("/collect/iam-policies")
+@require_oidc_auth
 def collect_iam_policies():
     """管理対象スコープ内のIAMポリシーを収集し、DBを洗い替えます。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
 
@@ -395,6 +439,7 @@ def collect_iam_policies():
 
 
 @app.post("/reconcile")
+@require_oidc_auth
 def reconcile_iam_issues():
     """
     IAMの矛盾を検出し、issuesテーブルに記録するリコンシリエーションジョブを実行します。
@@ -402,9 +447,6 @@ def reconcile_iam_issues():
     Returns:
         Response: 実行結果を含むJSONレスポンス。
     """
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "IAM_RECONCILIATION"
@@ -449,6 +491,7 @@ def reconcile_iam_issues():
 
 
 @app.post("/revoke_expired_permissions")
+@require_oidc_auth
 def revoke_expired_permissions():
     """
     期限切れの承認済みアクセス権限を自動的に取り消します。
@@ -456,9 +499,6 @@ def revoke_expired_permissions():
     Returns:
         Response: 実行結果（取り消し、スキップ、失敗の件数）を含むJSONレスポンス。
     """
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "EXPIRED_PERMISSION_REVOCATION"
@@ -585,6 +625,7 @@ def revoke_expired_permissions():
 
 
 @app.post("/jobs/update-iam-bindings-history")
+@require_oidc_auth
 def update_iam_bindings_history():
     """
     現在のIAMバインディングのスナップショットを履歴テーブルに保存するジョブを実行します。
@@ -592,9 +633,6 @@ def update_iam_bindings_history():
     Returns:
         Response: 実行結果（挿入された行数）を含むJSONレスポンス。
     """
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     execution_id = str(payload.get("execution_id", "")).strip() or str(uuid.uuid4())
     job_type = "IAM_BINDINGS_HISTORY_UPDATE"
@@ -646,10 +684,9 @@ def update_iam_bindings_history():
 
 
 @app.get("/api/statuses")
+@require_oidc_auth
 def api_get_statuses():
     """GAS等のクライアント向けにステータスマスタの対応表を提供します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     try:
         mapping = repo.get_status_master()
         # 英語のステータスコード自身もマッピングに含める（例: "APPROVED": "APPROVED"）
@@ -663,10 +700,9 @@ def api_get_statuses():
 
 
 @app.post("/api/requests")
+@require_oidc_auth
 def api_create_request():
     """新規アクセスリクエストを登録します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     try:
         repo.insert_access_request_raw(payload)
@@ -677,10 +713,9 @@ def api_create_request():
 
 
 @app.post("/api/requests/bulk")
+@require_oidc_auth
 def api_create_requests_bulk():
     """新規アクセスリクエストを一括登録します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     requests_list = payload.get("requests", [])
     if not isinstance(requests_list, list):
@@ -696,11 +731,9 @@ def api_create_requests_bulk():
 
 
 @app.post("/api/requests/bulk-status")
+@require_oidc_auth
 def api_bulk_update_request_status():
     """複数のアクセスリクエストのステータスを一括更新し、履歴を記録します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     updates = payload.get("updates", [])
     actor_email = payload.get("actor_email", "system")
@@ -732,11 +765,9 @@ def api_bulk_update_request_status():
 
 
 @app.post("/api/v1/requests/bulk-review")
+@require_oidc_auth
 def api_bulk_review_requests():
     """レビュー結果を一括適用し、承認分はIAM反映まで行います。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
-
     payload = request.get_json(silent=True) or {}
     reviews = payload.get("reviews", payload.get("updates", []))
     actor_email = str(payload.get("actor_email", "system"))
@@ -867,10 +898,9 @@ def api_bulk_review_requests():
 
 
 @app.put("/api/requests/<request_id>/status")
+@require_oidc_auth
 def api_update_request_status(request_id):
     """アクセスリクエストのステータスを更新します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     status = payload.get("status")
     if not status:
@@ -889,10 +919,9 @@ def api_update_request_status(request_id):
 
 
 @app.post("/api/history")
+@require_oidc_auth
 def api_create_history():
     """リクエスト履歴イベントを登録します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     try:
         repo.insert_request_history_event(payload)
@@ -903,10 +932,9 @@ def api_create_history():
 
 
 @app.post("/api/history/bulk")
+@require_oidc_auth
 def api_create_history_bulk():
     """リクエスト履歴イベントを一括登録します。"""
-    if not _authorize():
-        return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     events = payload.get("events", [])
     if not isinstance(events, list):
@@ -919,6 +947,48 @@ def api_create_history_bulk():
     except Exception as exc:
         logging.error(f"Failed to create history in bulk: {exc}", exc_info=True)
         return jsonify({"error": str(exc)}), 500
+
+
+# --- Frontend App APIs (Protected by IAP) ---
+
+
+@app.post("/api/ai/suggest")
+@require_iap_auth
+def api_ai_suggest():
+    """SaaSポータル: AIにロール候補を提案させます。"""
+    payload = request.get_json(silent=True) or {}
+    goal = payload.get("goal")
+    if not goal:
+        return jsonify({"error": "goal is required"}), 400
+    try:
+        res = suggest_iam_roles(
+            PROJECT_ID, goal, payload.get("resource", ""), payload.get("principal", "")
+        )
+        return jsonify(res)
+    except Exception as exc:
+        logging.error(f"AI Suggestion failed: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/ai/validate")
+@require_iap_auth
+def api_ai_validate():
+    """SaaSポータル: AIにロール名の妥当性を検証させます。"""
+    payload = request.get_json(silent=True) or {}
+    role = payload.get("role")
+    if not role:
+        return jsonify({"error": "role is required"}), 400
+    try:
+        res = validate_role_with_ai(
+            PROJECT_ID, role, payload.get("goal", ""), payload.get("resource", "")
+        )
+        return jsonify(res)
+    except Exception as exc:
+        logging.error(f"AI Validation failed: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+
+
+# --- Helpers ---
 
 
 def _authorize() -> bool:
