@@ -37,6 +37,7 @@ const EVENT_STATUS_CHANGED = 'STATUS_CHANGED';
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('棚卸し')
+    .addItem('📥 新規申請を取り込む', 'menuPullNewRequests_')
     .addItem('🔄 レビュー結果を一括送信', 'menuSubmitBulkReview_')
     .addItem('マトリクス更新', 'menuRefreshIamMatrixPivot_')
     .addItem('マスタ一括更新 (プリンシパル/グループ等)', 'refreshAllMasterData')
@@ -48,104 +49,69 @@ function onOpen() {
     .addToUi();
 }
 
+function menuPullNewRequests_() {
+  try {
+    const count = pullNewRequestsFromBQ_();
+    if (count > 0) {
+      SpreadsheetApp.getActiveSpreadsheet().toast(`📥 新規の申請を ${count} 件取り込みました。`, '棚卸し', 5);
+    } else {
+      SpreadsheetApp.getActiveSpreadsheet().toast('新しい申請はありません。', '棚卸し', 3);
+    }
+  } catch(e) {
+    SpreadsheetApp.getUi().alert(`申請の取り込みに失敗しました: ${e.message}`);
+    throw e;
+  }
+}
 
-/**
- * Webアプリ(ポータル)からの申請を受け付けるエントリーポイント
- */
-function submitAccessRequest(payload) {
+function pullNewRequestsFromBQ_() {
+  const sheet = getRequestReviewSheet_();
+  ensureRequestReviewColumns_(sheet);
+  const lastRow = sheet.getLastRow();
+  const existingIds = new Set();
+  
+  if (lastRow >= 2) {
+    const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const idx = indexMap_(header);
+    if (idx.request_id) {
+      const ids = sheet.getRange(2, idx.request_id, lastRow - 1, 1).getValues();
+      ids.forEach(r => { if(r[0]) existingIds.add(String(r[0]).trim()); });
+    }
+  }
+  
   const props = getProps_();
-  const requests = payload && payload.requests ? payload.requests : [payload];
-  if (!requests || requests.length === 0) {
-    return { success: true, count: 0 };
-  }
-
-  const requestGroupId = String((payload && payload.requestGroupId) || Utilities.getUuid());
-  const requestedAt = new Date().toISOString();
-  const bqRequests = [];
-  const historyEvents = [];
-
-  requests.forEach(reqData => {
-    const role = String(reqData.role || '').trim();
-    if (role && !role.startsWith('roles/')) {
-      throw new Error('セキュリティ違反: 「roles/」から始まる正式なロール名を指定してください。');
+  const tz = Session.getScriptTimeZone();
+  const sql = `
+    SELECT 
+      r.request_group_id, r.request_id, r.request_type, r.principal_email, r.resource_name, r.role,
+      r.reason, FORMAT_TIMESTAMP('%Y/%m/%d %H:%M:%S', r.expires_at, '${tz}') AS expires_at, 
+      r.requester_email, r.approver_email, r.status, 
+      FORMAT_TIMESTAMP('%Y/%m/%d %H:%M:%S', r.requested_at, '${tz}') AS requested_at, 
+      r.ticket_ref,
+      JSON_EXTRACT_SCALAR(h.details, '$.ai_suggestion') AS ai_suggestion
+    FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\` r
+    LEFT JOIN \`${props.projectId}.${props.datasetId}.iam_access_request_history\` h
+      ON r.request_id = h.request_id AND h.event_type = 'REQUESTED'
+    WHERE r.status = 'PENDING'
+    ORDER BY r.requested_at ASC
+  `;
+  
+  const rows = runSelectQuery_(props, sql, []);
+  let addedCount = 0;
+  
+  rows.forEach(req => {
+    if (!existingIds.has(String(req.request_id))) {
+      const formattedReq = Object.assign({}, req);
+      let typeJa = '新規付与';
+      if (req.request_type === 'REVOKE') typeJa = '削除';
+      if (req.request_type === 'CHANGE') typeJa = '変更';
+      formattedReq.request_type = typeJa;
+      
+      appendReviewSheet_(formattedReq, req.ai_suggestion);
+      existingIds.add(String(req.request_id));
+      addedCount++;
     }
-
-    const rawRequestType = String(reqData.requestType || '');
-    const isEmergency = rawRequestType === '緊急付与' || rawRequestType.indexOf('緊急') !== -1 || rawRequestType.toUpperCase().indexOf('EMERGENCY') !== -1;
-    const reason = (isEmergency ? '[緊急] ' : '') + String(reqData.reason || '').trim();
-
-    let expiresAt = null;
-    const expiresRaw = String(reqData.expiresAt || '');
-    if (expiresRaw && expiresRaw !== '恒久' && expiresRaw.toUpperCase().indexOf('PERMANENT') === -1) {
-      const d = new Date(expiresRaw);
-      if (!isNaN(d.getTime())) {
-        d.setHours(23, 59, 59, 999);
-        expiresAt = d.toISOString();
-      }
-    }
-
-    const requesterEmail = String(reqData.requester || getActorEmail_()).trim();
-    const request = {
-      request_group_id: String(reqData.requestGroupId || requestGroupId),
-      request_id: String(reqData.requestId || Utilities.getUuid()),
-      request_type: normalizeRequestType_(rawRequestType),
-      principal_email: String(reqData.principal || '').trim(),
-      resource_name: normalizeResourceName_(String(reqData.resource || '')),
-      role: role,
-      reason: reason,
-      expires_at: expiresAt,
-      requester_email: requesterEmail,
-      approver_email: String(reqData.approver || '').trim(),
-      status: STATUS_PENDING,
-      requested_at: requestedAt,
-      ticket_ref: '',
-      is_emergency: isEmergency,
-      ai_suggestion: String(reqData.aiSuggestion || '')
-    };
-    validateRequest_(request);
-    bqRequests.push(request);
-    historyEvents.push({
-      history_id: Utilities.getUuid(),
-      request_id: request.request_id,
-      request_group_id: request.request_group_id,
-      event_type: EVENT_REQUESTED,
-      old_status: '',
-      new_status: request.status,
-      reason_snapshot: request.reason,
-      request_type: request.request_type,
-      principal_email: request.principal_email,
-      resource_name: request.resource_name,
-      role: request.role,
-      requester_email: request.requester_email,
-      approver_email: request.approver_email,
-      acted_by: requesterEmail,
-      actor_source: 'WEB_APP_BULK',
-      event_at: requestedAt,
-      details: { source: 'web_app_bulk' }
-    });
   });
-
-  callCloudRunApi_(props, '/api/requests/bulk', 'post', { requests: bqRequests });
-  callCloudRunApi_(props, '/api/history/bulk', 'post', { events: historyEvents });
-
-  bqRequests.forEach(req => appendReviewSheet_(req, req.ai_suggestion));
-
-  const emergencyIds = bqRequests.filter(req => req.is_emergency).map(req => req.request_id);
-  if (emergencyIds.length > 0) {
-    const updates = emergencyIds.map(id => ({ request_id: id, status: STATUS_APPROVED }));
-    callCloudRunApi_(props, '/api/requests/bulk-status', 'post', {
-      updates: updates,
-      actor_email: 'SYSTEM_AUTO_APPROVE'
-    });
-    emergencyIds.forEach(id => callCloudRunExecute_(props, id));
-    refreshRequestReviewStatusForRequestIds_(emergencyIds);
-  }
-
-  return {
-    success: true,
-    count: bqRequests.length,
-    request_group_id: requestGroupId
-  };
+  return addedCount;
 }
 
 function handleEdit(e) {
@@ -386,75 +352,6 @@ function callCloudRunApi_(props, path, method, payloadObj) {
       Utilities.sleep(1000 * (i + 1));
     }
   }
-}
-
-function insertRequestToBigQuery_(props, request) {
-  const payload = {
-    request_id: request.request_id,
-    request_group_id: request.request_group_id || request.request_id,
-    request_type: request.request_type,
-    principal_email: request.principal_email,
-    resource_name: request.resource_name,
-    role: request.role,
-    reason: request.reason,
-    expires_at: request.expires_at || null,
-    requester_email: request.requester_email,
-    approver_email: request.approver_email,
-    status: request.status,
-    requested_at: request.requested_at,
-    ticket_ref: request.ticket_ref,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-  callCloudRunApi_(props, '/api/requests', 'post', payload);
-}
-
-function updateStatusInBigQuery_(props, requestId, normalizedStatus) {
-  const payload = { status: normalizedStatus };
-  callCloudRunApi_(props, `/api/requests/${requestId}/status`, 'put', payload);
-}
-
-function getRequestSnapshot_(props, requestId) {
-  const sql = `
-    SELECT
-      request_id,
-      request_type,
-      principal_email,
-      resource_name,
-      role,
-      reason,
-      requester_email,
-      approver_email,
-      status
-    FROM \`${props.projectId}.${props.datasetId}.iam_access_requests\`
-    WHERE request_id = @request_id
-    LIMIT 1
-  `;
-  const rows = runSelectQuery_(props, sql, [param_('request_id', 'STRING', String(requestId))]);
-  return rows.length ? rows[0] : null;
-}
-
-function insertRequestHistoryEvent_(props, event) {
-  const payload = {
-    history_id: Utilities.getUuid(),
-    request_id: String(event.request_id || ''),
-    request_group_id: String(event.request_group_id || ''),
-    event_type: String(event.event_type || ''),
-    old_status: String(event.old_status || ''),
-    new_status: String(event.new_status || ''),
-    reason_snapshot: String(event.reason_snapshot || ''),
-    request_type: String(event.request_type || ''),
-    principal_email: String(event.principal_email || ''),
-    resource_name: String(event.resource_name || ''),
-    role: String(event.role || ''),
-    requester_email: String(event.requester_email || ''),
-    approver_email: String(event.approver_email || ''),
-    acted_by: String(event.acted_by || 'unknown'),
-    actor_source: String(event.actor_source || 'UNKNOWN'),
-    event_at: new Date().toISOString(),
-    details: event.details_json ? JSON.parse(event.details_json) : {}
-  };
-  callCloudRunApi_(props, '/api/history', 'post', payload);
 }
 
 function getOidcToken_(props) {
@@ -825,6 +722,7 @@ function menuRefreshRequestReviewStatus_() {
 }
 
 function refreshRequestReviewStatus_() {
+  pullNewRequestsFromBQ_(); // 新規申請を自動プル
   const sheet = getRequestReviewSheet_();
   ensureRequestReviewColumns_(sheet);
 
@@ -1132,7 +1030,8 @@ function sendNotificationEmails_(emailsToSend) {
 
 function generatePrefilledUrl_(prefillData) {
   try {
-    const webAppUrl = ScriptApp.getService().getUrl();
+    const props = getProps_();
+    const webAppUrl = props.cloudRunUrl.replace(/\/execute\/?$/, '');
     if (!webAppUrl) return '(SaaSポータルのWebアプリURLを取得できませんでした)';
     
     const params = [];

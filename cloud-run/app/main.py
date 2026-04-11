@@ -106,7 +106,10 @@ def require_iap_auth(f):
 def index():
     """IAP経由でアクセスされるSaaSポータルのUIを提供します。"""
     email = request.environ.get("user_email", "unknown@example.com")
-    return render_template("RoleAdvisor.html", requester_email=email)
+    initial_data = request.args.to_dict()
+    return render_template(
+        "RoleAdvisor.html", requester_email=email, initial_data=initial_data
+    )
 
 
 # --- Batch / System APIs (Protected by OIDC) ---
@@ -1033,6 +1036,128 @@ def _authorize() -> bool:
         e.lower() for e in (SCHEDULER_INVOKER_EMAIL, GAS_INVOKER_EMAIL) if e
     ]
     return email in allowed_emails
+
+
+@app.post("/api/ui/requests/bulk")
+@require_iap_auth
+def api_ui_create_requests_bulk():
+    """SaaSポータル(Web UI)からの一括申請を受け付け、DBへ保存します。"""
+    payload = request.get_json(silent=True) or {}
+    requests_data = payload.get("requests", [])
+    request_group_id = payload.get("requestGroupId", str(uuid.uuid4()))
+    requester_email = request.environ.get("user_email", "unknown@example.com")
+
+    if not requests_data:
+        return jsonify({"result": "SUCCESS", "inserted_count": 0})
+
+    bq_requests = []
+    history_events = []
+    emergency_ids = []
+    requested_at = datetime.now(timezone.utc).isoformat()
+
+    for req in requests_data:
+        role = str(req.get("role", "")).strip()
+        if role and not role.startswith("roles/"):
+            return jsonify({"error": f"Invalid role: {role}"}), 400
+
+        raw_type = str(req.get("requestType", ""))
+        is_emergency = "緊急" in raw_type or "EMERGENCY" in raw_type.upper()
+
+        reason = str(req.get("reason", "")).strip()
+        if is_emergency and not reason.startswith("[緊急]"):
+            reason = f"[緊急] {reason}"
+
+        expires_raw = str(req.get("expiresAt", ""))
+        expires_at = None
+        if (
+            expires_raw
+            and expires_raw != "恒久"
+            and "PERMANENT" not in expires_raw.upper()
+        ):
+            try:
+                dt = datetime.strptime(expires_raw, "%Y-%m-%d")
+                expires_at = dt.replace(
+                    hour=23, minute=59, second=59, tzinfo=timezone.utc
+                ).isoformat()
+            except ValueError:
+                pass
+
+        req_id = str(req.get("requestId", str(uuid.uuid4())))
+        status = "APPROVED" if is_emergency else "PENDING"
+
+        req_type = "GRANT"
+        if "変更" in raw_type or "CHANGE" in raw_type.upper():
+            req_type = "CHANGE"
+        elif "削除" in raw_type or "REVOKE" in raw_type.upper():
+            req_type = "REVOKE"
+
+        res_val = str(req.get("resource", "")).strip()
+        if res_val and not (
+            res_val.startswith("projects/")
+            or res_val.startswith("folders/")
+            or res_val.startswith("organizations/")
+        ):
+            res_val = f"projects/{res_val}"
+
+        bq_req = {
+            "request_group_id": request_group_id,
+            "request_id": req_id,
+            "request_type": req_type,
+            "principal_email": str(req.get("principal", "")).strip(),
+            "resource_name": res_val,
+            "role": role,
+            "reason": reason,
+            "expires_at": expires_at,
+            "requester_email": requester_email,
+            "approver_email": str(req.get("approver", "")).strip(),
+            "status": status,
+            "requested_at": requested_at,
+            "ticket_ref": "",
+        }
+        bq_requests.append(bq_req)
+
+        history_events.append(
+            {
+                "history_id": str(uuid.uuid4()),
+                "request_id": req_id,
+                "request_group_id": request_group_id,
+                "event_type": "REQUESTED",
+                "old_status": "",
+                "new_status": status,
+                "reason_snapshot": reason,
+                "request_type": req_type,
+                "principal_email": bq_req["principal_email"],
+                "resource_name": bq_req["resource_name"],
+                "role": role,
+                "requester_email": requester_email,
+                "approver_email": bq_req["approver_email"],
+                "acted_by": requester_email,
+                "actor_source": "WEB_APP_BULK",
+                "event_at": requested_at,
+                "details": {
+                    "source": "web_app_bulk",
+                    "ai_suggestion": str(req.get("aiSuggestion", "")),
+                },
+            }
+        )
+        if is_emergency:
+            emergency_ids.append(req_id)
+
+    try:
+        repo.insert_access_requests_raw_bulk(bq_requests)
+        repo.insert_request_history_events_bulk(history_events)
+        for eid in emergency_ids:
+            _execute_request_by_id(eid)
+        return jsonify(
+            {
+                "result": "SUCCESS",
+                "inserted_count": len(bq_requests),
+                "request_group_id": request_group_id,
+            }
+        )
+    except Exception as exc:
+        logging.error(f"UI Bulk Submit failed: {exc}", exc_info=True)
+        return jsonify({"error": str(exc)}), 500
 
 
 def _build_collection_error_report(

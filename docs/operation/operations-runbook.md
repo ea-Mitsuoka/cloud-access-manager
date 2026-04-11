@@ -118,7 +118,7 @@ bash scripts/collect-iam-policies.sh
 
 1. **スプレッドシートの新規作成**: Googleドライブ等から、新しい空のスプレッドシートを作成し、任意の名前（例：「Cloud Access Manager 管理表」）を付けます。
 1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内の3つのコードを貼り付けます。
-1. **初期設定**: 詳細は `apps-script/README.md` の手順に従い、環境変数の登録、マニフェスト（oauthScopes）の追加、および時間主導トリガー（`refreshRequestReviewStatus_`）を設定してください。
+1. **初期設定**: 詳細は `apps-script/README.md` の手順に従い、環境変数の登録、マニフェスト（oauthScopes）の追加、および時間主導トリガー（`refreshRequestReviewStatus_` : 新規取り込みとステータス同期）を設定してください。
 1. **シートの保護（セキュリティ設定: 推奨）**:
    一般ユーザーによる不正な承認操作を防ぐため、スプレッドシート標準の「範囲の保護」機能を利用してUIレベルで編集をブロックします。バックエンド側の認可制御と併用することで、最も堅牢なセキュリティを実現できます。
    - `requests_review` シートを開きます。

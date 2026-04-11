@@ -13,7 +13,7 @@ graph TD
         Requester(["👤 申請者"])
         Approver(["👑 承認者・管理者"])
 
-        Portal["SaaS Portal (GAS Web App)"]
+        Portal["SaaS Portal (Cloud Run + IAP)"]
         Sheet["Google Sheet (管理UI)"]
 
         Requester -->|"① アクセス申請"| Portal

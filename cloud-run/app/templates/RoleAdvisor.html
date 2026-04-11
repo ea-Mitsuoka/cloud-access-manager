@@ -5,30 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cloud Access Manager 申請ポータル</title>
   <style>
-    :root {
-      --primary: #1a73e8; --primary-hover: #1557b0; --bg: #f8f9fa;
-      --border: #dadce0; --text: #202124; --text-muted: #5f6368; --error: #d93025;
-    }
+    :root { --primary: #1a73e8; --primary-hover: #1557b0; --bg: #f8f9fa; --border: #dadce0; --text: #202124; --text-muted: #5f6368; --error: #d93025; }
     body { font-family: 'Google Sans', Roboto, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--bg); color: var(--text); }
     .header { background: #fff; padding: 16px 24px; border-bottom: 1px solid var(--border); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1); display: flex; align-items: center; justify-content: space-between; }
     .header h1 { margin: 0; font-size: 20px; font-weight: 500; color: var(--text); }
-    
-    /* 2カラムレイアウト */
     .container { display: flex; flex-wrap: wrap; max-width: 1440px; margin: 24px auto; gap: 24px; padding: 0 16px; align-items: flex-start; }
     .panel { background: #fff; border-radius: 8px; border: 1px solid var(--border); padding: 28px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.05); }
     .panel-left { flex: 2.2; min-width: 360px; }
     .panel-right { flex: 1; min-width: 320px; background: #fbfcff; border-color: #d2e3fc; display: flex; flex-direction: column; position: sticky; top: 24px; max-height: calc(100vh - 48px); }
-    
     .section-title { font-size: 14px; margin-bottom: 16px; margin-top: 32px; color: var(--primary); border-bottom: 1px solid #e8f0fe; padding-bottom: 6px; font-weight: bold; }
     .section-title:first-of-type { margin-top: 0; }
-    
     .form-group { margin-bottom: 20px; }
     .form-group label { display: block; font-weight: 500; margin-bottom: 8px; font-size: 13px; }
     .form-group input, .form-group select, .form-group textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 14px; transition: border 0.2s; }
     .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
     .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
     .error-msg { color: var(--error); font-size: 12px; margin-top: 4px; display: none; }
-    
     button { padding: 10px 24px; border: none; border-radius: 4px; font-weight: 500; font-size: 14px; cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s; }
     button.primary { background: var(--primary); color: #fff; }
     button.primary:hover:not(:disabled) { background: var(--primary-hover); box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); }
@@ -37,14 +29,10 @@
     button.secondary:hover { background: #f1f3f4; }
     .text-button { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; }
     .text-button:hover { text-decoration: underline; }
-    
-    /* 明細カードUI */
     .request-list-item { border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 6px; background: #fff; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
     .item-title { font-size: 13px; margin-bottom: 8px; }
     .item-sub { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
     .request-list-container { flex: 1; overflow-y: auto; margin-bottom: 16px; padding-right: 4px; }
-    
-    /* AI インラインパネル */
     .ai-inline-panel { background: #f8f9fa; border-radius: 8px; padding: 16px; margin-top: 12px; border: 1px dashed var(--border); }
     .ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--primary); font-size: 14px; font-weight: bold; }
     .ai-header svg { width: 18px; height: 18px; fill: currentColor; }
@@ -56,7 +44,6 @@
     .ai-spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid rgba(26,115,232,0.2); border-radius: 50%; border-top-color: var(--primary); animation: spin 1s ease-in-out infinite; margin-bottom: 8px; }
     .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
     .apply-btn { margin-left: 8px; padding: 4px 10px; font-size: 12px; }
-    
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); flex-direction: column; align-items: center; justify-content: center; z-index: 1000; display: none; }
     .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -65,14 +52,13 @@
 <body>
   <div class="header">
     <h1>Cloud Access Manager 申請ポータル</h1>
-    <div style="font-size:14px; color:var(--text-muted);">👤 <?= requesterEmail ?></div>
+    <div style="font-size:14px; color:var(--text-muted);">👤 {{ requester_email }}</div>
   </div>
   
   <div class="container">
     <div class="panel panel-left">
       <h2 style="margin-top:0; margin-bottom:24px; font-size: 18px; color: var(--text);">IAM権限 追加リクエスト</h2>
       <form id="accessForm" onsubmit="addRequestItem(event)">
-        
         <div class="section-title">1. 対象者とリソース</div>
         <div class="form-group">
           <label>対象プリンシパル <span style="color:var(--error);">*</span></label>
@@ -84,7 +70,6 @@
           <input type="text" id="resource" placeholder="例: projects/my-project-id" required />
           <div class="hint">対象のプロジェクトIDやフォルダID</div>
         </div>
-
         <div class="section-title">2. 権限のアクション内容</div>
         <div class="form-group">
           <label>申請種別 <span style="color:var(--error);">*</span></label>
@@ -95,7 +80,6 @@
             <option value="緊急付与">緊急付与（※即時実行・要事後監査）</option>
           </select>
         </div>
-        
         <div class="form-group">
           <label>付与・変更ロール <span style="color:var(--error);">*</span></label>
           <div style="display:flex; gap:8px;">
@@ -104,7 +88,7 @@
           </div>
           <div id="roleError" class="error-msg">「roles/」から始まる正式なロール名を入力してください。</div>
           <div id="roleAiSuggestion" class="error-msg" style="font-weight:bold; font-size:13px; margin-top:8px;"></div>
-          
+
           <div id="aiPanel" class="ai-inline-panel" style="display:none;">
             <div class="ai-header">
               <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg>
@@ -119,7 +103,6 @@
             <input type="hidden" id="hiddenAiSuggestion" value="" />
           </div>
         </div>
-        
         <div class="form-group">
           <label>利用期限 <span style="color:var(--error);">*</span></label>
           <div style="display:flex; gap:12px;">
@@ -135,185 +118,109 @@
           <label>申請理由・利用目的 <span style="color:var(--error);">*</span></label>
           <textarea id="reason" rows="2" placeholder="例: 〇〇プロジェクトのログ調査のため" required></textarea>
         </div>
-
         <div class="section-title">3. 承認フロー</div>
         <div class="form-group">
           <label>承認者メール <span style="color:var(--error);">*</span></label>
           <input type="email" id="approver" placeholder="例: manager@example.com" required />
           <div class="hint">この申請をレビューし、承認する権限を持つ上長等のメールアドレス</div>
         </div>
-        
         <div style="margin-top: 32px;">
           <button type="submit" id="addRequestBtn" class="secondary" style="width:100%; padding: 12px; font-weight:bold; background:#f8f9fa;">＋ リクエスト明細に追加</button>
         </div>
       </form>
     </div>
-  
     <div class="panel panel-right">
       <h2 style="margin-top:0; font-size: 16px; color: #1967d2;">送信待ちのリクエスト</h2>
       <div id="requestListMeta" style="font-size:13px; color:var(--text-muted); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e8f0fe;">明細はありません</div>
-      
-      <div id="requestListContainer" class="request-list-container">
-        </div>
-      
+      <div id="requestListContainer" class="request-list-container"></div>
       <div style="display:flex; justify-content: space-between; gap: 12px; border-top: 1px solid #d2e3fc; padding-top: 16px; margin-top:auto;">
         <button type="button" class="secondary" onclick="clearRequestList()" style="padding: 10px 16px;">クリア</button>
         <button type="button" id="submitBtn" class="primary" onclick="submitRequestList()" style="flex:1; font-weight:bold;" disabled>一括申請を送信する</button>
       </div>
     </div>
   </div>
-
   <div id="overlay" class="overlay">
     <div class="spinner"></div>
     <div style="margin-top:16px; font-weight:500;">バックエンドへ送信中...</div>
   </div>
 
-  <script id="initial-data" type="application/json">
-    <?!= JSON.stringify(initialData || {}) ?>
-  </script>
-
+  <script id="initial-data" type="application/json">{{ initial_data | tojson | safe }}</script>
   <script>
     window.onload = () => {
-      let initialData = {};
-      try {
-        const dataText = document.getElementById('initial-data').textContent;
-        if (dataText.trim()) {
-          initialData = JSON.parse(dataText);
-        }
-      } catch (e) {
-        console.warn("Failed to parse initial data", e);
-      }
       toggleDate();
-      
-      // 却下メール等からのURLパラメータを復元 (Pre-filled URL機能)
-      if (initialData['申請種別']) document.getElementById('requestType').value = initialData['申請種別'];
-      if (initialData['対象プリンシパル']) document.getElementById('principal').value = initialData['対象プリンシパル'];
-      if (initialData['対象リソース'] || initialData['対象プロジェクト']) document.getElementById('resource').value = initialData['対象リソース'] || initialData['対象プロジェクト'];
-      if (initialData['付与・変更ロール']) document.getElementById('role').value = initialData['付与・変更ロール'];
-      if (initialData['申請理由・利用目的'] || initialData['利用目的']) document.getElementById('reason').value = initialData['申請理由・利用目的'] || initialData['利用目的'];
-      if (initialData['承認者メール（または承認グループ）']) document.getElementById('approver').value = initialData['承認者メール（または承認グループ）'];
-      
-      if (document.getElementById('role').value) {
-        validateRole();
-      }
+      let init = {};
+      try {
+        const txt = document.getElementById('initial-data').textContent;
+        if (txt.trim()) init = JSON.parse(txt);
+      } catch(e) {}
+      if (init['申請種別']) document.getElementById('requestType').value = init['申請種別'];
+      if (init['対象プリンシパル']) document.getElementById('principal').value = init['対象プリンシパル'];
+      if (init['対象リソース'] || init['対象プロジェクト']) document.getElementById('resource').value = init['対象リソース'] || init['対象プロジェクト'];
+      if (init['付与・変更ロール']) document.getElementById('role').value = init['付与・変更ロール'];
+      if (init['申請理由・利用目的'] || init['利用目的']) document.getElementById('reason').value = init['申請理由・利用目的'] || init['利用目的'];
+      if (init['承認者メール（または承認グループ）']) document.getElementById('approver').value = init['承認者メール（または承認グループ）'];
+      if (document.getElementById('role').value) validateRole();
       renderRequestList();
     };
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    }
-
+    function escapeHtml(str) { return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
     function toggleDate() {
       const type = document.getElementById('expiresType').value;
       const dateInput = document.getElementById('expiresDate');
-      if (type === 'perm') {
-        dateInput.style.display = 'none';
-        dateInput.required = false;
-        dateInput.value = '';
-      } else {
-        dateInput.style.display = 'block';
-        dateInput.required = true;
-      }
+      if (type === 'perm') { dateInput.style.display = 'none'; dateInput.required = false; dateInput.value = ''; }
+      else { dateInput.style.display = 'block'; dateInput.required = true; }
     }
-
     function validateRole() {
-      const roleInput = document.getElementById('role');
-      const errorMsg = document.getElementById('roleError');
+      const roleInput = document.getElementById('role'), errorMsg = document.getElementById('roleError');
       const val = roleInput.value.trim();
       if (val !== '' && !val.startsWith('roles/')) {
-        errorMsg.style.display = 'block';
-        roleInput.setCustomValidity('「roles/」から始まる正式なロール名を入力してください。');
-        return false;
-      } else {
-        errorMsg.style.display = 'none';
-        roleInput.setCustomValidity('');
-        return true;
-      }
+        errorMsg.style.display = 'block'; roleInput.setCustomValidity('「roles/」から始まる正式なロール名を入力してください。'); return false;
+      } else { errorMsg.style.display = 'none'; roleInput.setCustomValidity(''); return true; }
     }
-
-    function toggleAiPanel() {
-      const panel = document.getElementById('aiPanel');
-      panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
-    }
-
+    function toggleAiPanel() { const p = document.getElementById('aiPanel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; }
     function applySuggestion(role, summary) {
-      document.getElementById('role').value = role;
-      validateRole();
-      const reasonEl = document.getElementById('reason');
-      if (!reasonEl.value.includes(summary)) {
-        reasonEl.value = summary + '\n' + reasonEl.value;
-      }
-      toggleAiPanel(); // 反映したら閉じる
+      document.getElementById('role').value = role; validateRole();
+      const r = document.getElementById('reason');
+      if (!r.value.includes(summary)) r.value = summary + '\n' + r.value;
+      toggleAiPanel();
     }
 
-    function runSuggest() {
+    async function runSuggest() {
       const goal = document.getElementById('aiGoal').value.trim();
       const resource = document.getElementById('resource').value.trim();
       const principal = document.getElementById('principal').value.trim();
-
       if (!goal) { alert('「やりたいこと」を入力してください。'); return; }
-
-      const btn = document.getElementById('aiBtn');
-      const container = document.getElementById('aiResultContainer');
-      const resultEl = document.getElementById('aiResult');
-
-      btn.disabled = true;
-      btn.textContent = '✨ Geminiが推論中...';
-      container.style.display = 'block';
-      resultEl.innerHTML = `
-        <div style="text-align:center; padding: 24px 10px;">
-          <div class="ai-spinner"></div>
-          <div style="color:var(--primary); font-weight:bold; font-size:13px;">✨ Geminiが最小権限を推論しています...</div>
-          <div style="color:var(--text-muted); font-size:12px; margin-top:6px;">しばらくお待ちください（約10〜20秒）</div>
-        </div>
-      `;
-
-      google.script.run
-        .withSuccessHandler(res => {
-          let html = '';
-          let textForSheet = '';
-          if (res.summary) html += `<h4>💡 要約</h4><p style="margin-top:0; margin-bottom:8px;">${escapeHtml(res.summary)}</p>`;
-          if (res.recommended_roles && res.recommended_roles.length > 0) {
-            html += `<h4>🔑 推奨ロール候補</h4><ul>`;
-            const rolesForSheet = [];
-            res.recommended_roles.forEach(r => {
-              const safeRole = escapeHtml(r.role);
-              const safeSummary = escapeHtml(res.summary);
-              html += `<li>
-                <div class="role-badge">
-                  ${safeRole}
-                  <button type="button" class="secondary apply-btn" onclick="applySuggestion('${safeRole}', '${safeSummary}')">反映</button>
-                </div>
-                <div style="font-size:11px; color:var(--text-muted);">理由: ${escapeHtml(r.reason)}</div>
-              </li>`;
-              rolesForSheet.push(r.role);
-            });
-            html += `</ul>`;
-            textForSheet += `【推奨ロール】\n${rolesForSheet.join(', ')}\n\n`;
-          }
-          if (res.cautions && res.cautions.length > 0) {
-            html += `<h4>⚠️ 注意点・確認事項</h4><ul>`;
-            res.cautions.forEach(c => { html += `<li style="font-size:11px; color:var(--text-muted);">${escapeHtml(c)}</li>`; });
-            html += `</ul>`;
-          }
-          if (res.reviewer_note) textForSheet += `【レビューア向けメモ】\n${res.reviewer_note}`;
-
-          resultEl.innerHTML = html;
-          document.getElementById('hiddenAiSuggestion').value = textForSheet;
-          btn.disabled = false;
-          btn.textContent = 'Geminiに再相談する';
-        })
-        .withFailureHandler(err => {
-          resultEl.innerHTML = `<span style="color:var(--error);">エラーが発生しました: ${escapeHtml(err.message)}</span>`;
-          btn.disabled = false;
-          btn.textContent = '推論させる';
-        })
-        .suggestIamRoles({ goal, resource, principal });
+      const btn = document.getElementById('aiBtn'), container = document.getElementById('aiResultContainer'), resultEl = document.getElementById('aiResult');
+      btn.disabled = true; btn.textContent = '✨ Geminiが推論中...'; container.style.display = 'block';
+      resultEl.innerHTML = `<div style="text-align:center; padding: 24px 10px;"><div class="ai-spinner"></div><div style="color:var(--primary); font-weight:bold; font-size:13px;">✨ Geminiが最小権限を推論しています...</div><div style="color:var(--text-muted); font-size:12px; margin-top:6px;">しばらくお待ちください</div></div>`;
+      try {
+        const response = await fetch('/api/ai/suggest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ goal, resource, principal }) });
+        if (!response.ok) throw new Error(`API failed: ${response.status}`);
+        const res = await response.json();
+        let html = '', textForSheet = '';
+        if (res.summary) html += `<h4>💡 要約</h4><p style="margin-top:0; margin-bottom:8px;">${escapeHtml(res.summary)}</p>`;
+        if (res.recommended_roles && res.recommended_roles.length > 0) {
+          html += `<h4>🔑 推奨ロール候補</h4><ul>`;
+          const rolesForSheet = [];
+          res.recommended_roles.forEach(r => {
+            const sR = escapeHtml(r.role), sS = escapeHtml(res.summary);
+            html += `<li><div class="role-badge">${sR}<button type="button" class="secondary apply-btn" onclick="applySuggestion('${sR}', '${sS}')">反映</button></div><div style="font-size:11px; color:var(--text-muted);">理由: ${escapeHtml(r.reason)}</div></li>`;
+            rolesForSheet.push(r.role);
+          });
+          html += `</ul>`; textForSheet += `【推奨ロール】\n${rolesForSheet.join(', ')}\n\n`;
+        }
+        if (res.cautions && res.cautions.length > 0) {
+          html += `<h4>⚠️ 注意点</h4><ul>`;
+          res.cautions.forEach(c => { html += `<li style="font-size:11px; color:var(--text-muted);">${escapeHtml(c)}</li>`; });
+          html += `</ul>`;
+        }
+        if (res.reviewer_note) textForSheet += `【メモ】\n${res.reviewer_note}`;
+        resultEl.innerHTML = html; document.getElementById('hiddenAiSuggestion').value = textForSheet;
+      } catch (err) { resultEl.innerHTML = `<span style="color:var(--error);">エラー: ${escapeHtml(err.message)}</span>`; }
+      finally { btn.disabled = false; btn.textContent = 'Geminiに再相談する'; }
     }
 
     let requestList = [];
-
     function buildFormData() {
       return {
         requestId: 'req-' + Math.random().toString(36).substring(2, 12),
@@ -324,155 +231,65 @@
         expiresAt: document.getElementById('expiresType').value === 'perm' ? '恒久' : document.getElementById('expiresDate').value,
         reason: document.getElementById('reason').value.trim(),
         approver: document.getElementById('approver').value.trim(),
-        requester: '<?= requesterEmail ?>',
         aiSuggestion: document.getElementById('hiddenAiSuggestion').value
       };
     }
 
-    function addRequestItem(e) {
-      if (e && e.preventDefault) e.preventDefault();
+    async function addRequestItem(e) {
+      if (e) e.preventDefault();
       const form = document.getElementById('accessForm');
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return false;
-      }
-      if (!validateRole()) {
-        alert('ロール名を修正してください。');
-        return false;
-      }
-
-      const overlay = document.getElementById('overlay');
-      const addBtn = document.getElementById('addRequestBtn');
-      const aiSugEl = document.getElementById('roleAiSuggestion');
-      overlay.style.display = 'flex';
-      addBtn.disabled = true;
-      if (aiSugEl) aiSugEl.style.display = 'none';
-
+      if (!form.checkValidity()) { form.reportValidity(); return false; }
+      if (!validateRole()) { alert('ロール名を修正してください。'); return false; }
+      const overlay = document.getElementById('overlay'), addBtn = document.getElementById('addRequestBtn'), aiSugEl = document.getElementById('roleAiSuggestion');
+      overlay.style.display = 'flex'; addBtn.disabled = true; if (aiSugEl) aiSugEl.style.display = 'none';
       const formData = buildFormData();
-      google.script.run
-        .withSuccessHandler(function(validationRes) {
-          overlay.style.display = 'none';
-          addBtn.disabled = false;
-          if (validationRes && validationRes.is_valid === false && validationRes.suggested_role) {
-            aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(validationRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline; font-size:14px;">${escapeHtml(validationRes.suggested_role)}</a> ですか？`;
-            aiSugEl.style.display = 'block';
-            return;
+      try {
+        const response = await fetch('/api/ai/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: formData.role, goal: formData.reason, resource: formData.resource }) });
+        if (response.ok) {
+          const vRes = await response.json();
+          if (vRes.is_valid === false && vRes.suggested_role) {
+            aiSugEl.innerHTML = `⚠️ 存在しないロール名の可能性があります。<br>もしかして： <a href="#" onclick="document.getElementById('role').value='${escapeHtml(vRes.suggested_role)}'; document.getElementById('roleAiSuggestion').style.display='none'; return false;" style="color:#1a73e8; text-decoration:underline;">${escapeHtml(vRes.suggested_role)}</a> ですか？`;
+            aiSugEl.style.display = 'block'; return false;
           }
-          requestList.push(formData);
-          renderRequestList();
-          
-          // 次の連続入力のためにロール欄とAI推論の履歴のみをクリア
-          document.getElementById('role').value = '';
-          document.getElementById('hiddenAiSuggestion').value = '';
-          const currentAiSugEl = document.getElementById('roleAiSuggestion');
-          if (currentAiSugEl) currentAiSugEl.style.display = 'none';
-        })
-        .withFailureHandler(function(err) {
-          overlay.style.display = 'none';
-          addBtn.disabled = false;
-          console.warn("AI Validation failed, add to request list without blocking: " + err.message);
-          requestList.push(formData);
-          renderRequestList();
-          
-          // 次の連続入力のためにロール欄とAI推論の履歴のみをクリア
-          document.getElementById('role').value = '';
-          document.getElementById('hiddenAiSuggestion').value = '';
-          const currentAiSugEl = document.getElementById('roleAiSuggestion');
-          if (currentAiSugEl) currentAiSugEl.style.display = 'none';
-        })
-        .validateRoleWithAi(formData.role, formData.reason, formData.resource);
-
+        }
+      } catch(err) {} finally { overlay.style.display = 'none'; addBtn.disabled = false; }
+      requestList.push(formData); renderRequestList();
+      document.getElementById('role').value = ''; document.getElementById('hiddenAiSuggestion').value = '';
+      if (aiSugEl) aiSugEl.style.display = 'none';
       return false;
     }
 
     function renderRequestList() {
-      const list = document.getElementById('requestListContainer');
-      const meta = document.getElementById('requestListMeta');
-      const submitBtn = document.getElementById('submitBtn');
-      
-      if (!requestList.length) {
-        list.innerHTML = '<div style="text-align:center; padding: 64px 0; color:var(--text-muted); font-size:13px;">左のフォームから追加された<br>リクエスト明細がここに表示されます</div>';
-        meta.textContent = '明細はありません';
-        submitBtn.disabled = true;
-        return;
-      }
-      
-      submitBtn.disabled = false;
-      meta.textContent = requestList.length + '件のリクエスト明細';
+      const list = document.getElementById('requestListContainer'), meta = document.getElementById('requestListMeta'), submitBtn = document.getElementById('submitBtn');
+      if (!requestList.length) { list.innerHTML = '<div style="text-align:center; padding: 64px 0; color:var(--text-muted); font-size:13px;">左のフォームから追加された<br>リクエスト明細がここに表示されます</div>'; meta.textContent = '明細はありません'; submitBtn.disabled = true; return; }
+      submitBtn.disabled = false; meta.textContent = requestList.length + '件のリクエスト明細';
       list.innerHTML = requestList.map((item, i) => {
-        let borderColor = '#bdc1c6';
-        let typeColor = '#5f6368';
-        if(item.requestType.includes('新規') || item.requestType.includes('緊急')) {
-          borderColor = '#34a853'; typeColor = '#137333';
-        } else if(item.requestType.includes('削除')) {
-          borderColor = '#ea4335'; typeColor = '#c5221f';
-        } else {
-          borderColor = '#4285f4'; typeColor = '#1967d2';
-        }
-
-        return `
-        <div class="request-list-item" style="border-left-color: ${borderColor};">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-            <div class="item-title" style="margin:0;"><span style="color:${typeColor};font-weight:bold;">${escapeHtml(item.requestType)}</span> : <span style="font-family:monospace; font-size:12px; background:#f1f3f4; padding:2px 6px; border-radius:4px; color:#202124;">${escapeHtml(item.role)}</span></div>
-            <button type="button" class="text-button" style="color:var(--text-muted); padding:0 4px; font-size:18px; line-height:1;" title="この明細を削除" onclick="removeRequestItem(${i})">×</button>
-          </div>
-          <div class="item-sub">
-             <div style="margin-bottom:2px;"><strong>対象:</strong> ${escapeHtml(item.principal)}</div>
-             <div style="margin-bottom:2px;"><strong>リソース:</strong> ${escapeHtml(item.resource)}</div>
-             <div><strong>期限:</strong> ${escapeHtml(item.expiresAt)}</div>
-          </div>
-        </div>
-        `;
+        let borderColor = '#bdc1c6', typeColor = '#5f6368';
+        if(item.requestType.includes('新規') || item.requestType.includes('緊急')) { borderColor = '#34a853'; typeColor = '#137333'; }
+        else if(item.requestType.includes('削除')) { borderColor = '#ea4335'; typeColor = '#c5221f'; }
+        else { borderColor = '#4285f4'; typeColor = '#1967d2'; }
+        return `<div class="request-list-item" style="border-left-color: ${borderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;"><div class="item-title" style="margin:0;"><span style="color:${typeColor};font-weight:bold;">${escapeHtml(item.requestType)}</span> : <span style="font-family:monospace; font-size:12px; background:#f1f3f4; padding:2px 6px; border-radius:4px;">${escapeHtml(item.role)}</span></div><button type="button" class="text-button" style="color:var(--text-muted); padding:0 4px; font-size:18px; line-height:1;" title="この明細を削除" onclick="removeRequestItem(${i})">×</button></div><div class="item-sub"><div style="margin-bottom:2px;"><strong>対象:</strong> ${escapeHtml(item.principal)}</div><div style="margin-bottom:2px;"><strong>リソース:</strong> ${escapeHtml(item.resource)}</div><div><strong>期限:</strong> ${escapeHtml(item.expiresAt)}</div></div></div>`;
       }).join('');
     }
 
-    function removeRequestItem(index) {
-      requestList.splice(index, 1);
-      renderRequestList();
-    }
+    function removeRequestItem(i) { requestList.splice(i, 1); renderRequestList(); }
+    function clearRequestList() { requestList = []; renderRequestList(); }
 
-    function clearRequestList() {
-      requestList = [];
-      renderRequestList();
-    }
-
-    function submitRequestList() {
-      if (!requestList.length) {
-        alert('明細が空です。');
-        return;
-      }
-
-      const btn = document.getElementById('submitBtn');
-      const overlay = document.getElementById('overlay');
-      btn.disabled = true;
-      overlay.style.display = 'flex';
-
+    async function submitRequestList() {
+      if (!requestList.length) return;
+      const btn = document.getElementById('submitBtn'), overlay = document.getElementById('overlay');
+      btn.disabled = true; overlay.style.display = 'flex';
       const requestGroupId = 'req-grp-' + Math.random().toString(36).substring(2, 12);
-      const payload = {
-        requestGroupId: requestGroupId,
-        requests: requestList.map(item => Object.assign({}, item, { requestGroupId }))
-      };
-
-      google.script.run
-        .withSuccessHandler(function(res) {
-          overlay.style.display = 'none';
-          btn.disabled = false;
-          const count = (res && res.count) ? res.count : requestList.length;
-          alert('✅ ' + count + '件の明細を一括申請しました。\n申請グループID: ' + requestGroupId);
-          clearRequestList();
-          document.getElementById('accessForm').reset();
-          document.getElementById('hiddenAiSuggestion').value = '';
-          document.getElementById('aiResultContainer').style.display = 'none';
-          document.getElementById('aiPanel').style.display = 'none';
-          document.getElementById('aiGoal').value = '';
-          toggleDate();
-        })
-        .withFailureHandler(function(err) {
-          overlay.style.display = 'none';
-          btn.disabled = false;
-          alert('❌ 一括申請中にエラーが発生しました:\n' + (err.message || '不明なエラー'));
-        })
-        .submitAccessRequest(payload);
+      const payload = { requestGroupId: requestGroupId, requests: requestList.map(item => Object.assign({}, item, { requestGroupId })) };
+      try {
+        const response = await fetch('/api/ui/requests/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if (!response.ok) throw new Error(`API failed: ${response.status}`);
+        const res = await response.json();
+        alert('✅ ' + (res.inserted_count || requestList.length) + '件の明細を一括申請しました。\n承認者に連絡してください。');
+        clearRequestList(); document.getElementById('accessForm').reset(); toggleDate();
+        document.getElementById('hiddenAiSuggestion').value = ''; document.getElementById('aiResultContainer').style.display = 'none'; document.getElementById('aiPanel').style.display = 'none'; document.getElementById('aiGoal').value = '';
+      } catch(err) { alert('❌ エラーが発生しました:\n' + err.message); }
+      finally { overlay.style.display = 'none'; btn.disabled = false; }
     }
   </script>
 </body>
