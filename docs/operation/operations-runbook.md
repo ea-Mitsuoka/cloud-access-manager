@@ -40,7 +40,58 @@
 - `scripts/bootstrap-deploy.sh` は実行前に順序を検証し、逆転している場合は停止します。
 - Terraform 側にも順序ガード（`scheduler_order_guard`）を実装しており、`terraform apply` 直実行でも順序違反を拒否します。
 
-## 3. 管理用スプレッドシートの基本セットアップ
+## 3. テナント・オンボーディングと初期データ収集
+
+SaaS基盤のデプロイ完了後、以下の手順で顧客環境の初期データを収集し、システムを稼働可能な状態にします。
+
+1. （既存環境からの移行時のみ）旧設計でTerraformが管理していた「顧客側IAM付与リソース」をStateから切り離します。\
+   ※ `scripts/bootstrap-deploy.sh` 実行時はこの処理を自動で実施しますが、手動 `terraform apply` の場合は先に実行してください。
+
+   ```bash
+   cd terraform
+   terraform state list | grep -E '^(google_project_iam_member\.executor_managed_project_roles|google_organization_iam_member\.executor_managed_organization_roles)' | while read -r r; do terraform state rm "$r"; done
+   ```
+
+1. 顧客のIT管理者に `docs/customer/tenant-workspace-setup-guide.md` を渡し、自社のSaaS用サービスアカウントに対するIAM権限（Google WorkspaceおよびGoogle Cloud）の付与を依頼します。
+
+1. 顧客から「権限付与完了」の連絡を受けたら、以下のどちらかの方法で初期データ収集を実施します。
+
+   ```bash
+   # 推奨: ワンコマンド
+   bash scripts/onboard-tenant.sh
+   ```
+
+<details><summary>※スクリプトが使えない環境で手動実行する場合</summary>
+
+```bash
+bash scripts/collect-resource-inventory.sh
+bash scripts/collect-principals.sh
+bash scripts/collect-iam-policies.sh
+```
+
+</details>
+
+1. 収集ジョブが `SUCCESS`（または必要に応じて `PARTIAL_SUCCESS`）で完了していることを、`iam_pipeline_job_reports` で確認します。
+
+   ```bash
+   bq query --project_id="your-tool-project-id" --use_legacy_sql=false '
+   SELECT job_type, result, error_code, error_message, occurred_at
+   FROM `your-tool-project-id.iam_access_mgmt.iam_pipeline_job_reports`
+   WHERE job_type IN ("RESOURCE_COLLECTION","PRINCIPAL_COLLECTION","IAM_POLICY_COLLECTION")
+   ORDER BY occurred_at DESC
+   LIMIT 20'
+   ```
+
+1. 収集結果を確認した後、初期マスタおよび履歴データを生成するためのSQLをBigQuery上で実行します。
+
+   ```bash
+   # プロジェクトID等はご自身の環境に合わせてください
+   bq query --project_id="your-tool-project-id" --use_legacy_sql=false < build/sql/007_seed_workbook_from_existing.sql
+   ```
+
+1. 以上でシステムのバックエンド準備は完了です。続いて「4. 管理用スプレッドシートの基本セットアップ」に進んでください。
+
+## 4. 管理用スプレッドシートの基本セットアップ
 
 1. **スプレッドシートの新規作成**: Googleドライブ等から、新しい空のスプレッドシートを作成し、任意の名前（例：「Cloud Access Manager 管理表」）を付けます。
 1. **GASのデプロイ**: 作成したスプレッドシートのメニューから `拡張機能 > Apps Script` を開き、`apps-script/` フォルダ内の3つのコードを貼り付けます。
@@ -51,7 +102,7 @@
    - ステータスを更新する列（またはシート全体）を選択し、右クリックから「セルでのプルダウンなどの操作」>「範囲を保護」を選択します。
    - 編集権限を「自分のみ」や「特定の承認者グループ（Googleグループ）」に限定します。
 
-### 3.1. Connected Sheets による監査データの取り込み（可視化）
+### 4.1. Connected Sheets による監査データの取り込み（可視化）
 
 BigQuery に構築された帳票用の整形済みビュー（`v_sheet_*`）をスプレッドシートの各タブに接続します。
 
@@ -67,7 +118,7 @@ BigQuery に構築された帳票用の整形済みビュー（`v_sheet_*`）を
    - `v_sheet_status` （ステータスマスタ）
 1. 接続された各シートで、必要に応じて「スケジュールされた更新」を設定します（例: 毎朝8時に自動更新など）。これにより、前夜のバッチで収集・整形された最新のIAM監査データが、スプレッドシートを開くたびに自動で反映されます。
 
-### 3.2. 「IAM権限設定マトリクス」の作成（ピボットテーブル）
+### 4.2. 「IAM権限設定マトリクス」の作成（ピボットテーブル）
 
 Connected Sheetsで取り込んだ `v_sheet_iam_permission_history` （IAM権限設定履歴）のデータを元に、全体を俯瞰できるマトリクス表を作成します。
 
@@ -75,12 +126,12 @@ Connected Sheetsで取り込んだ `v_sheet_iam_permission_history` （IAM権限
    *(※手動で行う場合は、`v_sheet_iam_permission_history` のシートからピボットテーブルを作成し、行に「リソース名」「プリンシパル」、列に「IAMロール」、値に「ステータス(COUNTA)」を設定してください)*
 1. これにより、誰が・どのリソースに・何の権限を持っているかが一目でわかるクロス集計表（マトリクス）が完成します。
 
-## 4. ランニングコスト（GCP料金）と最適化
+## 5. ランニングコスト（GCP料金）と最適化
 
 本システムのアーキテクチャ（Google Workspace + サーバーレスGCP）は、\*\*「アイドル時の固定費がゼロ（Scale-to-Zero）」\*\*である点が最大の強みです。
 一般的な中小〜中堅企業規模（月間100〜500件程度の申請、日次の自動棚卸しバッチ稼働）であれば、\*\*Google Cloudの月額費用は数十円〜数百円（ほぼ無料枠内）\*\*に収まる想定です。
 
-### 4.1 月額費用の見積もり目安（月間300件の申請を想定）
+### 5.1 月額費用の見積もり目安（月間300件の申請を想定）
 
 | GCPサービス | 役割 | 想定利用量と料金概算（月額） |
 | :--- | :--- | :--- |
@@ -95,7 +146,7 @@ Connected Sheetsで取り込んだ `v_sheet_iam_permission_history` （IAM権限
 
 **💰 月額合計の目安： 約 200円 程度**
 
-### 4.2 コスト最適化の運用ポイント
+### 5.2 コスト最適化の運用ポイント
 
 このシステムは放置していても費用が跳ね上がることは基本的にありませんが、以下の点だけ運用に組み込んでおくと完璧です。
 
@@ -121,15 +172,15 @@ gcloud artifacts repositories set-cleanup-policies iam-access-repo --project="YO
 **2. BigQuery の長期保存（自動適用）**
 監査ログは永遠に追記されていきますが、90日以上更新されないデータは自動的に「長期保存ストレージ」として料金が半額になるため、明示的なデータ削除（パージ）処理は不要です。
 
-## 5. IAMロールマスタの運用（Human-in-the-Loop）
+## 6. IAMロールマスタの運用（Human-in-the-Loop）
 
-本システムは、未知のIAMロールを検知すると毎朝のバッチ (`iam-role-discovery-daily`) でGemini APIを呼び出し、日本語訳を自動生成して `iam_role_master` に登録します。 [cite: 702, 713]
+本システムは、未知のIAMロールを検知すると毎朝のバッチ (`iam-role-discovery-daily`) でGemini APIを呼び出し、日本語訳を自動生成して `iam_role_master` に登録します。
 
-運用担当者は定期的に（例：月1回）以下の手順でAIの翻訳結果をレビューし、必要に応じて修正してください。この「人間によるレビューと修正」を前提とした運用設計（Human-in-the-Loop）により、運用の省力化と翻訳精度の両立を実現しています。 [cite: 522]
+運用担当者は定期的に（例：月1回）以下の手順でAIの翻訳結果をレビューし、必要に応じて修正してください。この「人間によるレビューと修正」を前提とした運用設計（Human-in-the-Loop）により、運用の省力化と翻訳精度の両立を実現しています。
 
-1. BigQueryコンソールを開き、`iam_role_master` テーブルを確認します。 [cite: 523]
+1. BigQueryコンソールを開き、`iam_role_master` テーブルを確認します。
 1. `is_auto_translated = TRUE` となっているレコードが、AIによって自動翻訳されたまま未確認のロールです。
-1. 翻訳内容（`role_name_ja`）に違和感がある場合、または公式な名称に固定したい場合は、以下のSQLで手動修正してください。 [cite: 530]
+1. 翻訳内容（`role_name_ja`）に違和感がある場合、または公式な名称に固定したい場合は、以下のSQLで手動修正してください。
 
 ```sql
 UPDATE `YOUR_PROJECT.YOUR_DATASET.iam_role_master`

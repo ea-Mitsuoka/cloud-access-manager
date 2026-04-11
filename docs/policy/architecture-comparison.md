@@ -297,7 +297,7 @@ Cloud RunのデフォルトURL（`*.run.app`）をそのまま公開すると、
 ### 2. クラウドの「裏口」を完全に封鎖できる（Ingress制御）
 
 これがセキュリティ上最も重要です。
-[cite_start]過去の改修履歴にも記載がある通り、本システムはVPC-SC（閉域網）を見据えて、Cloud Runの入り口（Ingress）を `INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING` に設定できる機能を持っています [cite: 806]。
+過去の改修履歴にも記載がある通り、本システムはVPC-SC（閉域網）を見据えて、Cloud Runの入り口（Ingress）を `INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING` に設定できる機能を持っています。
 ロードバランサーを置くことで、\*\*「インターネットからの直接アクセス（裏口）を完全に遮断し、ロードバランサー経由の通信（表玄関）しか絶対に受け付けない」\*\*という、極めて強固なネットワーク境界を作ることができます。
 
 ### 3. 独自のドメイン（URL）と証明書の統合管理

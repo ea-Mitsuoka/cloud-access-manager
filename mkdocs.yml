@@ -25,6 +25,7 @@ nav:
   - ホーム: index.md
   - ユーザーガイド (申請者向け): operation/user-guide.md
   - 運用マニュアル (SRE向け): operation/operations-runbook.md
+  - テナント初期セットアップ: customer/tenant-workspace-setup-guide.md
   - 要件定義書: design/requirements.md
   - BigQuery仕様: design/bigquery_tables.md
   - データリネージとマッピング: design/data_lineage_and_mapping.md

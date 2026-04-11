@@ -28,6 +28,7 @@ BigQueryモジュール（`terraform/modules/bigquery/main.tf`）内で作成さ
 | スクリプト名 | 役割 |
 | :--- | :--- |
 | `bootstrap-deploy.sh` | 初期設定の同期、Dockerイメージのビルド、既存監査データのImport、およびTerraform Applyを全自動で行うデプロイパイプラインです。 |
+| `onboard-tenant.sh` | インフラデプロイ完了後、テナント側での権限付与が終わったタイミングで実行し、初期データの収集と帳票のセットアップ（Seed）を行います。 |
 | `teardown.sh` | 監査ログ（BigQuery）や基本APIの設定をStateから安全に退避させた上で、Cloud RunやSchedulerなどのコンピュートリソースのみを綺麗に削除します。 |
 | `sync-config.sh` | `saas.env` に設定された環境変数を読み込み、TerraformやCloud Run、GAS向けの各設定ファイル（`.tfvars`, `.env`, `json`）を自動生成します。 |
 | `collect-*.sh` | 手動でデータ収集ジョブ（Cloud Runエンドポイント）をキックするためのユーティリティです。 |

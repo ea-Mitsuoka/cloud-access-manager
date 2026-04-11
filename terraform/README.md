@@ -108,4 +108,4 @@ bash scripts/bootstrap-deploy.sh
 - **重要**: 監査ログとして機能する BigQuery テーブル (`iam_access_requests`, `iam_access_change_log` など) は `lifecycle { prevent_destroy = true }` で保護されています。これにより、誤った `terraform destroy` 操作で監査証跡が失われるのを防ぎます。通常の運用や環境の再構築時は、必ず提供されている `scripts/teardown.sh` と `scripts/bootstrap-deploy.sh` を使用してライフサイクルを管理してください。
 - **重要:** GASからのOIDC認証連携を利用する場合、`var.gas_trigger_owner_email` に指定したユーザー（GASトリガーのオーナー）に対して、Terraformが自動的にサービスアカウントトークン作成者ロール（`roles/iam.serviceAccountTokenCreator`）を付与します。これにより、GASスクリプト内から安全にCloud Run呼び出し用のOIDCトークンを動的に生成できるようになります。
 - コンテナイメージは別途ビルド/プッシュし、`cloud_run_image` 変数で渡す必要があります。
-- 詳細なロール一覧や運用コマンドについては、`docs/operations-runbook.md` を参照してください。
+- 詳細なロール一覧や運用コマンドについては、`docs/operation/operations-runbook.md` を参照してください。

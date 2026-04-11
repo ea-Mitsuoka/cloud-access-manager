@@ -13,19 +13,6 @@ locals {
     scope  = local.organization_scope_enabled ? "organization" : "project"
   }
 
-  executor_project_roles = [
-    "roles/resourcemanager.projectIamAdmin",
-    "roles/cloudasset.viewer",
-    "roles/iam.serviceAccountViewer"
-  ]
-
-  executor_organization_roles = [
-    "roles/browser",
-    "roles/cloudasset.viewer",
-    "roles/resourcemanager.projectIamAdmin",
-    "roles/iam.serviceAccountViewer"
-  ]
-
   base_enabled_services = toset([
     "bigquery.googleapis.com",
     "cloudasset.googleapis.com",
@@ -130,23 +117,6 @@ resource "google_project_iam_member" "executor_bigquery_job_user" {
   member  = "serviceAccount:${module.service_accounts.executor_service_account_email}"
 }
 
-# Project-only scope roles for executor SA
-resource "google_project_iam_member" "executor_managed_project_roles" {
-  for_each = local.organization_scope_enabled ? toset([]) : toset(local.executor_project_roles)
-  project  = local.effective_managed_project_id
-  role     = each.value
-  member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
-}
-
-# Organization scope roles for executor SA
-resource "google_organization_iam_member" "executor_managed_organization_roles" {
-  for_each = local.organization_scope_enabled ? toset(local.executor_organization_roles) : toset([])
-  org_id   = var.organization_id
-  role     = each.value
-  member   = "serviceAccount:${module.service_accounts.executor_service_account_email}"
-}
-
-
 module "cloud_run" {
   source                                  = "./modules/cloud_run"
   service_name                            = var.cloud_run_service_name
@@ -165,10 +135,7 @@ module "cloud_run" {
   depends_on = [
     google_project_service.services,
     google_bigquery_dataset_iam_member.executor_bigquery_data_editor,
-    google_project_iam_member.executor_bigquery_job_user,
-
-    google_project_iam_member.executor_managed_project_roles,
-    google_organization_iam_member.executor_managed_organization_roles,
+    google_project_iam_member.executor_bigquery_job_user
   ]
 }
 

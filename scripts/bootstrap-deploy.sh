@@ -171,7 +171,7 @@ ensure_docker_running() {
         echo "❌ Could not detect a known Docker manager. Please start Docker manually."
         exit 1
       fi
-      
+
       echo -n "⏳ Waiting for Docker daemon to be ready..."
       local max_wait=60
       local elapsed=0
@@ -269,7 +269,7 @@ else
     if ask_yes_no "Enable VPC Service Controls for enhanced security? (Requires Organization Admin roles)" "$default_answer"; then
         update_config "enable_vpc_sc" "true" "$CONFIG_FILE"
         current_access_policy_name=$(grep -E '^access_policy_name=' "$CONFIG_FILE" | cut -d= -f2)
-        
+
         while true; do
             read -r -p "Enter Access Policy name (e.g. accessPolicies/123456789): " access_policy_name
             access_policy_name="${access_policy_name:-$current_access_policy_name}"
@@ -410,6 +410,23 @@ for api in "${apis[@]}"; do
   import_resource "google_project_service.services["$api"]" "$TOOL_PROJECT_ID/$api"
 done
 
+# 3. 旧設計（顧客側IAMをTerraformで管理）からの移行:
+#    stateに残っている対象IAMリソースを退避し、意図しないdestroyを防止する。
+echo "Checking legacy tenant IAM resources in Terraform state..."
+legacy_state_resources=$(
+  terraform state list 2>/dev/null | \
+    grep -E '^(google_project_iam_member\.executor_managed_project_roles|google_organization_iam_member\.executor_managed_organization_roles)' || true
+)
+if [[ -n "$legacy_state_resources" ]]; then
+  echo "Found legacy tenant IAM resources in state. Detaching from state to prevent accidental revocation..."
+  while IFS= read -r addr; do
+    [[ -z "$addr" ]] && continue
+    terraform state rm "$addr" >/dev/null
+    echo "  - detached: $addr"
+  done <<< "$legacy_state_resources"
+  echo "✅ Legacy tenant IAM resources were detached from state."
+fi
+
 echo
 echo "[5/8] Terraform plan..."
 terraform plan -var-file="$ROOT_DIR/environment.auto.tfvars"
@@ -452,7 +469,7 @@ else
     if [[ -f "$sql_file" ]]; then
       echo "--------------------------------------------------------"
       echo "📄 Executing SQL: $sql_filename"
-      
+
       # 複雑なView定義で固まらないよう、一時ファイル経由でクエリを実行
       # また、実行状況がわかるように stdout を逐次表示する
       # 標準入力から流し込む形式に戻しつつ、余計なフラグを削除して安定性を優先
@@ -469,71 +486,7 @@ else
 fi
 
 echo
-echo "[8/8] Initial Data Collection & Seeding"
-if ask_yes_no "Run initial data collection jobs and seed existing permissions? This may take a few minutes." y; then
-  
-  echo "Waiting 30 seconds for IAM permissions to propagate before triggering jobs..."
-  sleep 30
 
-  echo "Triggering data collection jobs via Cloud Scheduler (Async)..."
-  bash "$ROOT_DIR/scripts/collect-resource-inventory.sh" || true
-  bash "$ROOT_DIR/scripts/collect-principals.sh" || true
-  bash "$ROOT_DIR/scripts/collect-iam-policies.sh" || true
-  
-  echo "Waiting for IAM policies to be collected into BigQuery before seeding..."
-  echo "(This usually takes 1-3 minutes. Polling every 10 seconds...)"
-  
-  MAX_WAIT=300
-  WAIT_INTERVAL=10
-  elapsed=0
-  seed_ready=false
-  last_trigger_time=0
-  
-  while [[ $elapsed -lt $MAX_WAIT ]]; do
-    # 収集データが1件でも入ったか確認
-    row_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_policy_permissions\`" 2>/dev/null | tail -n 1 | tr -d '\r')
-    
-    if [[ "$row_count" =~ ^[0-9]+$ ]] && [[ "$row_count" -gt 0 ]]; then
-      echo "✅ Data collection detected ($row_count rows). Proceeding to seed..."
-      seed_ready=true
-      break
-    fi
-
-    # 💡【改善箇所】60秒経過してもデータが入っていなければ、初弾が権限エラーで死んだと見なして再キックする
-    if [[ $((elapsed - last_trigger_time)) -ge 60 && $elapsed -gt 0 ]]; then
-      echo "⏳ Still waiting... Re-triggering IAM policy collection job just in case of initial IAM permission delay."
-      bash "$ROOT_DIR/scripts/collect-iam-policies.sh" || true
-      last_trigger_time=$elapsed
-    fi
-    
-    echo "⏳ Waiting... (${elapsed}s / ${MAX_WAIT}s)"
-    sleep $WAIT_INTERVAL
-    elapsed=$((elapsed + WAIT_INTERVAL))
-  done
-
-  if [[ "$seed_ready" == "true" ]]; then
-    # 冪等性（Idempotency）の担保: Historyテーブルが空の場合のみSeedを実行する
-    seed_count=$(bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false --format=csv "SELECT COUNT(1) FROM \`$TOOL_PROJECT_ID.$BQ_DATASET_ID.iam_permission_bindings_history\`" 2>/dev/null | tail -n 1 | tr -d '
-')
-    
-    if [[ "$seed_count" =~ ^[0-9]+$ ]] && [[ "$seed_count" -eq 0 ]]; then
-      echo "Executing: 007_seed_workbook_from_existing.sql"
-      bq query --project_id="$TOOL_PROJECT_ID" --use_legacy_sql=false < "$ROOT_DIR/build/sql/007_seed_workbook_from_existing.sql"
-      echo "✅ Initial data seeding finished."
-    elif [[ "$seed_count" =~ ^[0-9]+$ ]]; then
-      echo "✅ History table already contains data ($seed_count rows). Skipping seed to prevent duplication."
-    else
-      echo "⚠️ Could not verify table row count. Skipping seed to prevent potential duplication."
-    fi
-  else
-    echo "⚠️ Warning: IAM policies collection did not finish within $MAX_WAIT seconds."
-    echo "👉 Skipping automatic seed. Please run '007_seed_workbook_from_existing.sql' manually in BigQuery later."
-  fi
-else
-  echo "Skipping initial data collection. You can run collection scripts manually later."
-fi
-
-echo
 echo "=== Bootstrap & Deploy Complete ==="
 cd "$ROOT_DIR/terraform"
 if terraform output cloud_run_url >/dev/null 2>&1; then
@@ -556,3 +509,10 @@ if terraform output cloud_run_url >/dev/null 2>&1; then
   fi
 fi
 cd "$ROOT_DIR"
+
+echo "========================================================"
+echo "✅ SaaSインフラの構築（コントロールプレーン）が完了しました！"
+echo "========================================================"
+echo "ℹ️ テナントのオンボーディング（権限付与と初期データ収集）は、"
+echo "デプロイ完了後に docs/operation/operations-runbook.md の"
+echo "「3. テナント・オンボーディングと初期データ収集」に従って実施してください。"

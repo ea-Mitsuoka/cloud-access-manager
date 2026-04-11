@@ -14,6 +14,7 @@ Cloud Access Managerは、Google Cloud環境におけるIAM権限の申請、承
 - **ユーザー・運用向け**
   - [ユーザーガイド (申請者向け)](operation/user-guide.md)
   - [運用マニュアル (SRE向け)](operation/operations-runbook.md)
+  - [テナント初期セットアップガイド](customer/tenant-workspace-setup-guide.md)
   - [IAM権限の整合性管理とインシデント対応フロー](operation/iam-reconciliation-and-incident-flow.md)
 - **設計・データ仕様**
   - [要件定義書](design/requirements.md)

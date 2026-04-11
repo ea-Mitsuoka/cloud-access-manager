@@ -272,6 +272,20 @@ jobs:
         run: terraform init -backend-config=../backend.hcl
         working-directory: terraform
 
+      - name: Detach legacy IAM resources from state
+        if: steps.check_wif.outputs.wif_enabled == 'true'
+        working-directory: terraform
+        run: |
+          echo "Checking legacy tenant IAM resources in Terraform state..."
+          resources=$(terraform state list 2>/dev/null | grep -E '^(google_project_iam_member\.executor_managed_project_roles|google_organization_iam_member\.executor_managed_organization_roles)' || true)
+          if [ -n "$resources" ]; then
+            while IFS= read -r r; do
+              [ -z "$r" ] && continue
+              terraform state rm "$r"
+              echo "Detached: $r"
+            done <<< "$resources"
+          fi
+
       - name: Terraform Apply
         if: steps.check_wif.outputs.wif_enabled == 'true'
         run: terraform apply -input=false tfplan

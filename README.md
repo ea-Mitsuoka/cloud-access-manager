@@ -102,14 +102,14 @@ graph TD
 
 ## ⏱️ クイックスタート
 
-```bash
-# 1. 設定ファイルの作成
-cp saas.env.example saas.env
-# vi saas.env で必要な変数を設定してください
-
-# 2. 自動デプロイの実行
-bash scripts/bootstrap-deploy.sh
-```
+1. **設定ファイルの作成**
+   `cp saas.env.example saas.env` を実行し、必要な変数を設定します。
+1. **SaaS基盤の自動デプロイ**
+   `bash scripts/bootstrap-deploy.sh` を実行してインフラを構築します。
+1. **テナント環境での権限付与（オンボーディング）**
+   出力されたサービスアカウントに対し、`docs/customer/tenant-workspace-setup-guide.md` に従って顧客環境（GCP/Workspace）で権限を付与してもらいます。
+1. **初期データの収集**
+   権限付与完了後、初期データ収集バッチを手動トリガー（または `bash scripts/onboard-tenant.sh` を実行）してセットアップ完了です。
 
 ## 📚 ドキュメントナビゲーション
 
