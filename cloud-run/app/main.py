@@ -999,6 +999,18 @@ def _authorize() -> bool:
     リクエストを認証します。
     Cloud Scheduler または GAS からの OIDC トークンを検証します。
     """
+    allowed_emails = [
+        e.lower() for e in (SCHEDULER_INVOKER_EMAIL, GAS_INVOKER_EMAIL) if e
+    ]
+
+    # IAP有効環境では、IAPがAuthorizationヘッダを消費するため、付与されたヘッダで判定
+    iap_email = request.headers.get("X-Goog-Authenticated-User-Email", "")
+    if iap_email:
+        clean_email = iap_email.replace("accounts.google.com:", "").strip().lower()
+        if clean_email in allowed_emails:
+            return True
+        return False
+
     if not SCHEDULER_INVOKER_EMAIL and not GAS_INVOKER_EMAIL:
         return False
 
@@ -1032,9 +1044,7 @@ def _authorize() -> bool:
         return False
 
     email = str(claims.get("email", "")).strip().lower()
-    allowed_emails = [
-        e.lower() for e in (SCHEDULER_INVOKER_EMAIL, GAS_INVOKER_EMAIL) if e
-    ]
+
     return email in allowed_emails
 
 
