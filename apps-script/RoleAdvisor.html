@@ -53,6 +53,7 @@
     .result-content h4:first-child { margin-top: 0; }
     .result-content ul { margin: 0; padding-left: 20px; }
     .result-content li { margin-bottom: 6px; }
+    .ai-spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid rgba(26,115,232,0.2); border-radius: 50%; border-top-color: var(--primary); animation: spin 1s ease-in-out infinite; margin-bottom: 8px; }
     .role-badge { display: inline-flex; align-items: center; background: #fff; color: #1967d2; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; font-weight: bold; border: 1px solid #d2e3fc; margin-bottom: 4px; }
     .apply-btn { margin-left: 8px; padding: 4px 10px; font-size: 12px; }
     
@@ -260,7 +261,13 @@
       btn.disabled = true;
       btn.textContent = '✨ Geminiが推論中...';
       container.style.display = 'block';
-      resultEl.innerHTML = '<div style="text-align:center; padding: 10px;">推論中...</div>';
+      resultEl.innerHTML = `
+        <div style="text-align:center; padding: 24px 10px;">
+          <div class="ai-spinner"></div>
+          <div style="color:var(--primary); font-weight:bold; font-size:13px;">✨ Geminiが最小権限を推論しています...</div>
+          <div style="color:var(--text-muted); font-size:12px; margin-top:6px;">しばらくお待ちください（約10〜20秒）</div>
+        </div>
+      `;
 
       google.script.run
         .withSuccessHandler(res => {
