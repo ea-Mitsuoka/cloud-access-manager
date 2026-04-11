@@ -75,3 +75,14 @@ resource "google_cloud_run_v2_service_iam_member" "iap_service_agent_invoker" {
   role     = "roles/run.invoker"
   member   = "serviceAccount:service-${data.google_project.tool_project.number}@gcp-sa-iap.iam.gserviceaccount.com"
 }
+
+# Cloud SchedulerやGAS（プログラム）からのカスタムクライアントIDを用いたIAPアクセスを許可
+resource "google_iap_settings" "iap_settings" {
+  count = var.enable_iap && trimspace(var.iap_oauth_client_id) != "" ? 1 : 0
+  name  = "projects/${data.google_project.tool_project.number}/iap_web/cloud_run-${var.region}/services/${google_cloud_run_v2_service.executor.name}"
+  access_settings {
+    oauth_settings {
+      programmatic_clients = [var.iap_oauth_client_id]
+    }
+  }
+}
