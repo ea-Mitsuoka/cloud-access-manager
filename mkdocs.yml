@@ -26,6 +26,8 @@ nav:
   - ユーザーガイド (申請者向け): operation/user-guide.md
   - 運用マニュアル (SRE向け): operation/operations-runbook.md
   - テナント初期セットアップ: customer/tenant-workspace-setup-guide.md
+  - IAM権限の整合性管理とインシデント対応フロー: operation/iam-reconciliation-and-incident-flow.md
+  - 申請ステータスと実行結果の読み解き方: operation/execution-status-guide.md
   - 要件定義書: design/requirements.md
   - BigQuery仕様: design/bigquery_tables.md
   - データリネージとマッピング: design/data_lineage_and_mapping.md
