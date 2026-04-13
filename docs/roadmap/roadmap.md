@@ -48,56 +48,61 @@ ______________________________________________________________________
 
 ```mermaid
 graph TD
-    subgraph OurOrg ["🏢 当社 Google Cloud 組織"]
-        
-        subgraph Vendor ["SaaSベンダー管理環境 (メインシステム)"]
+    subgraph OurOrg ["🏢 当社 Google Cloud 組織 (SaaS基盤)"]
+
+        subgraph Vendor ["コントロールプレーン (共通基盤)"]
             Edge["カスタムドメイン + LB + Cloud Armor"]
             IAP["IAP (ゼロトラスト認証)"]
             CR["Cloud Run (申請ポータル & 実行エンジン)"]
-            
+
             Edge -->|"防御"| IAP
             IAP -->|"認証"| CR
         end
 
-        subgraph TenantA ["テナントA GCPプロジェクト"]
-            IAMA["🔐 対象IAM (Tenant A)"]
-            BQA[("📊 BigQuery (監査ログ Tenant A)")]
+        subgraph TenantData ["データプレーン (テナント毎にプロジェクトを分離)"]
+            BQA[("📊 Tenant A 用 BigQuery")]
+            BQB[("📊 Tenant B 用 BigQuery")]
         end
 
-        subgraph TenantB ["テナントB GCPプロジェクト"]
-            IAMB["🔐 対象IAM (Tenant B)"]
-            BQB[("📊 BigQuery (監査ログ Tenant B)")]
-        end
+        CR -->|"③ ログ記録 (テナントA用DBへ)"| BQA
+        CR -.->|"ログ記録 (テナントB用DBへ)"| BQB
 
+    end
+
+    subgraph TenantA_GCP ["テナントA GCP環境"]
+        IAMA["🔐 対象IAM (Tenant A)"]
+    end
+
+    subgraph TenantB_GCP ["テナントB GCP環境"]
+        IAMB["🔐 対象IAM (Tenant B)"]
     end
 
     User(["👤 テナントA/B ユーザー"]) -->|"① HTTPSアクセス"| Edge
     CR -->|"② 権限の付与/剥奪 (Cross-Project)"| IAMA
-    CR -->|"③ 監査ログの書き込み (Cross-Project)"| BQA
-    CR -.-> IAMB
-    CR -.-> BQB
+    CR -.->|"② 権限の付与/剥奪 (Cross-Project)"| IAMB
 
     %% スタイル定義
     style OurOrg fill:#f8f9fa,stroke:#5f6368,stroke-width:2px,stroke-dasharray: 5 5,color:#202124
     style Vendor fill:#ffffff,stroke:#9AA0A6,stroke-width:2px
-    style TenantA fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
-    style TenantB fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style TenantData fill:#ffffff,stroke:#9AA0A6,stroke-width:2px
+    style TenantA_GCP fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
+    style TenantB_GCP fill:#E8F0FE,stroke:#4285F4,stroke-width:2px
     style Edge fill:#4285F4,color:#fff,stroke:#2a56c4
     style CR fill:#34A853,color:#fff,stroke:#267d3f
 ```
 
-**目標:** 1つのコアシステムで複数テナントを効率的に捌きつつ、外部公開に向けた強固なセキュリティの確立と、監査データストアの物理的な分離を行う。
+**目標:** 1つのコアシステムで複数テナントを効率的に捌きつつ、外部公開に向けた強固なセキュリティの確立と、監査データストアの物理的な分離を行う。また、顧客のインフラ構築ハードルをゼロにし、最速のオンボーディングを実現する。
 
 - **アーキテクチャ構成:**
-  - 当社（ベンダー）管理の「メインシステム・デプロイプロジェクト」と、テナントごとの「BigQueryデータセット管理プロジェクト」の完全分離。
+  - 当社（ベンダー）管理組織内で「メインシステム・デプロイプロジェクト」と、テナントごとの「BigQueryデータ用プロジェクト（テナント・パー・プロジェクト）」を分離して構築する。
   - **セキュリティの強化（LB ＋ Cloud Armor導入）:** 社外公開を見据え、Cloud Runの手前に外部HTTPSロードバランサ（LB）とCloud Armor（WAF/DDoS防御）を追加します。これにより、カスタムドメインによるブランド信頼性と、エンタープライズ水準のアタック防御を実現します。
 - **システム挙動と権限モデル:**
   - 当社はメインシステムを通じて、共通のログイン機能および申請・承認UIを提供する。
-  - 各テナントからは、「ターゲットとなるGCPプロジェクト」に対するIAM管理者権限を当社システムに付与してもらう。
-  - メインシステムはクロスプロジェクトでIAMの付与・剥奪を実行し、監査ログを各テナントのBigQueryプロジェクトへ確実に出力する。
+  - 各テナントからは、「ターゲットとなるGCP/Workspace環境」に対するIAM管理者・閲覧権限を当社のサービスアカウントに付与してもらうのみ（インフラ構築不要）。
+  - メインシステムはクロスプロジェクトでIAMの付与・剥奪を実行し、監査ログを当社環境内の各テナント専用BigQueryプロジェクトへ確実に出力する。
 - **💰 インフラコスト:**
-  - **🏢 当社（ベンダー）側負担:** **固定費 月額 約4,500円〜5,000円**（ロードバランサ維持費: 約$18 ＋ Cloud Armor維持費: 約$12 ＋ カスタムドメイン代）
-  - **🏢 テナント（顧客）側負担:** **月額 ほぼ0円**（各テナント用BigQueryデータセットのストレージ・クエリ費用のみ。監査ログ程度のデータ量であれば、Google Cloudの毎月の無料枠内に収束するため、顧客にインフラ維持費の負担はほぼ発生しません）
+  - **🏢 当社（ベンダー）側負担:** **固定費 月額 約4,500円〜5,000円 ＋ テナントのデータ保存費用**（ロードバランサ維持費: 約$18 ＋ Cloud Armor維持費: 約$12 ＋ カスタムドメイン代 ＋ 顧客数分のBQ費用。ただしBQはほぼ無料枠内に収束）
+  - **🏢 テナント（顧客）側負担:** **発生しない**（SaaS利用料のみ。自社GCPへのインフラ構築やリソース維持費は一切不要）
 
 ______________________________________________________________________
 
@@ -116,7 +121,7 @@ graph TD
             CR_T["🚀 Cloud Run (IAM実行エンジン)"]
             BQ_T[("📊 BigQuery (監査ログ・マスタ)")]
             IAM_T["🔐 対象IAM"]
-            
+
             CR_T -->|"③ 閉域網内での権限実行"| IAM_T
             CR_T -->|"④ 閉域網内でのログ記録"| BQ_T
         end
@@ -124,7 +129,7 @@ graph TD
 
     User(["👤 顧客ユーザー"]) -->|"① 申請・承認"| Portal
     Portal -->|"② API連携 (OIDC)"| CR_T
-    
+
     AR -.->|"⑤ 最新イメージの配信"| CR_T
     GCS -.->|"⑥ インフラ構成の統制"| Tenant
 
