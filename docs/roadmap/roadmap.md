@@ -49,24 +49,24 @@ ______________________________________________________________________
 ```mermaid
 graph TD
     subgraph OurOrg ["🏢 当社 Google Cloud 組織 (SaaS基盤)"]
+        subgraph VPCSC ["VPC Service Controls (サービス境界)"]
+            subgraph Vendor ["コントロールプレーン (共通基盤)"]
+                Edge["カスタムドメイン + LB + Cloud Armor"]
+                IAP["IAP (ゼロトラスト認証)"]
+                CR["Cloud Run (申請ポータル & 実行エンジン)"]
 
-        subgraph Vendor ["コントロールプレーン (共通基盤)"]
-            Edge["カスタムドメイン + LB + Cloud Armor"]
-            IAP["IAP (ゼロトラスト認証)"]
-            CR["Cloud Run (申請ポータル & 実行エンジン)"]
+                Edge -->|"防御"| IAP
+                IAP -->|"認証"| CR
+            end
 
-            Edge -->|"防御"| IAP
-            IAP -->|"認証"| CR
+            subgraph TenantData ["データプレーン (テナント毎にプロジェクトを分離)"]
+                BQA[("📊 Tenant A 用 BigQuery")]
+                BQB[("📊 Tenant B 用 BigQuery")]
+            end
+
+            CR -->|"③ ログ記録 (テナントA用DBへ)"| BQA
+            CR -.->|"ログ記録 (テナントB用DBへ)"| BQB
         end
-
-        subgraph TenantData ["データプレーン (テナント毎にプロジェクトを分離)"]
-            BQA[("📊 Tenant A 用 BigQuery")]
-            BQB[("📊 Tenant B 用 BigQuery")]
-        end
-
-        CR -->|"③ ログ記録 (テナントA用DBへ)"| BQA
-        CR -.->|"ログ記録 (テナントB用DBへ)"| BQB
-
     end
 
     subgraph TenantA_GCP ["テナントA GCP環境"]
